@@ -1,9 +1,11 @@
 node_modules/
 dist/
+tests/frameworks/.runtime-*/
+tests/frameworks/fixtures/next/.next/
+test-results/
 coverage/
 .env
 .env.*
 !.env.example
 *.log
 .DS_Store
-

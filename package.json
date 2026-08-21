@@ -19,13 +19,24 @@
     "build": "tsc -p tsconfig.build.json",
     "check:boundaries": "node scripts/check-boundaries.mjs",
     "check": "npm run typecheck && npm run check:boundaries && npm run build && npm test",
-    "test:postgres": "node --experimental-strip-types --test packages/storage-postgres/src/postgres-auth-repository.integration.test.ts"
+    "check:mvp": "npm run check && npm run test:frameworks",
+    "test:postgres": "node --experimental-strip-types --test packages/storage-postgres/src/postgres-auth-repository.integration.test.ts",
+    "test:frameworks": "node --experimental-strip-types ./node_modules/@playwright/test/cli.js test --config tests/frameworks/playwright.config.mjs",
+    "canary:origin": "node scripts/canary-origin.mjs",
+    "verify:public-path": "node scripts/verify-public-path.mjs",
+    "backup:postgres": "node scripts/postgres-backup.mjs",
+    "restore:postgres": "node scripts/postgres-restore.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
     "@types/pg": "^8.23.1",
     "@types/ws": "^8.18.1",
-    "typescript": "^5.9.3"
+    "@playwright/test": "1.62.1",
+    "next": "16.3.2",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "typescript": "^5.9.3",
+    "vite": "8.2.2"
   },
   "dependencies": {
     "argon2": "^0.45.1",
