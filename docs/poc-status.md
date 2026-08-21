@@ -1,66 +1,52 @@
-# Review Tunnel Phase 0·1 및 내부 계정 인증 구현 결과
+# Review Tunnel 보안 MVP 구현 상태
 
-- 상태: 격리 POC 핵심 경로 완료
-- 기준일: 2026-08-21
+- 상태: Phase 2 애플리케이션 구현 완료, 환경별 운영 인수 대기
+- 기준일: 2026-08-24
 - 런타임: TypeScript 5.9, Node.js 24
-- Carrier profile: `review-tunnel.poc.1`
+- Carrier profile: `review-tunnel.v1`
 
-## 내부 계정 인증 완료 범위
+## 완료한 애플리케이션 범위
 
-- 공개 회원가입 없는 `ADMIN`·`DEVELOPER`·`REVIEWER` 내부 계정
-- Linux CLI 최초 관리자 bootstrap과 관리자 CLI 전체 계정 작업
-- Argon2id 비밀번호 해시, 최초 변경 임시 비밀번호와 계정 단위 로그인 제한
-- PostgreSQL 계정·세션·로그인 제한·일회용 교환·Carrier credential·감사 이벤트 저장
-- 중앙 로그인/로그아웃, host 전용 세션 교환과 관리자 웹 UI
-- Client 로그인 API와 60초·1회용·purpose/Tunnel 제한 Carrier credential
-- 계정 정지·권한·비밀번호 변경 시 로그인 세션 폐기와 활성 Tunnel·Stream 회수
-- control/content session audience 분리와 Gateway 예약 Cookie 격리
-- eTLD+1 기준 content/control 사이트 경계 검증
-- Linux multi-stage Docker 이미지와 headless 운영 절차
+- Gateway가 발급하는 인증 모드 Tunnel ID·공유 URL과 `SESSION_PROVISIONED → SESSION_CONFIG → CONFIG_APPLIED → OPEN_PROBE → SESSION_ACTIVE` 활성화 장벽
+- configuration revision·canonical digest·provision receipt 검증, 동일 ACK 멱등 처리, 1회 재전송과 activation timeout
+- generation fencing, heartbeat·lease, 8시간 최대 수명·30분 유휴·2분 resume 유예와 CLI bounded exponential reconnect
+- `localhost`의 모든 DNS 결과 loopback 검증, 연결 가능한 IP literal 고정과 resume 시 local-origin fingerprint 고정
+- 일반 HTTP body streaming, SSE, WebSocket raw byte relay와 Stream·Carrier flow control
+- 닫힌 Stream에 늦게 도착한 flow-control 갱신의 안전한 무시와 Gateway 종료 시 Upgrade socket 회수
+- `local-view`·`proxy-aware` Origin projection, untrusted forwarding header 제거, Host·Origin·Referer 재구성
+- 로컬 절대 `Location`·`Refresh`의 public origin 변환과 `Set-Cookie` Domain·예약 Cookie 격리
+- WebSocket `Sec-WebSocket-Accept` 검증, generic CONNECT와 WebSocket 이외 Upgrade 명시적 거부
+- request body·finite response 크기, 응답 header·inactivity·최대 지속 시간, 동시 Stream·분당 새 Stream 제한
+- 내부 계정, host별 content session, 60초·1회용·purpose 제한 Carrier credential과 HMAC key overlap 회전
+- 인증 정책을 Tunnel 조회보다 먼저 적용해 미인증 사용자에게 Tunnel 존재 여부를 노출하지 않는 경계
+- 개발자·검토자 authorization max-age와 `auth_version` 회수, 현재 Stream·Carrier·resume 폐기
+- HMAC 익명 Tunnel reference를 쓰는 구조화 수명주기 로그, low-cardinality Prometheus 메트릭과 별도 bearer 보호
+- 관리자 재인증이 필요한 운영 kill switch와 초기 환경 admission gate
+- PostgreSQL custom-format 원자 백업 및 확인 문자열이 필요한 파괴적 복구 스크립트
+- 미인증 차단·request streaming·SSE·WebSocket을 검사하는 고정 public-path canary
 
-## 완료한 범위
+## 자동 검증 결과
 
-- npm workspace와 Gateway·Client·protocol·proxy·relay 경계
-- 실행 가능한 loopback Gateway와 Client CLI
-- 16-byte binary envelope와 binary-safe DATA chunk
-- 일반 HTTP method, path·query, 반복 header와 request·response body streaming
-- SSE 첫 chunk 즉시 flush와 downstream cancellation 전파
-- 로컬 101 성공 뒤 WebSocket raw byte 중계
-- WebSocket binary message, subprotocol과 정상 close E2E
-- Stream 64 KiB, Carrier 256 KiB flow-control credit
-- DATA 32 KiB chunk와 Carrier pending write 1 MiB 상한
-- 1 MiB가 넘는 payload의 window 정지·갱신·재개 E2E
-- create 시 Resume secret 발급, Gateway HMAC 저장, 2분 안의 동일 URL resume와 generation 증가
-- 잘못된 Resume secret 거부와 명시적 종료 시 URL·secret 즉시 폐기
-- 최대 8시간, Stream이 없을 때 idle 30분, reconnect 2분의 순수 Session 상태기계
-- hop-by-hop header와 `Connection`이 지목한 동적 header 제거
-- metadata CR/LF injection, 잘못된 frame·version·길이의 fail-closed 검증
-- TypeScript typecheck, 아키텍처 경계 검사, JavaScript emit build와 loopback E2E
+2026-08-24 로컬 검증 결과는 다음과 같다.
 
-## 검증 결과
+- `npm test`: 87개 중 86개 통과, 실패 0, PostgreSQL 실연동 1개는 `TEST_DATABASE_URL`이 없어 건너뜀
+- `npm run test:frameworks`: 2개 통과
+  - Vite 8.2.2: 초기 화면, 정적 모듈, 상호작용과 HMR
+  - Next.js 16.3.2·React 19.2.8: RSC, Route Handler, Server Action, client navigation, 상태 보존 Fast Refresh
+- `npm run typecheck`, 아키텍처 경계 검사와 `npm run build` 통과
+- npm audit: 알려진 취약점 0개
 
-`npm run check`가 다음을 한 번에 검증한다.
+PostgreSQL 검증은 [`compose.test.yml`](../compose.test.yml)의 PostgreSQL 17.6과 `npm run test:postgres`로 재현한다. 이번 작업 환경에서는 Docker daemon이 실행 중이지 않아 실연동 테스트를 다시 실행하지 못했다. 실행 순서는 [`linux-deployment.md`](linux-deployment.md)에 고정했다.
 
-1. TypeScript strict typecheck
-2. protocol·relay·proxy 패키지의 앱 역의존 금지
-3. `dist/` JavaScript emit build
-4. 단위·통합·loopback E2E 62개. PostgreSQL 통합 테스트는 `TEST_DATABASE_URL`이 있을 때 실행
+## 실제 환경에서 남은 인수 작업
 
-추가 검증에서 실제 PostgreSQL 17 컨테이너의 migration·Argon2id·재시작 세션 영속성이 통과했다. Linux multi-stage 이미지를 빌드하고 이미지 내부에서 Argon2id 네이티브 모듈과 production 도메인 설정 검증을 실행했다. npm 운영 의존성 audit 결과는 알려진 취약점 0건이다.
+다음 항목은 코드만으로 완료할 수 없으며 배포 환경 소유자가 실제 값과 인프라에서 수행해야 한다.
 
-## 현재 안전 경계
+1. 콘텐츠 wildcard와 control host를 서로 다른 사이트 경계에 배치하고 승인된 TLS·Ingress 버전과 config digest를 고정한다.
+2. secret manager로 active·previous HMAC key와 metrics token을 주입하고 key overlap 회전·철회를 훈련한다.
+3. 후보 Ingress에서 public-path canary를 통과한 뒤에만 신규 Session admission과 사용자 트래픽을 연다.
+4. 실제 PostgreSQL 백업을 별도 보안 저장소에 보관하고 격리 DB에 복구한 뒤 로그인·감사·세션 스키마를 확인한다.
+5. 관리되는 macOS arm64·Chrome과 회사 표준 Vite·Next.js 프로젝트 버전을 호환성 매트릭스에 고정한다.
+6. 운영 소유자, 알림 임계치, 로그 보존 기간, 회수 전파 SLO와 kill switch 권한자를 조직 정책으로 승인한다.
 
-환경 변수 없이 실행하는 기본 모드는 인증과 TLS가 없는 격리 POC다. Gateway는 기본적으로 `127.0.0.1`에만 바인딩하며 외부 bind는 명시적 `ALLOW_INSECURE_POC=true` 없이는 거부한다. 내부 계정 모드는 `DATABASE_URL`, `CONTROL_HOST`, `AUTH_SESSION_HMAC_KEY`를 모두 제공해야 활성화된다.
-
-정식 `review-tunnel.v1`이나 실제 사내 운영으로 간주하지 않는다. 다음 항목은 Phase 2에서 구현·검증해야 한다.
-
-- `SESSION_PROVISIONED`, configuration revision·digest·ACK와 activation probe
-- heartbeat, lease와 CLI 자동 reconnect retry loop
-- 실제 Gateway에 8시간·30분 Session timer와 authorization max-age 적용
-- content·auth·control 사이트 경계, TLS·Ingress와 public-path canary
-- Origin projection, Gateway cookie·credential 격리와 Location·Cookie 정책
-- 유형별 timeout·rate·동시성·request/response 크기 제한
-- 로그·메트릭·회수 SLO와 운영 kill switch
-- 실제 TLS·Ingress, secret manager, PostgreSQL 백업·복구와 public-path canary
-
-Phase 2 인수 기준을 통과하기 전에는 인터넷이나 사내 일반 사용자에게 공개하지 않는다.
+이 인수 작업이 끝나기 전 상태는 “코드 완료”이지 “운영 공개 승인”이 아니다.

@@ -1,6 +1,6 @@
 # ADR-0002: 격리 POC Carrier protocol을 정식 v1과 분리
 
-- 상태: 승인
+- 상태: ADR-0004로 대체됨
 - 날짜: 2026-08-21
 
 ## 결정
@@ -36,3 +36,5 @@ POC create는 32-byte Resume secret을 Client에 전달하고 Gateway에는 프�
 - Stream·connection queue와 공정성 부하 테스트
 
 이 조건을 채우기 전에는 profile 이름만 `review-tunnel.v1`로 바꾸지 않는다.
+
+위 승격 조건은 2026-08-24 구현과 검증을 마쳤다. 현재 결정은 [ADR-0004](0004-review-tunnel-v1-activation.md)를 따른다.

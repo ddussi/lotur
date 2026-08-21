@@ -4,7 +4,7 @@
 
 | 항목 | 내용 |
 | --- | --- |
-| 문서 상태 | Draft v0.5 — 내부 계정 인증 결정 반영 |
+| 문서 상태 | Draft v0.6 — 보안 MVP 구현 결과와 외부 인수 경계 반영 |
 | 제품명 | Review Tunnel(가칭) |
 | 대상 독자 | 제품 담당자, 개발자, 인프라·보안 검토자 |
 | 문서 목적 | MVP의 범위, 핵심 흐름, 시스템 경계, 보안 기준과 검증 조건을 합의한다. |
@@ -678,7 +678,7 @@ HTTP request와 WebSocket handshake를 열 때 검토자 신원, 인증 만료�
 | 검토자 host 세션 | 하나의 Tunnel host 접근 | `__Host-rt_session` Secure·HttpOnly cookie | host·Tunnel·검토자·expiry에 바인딩된 HMAC session ID | Tunnel TTL, 인증 max-age, 접근 회수 중 먼저 도달한 때 |
 | host 교환 코드 | 중앙 로그인에서 Tunnel host 세션으로 교환 | 브라우저 redirect 동안만 전달 | host·검토자에 바인딩된 HMAC과 consumed 상태 | 매우 짧은 TTL과 1회 소비 |
 
-Gateway는 Carrier credential secret, Resume secret과 opaque 검토자 세션 ID의 원문을 Registry·DB·cache 같은 상태 저장소에 남기지 않는다. 용도별 서버 키와 versioned length-prefix canonical bytes를 사용해 HMAC-SHA-256 lookup 값을 만들고 constant-time으로 비교한다. 원문은 발급·검증 중 bounded transient buffer에만 존재하고 처리 직후 참조를 해제하며 로그·trace·crash dump 수집 대상에서 제외한다. HMAC key는 소스나 일반 설정 파일이 아니라 회사 secret manager에서 관리하고 key ID로 회전한다. 정확한 TTL, key overlap과 회수 정책은 Phase 0에서 확정한다.
+Gateway는 Carrier credential secret, Resume secret과 opaque 검토자 세션 ID의 원문을 Registry·DB·cache 같은 상태 저장소에 남기지 않는다. 용도별 서버 키와 versioned length-prefix canonical bytes를 사용해 HMAC-SHA-256 lookup 값을 만들고 constant-time으로 비교한다. 원문은 발급·검증 중 bounded transient buffer에만 존재하고 처리 직후 참조를 해제하며 로그·trace·crash dump 수집 대상에서 제외한다. HMAC key는 소스나 일반 설정 파일이 아니라 회사 secret manager에서 관리한다. 새 artifact는 active key로 발급하고 이전 key 목록은 로그인 세션 최대 12시간과 시계 오차를 포함한 제한된 overlap 동안 검증에만 사용한 뒤 제거한다.
 
 Client는 Carrier credential과 Resume secret을 stdout, shell history, debug log, crash report나 telemetry에 출력하지 않는다. 개발자 로그인 자격증명은 필요할 때만 OS 보안 저장소에 두고 Carrier credential과 Resume secret은 기본적으로 디스크에 기록하지 않는다. 진단 bundle은 Authorization·Cookie header 전체와 URL query를 구조적으로 제거한 뒤 생성한다.
 
@@ -861,7 +861,7 @@ Gateway는 process liveness, instance traffic readiness와 Gateway admission rea
 | SSE | 종료가 늦는 HTTP response stream | MVP 확정 | 별도 event protocol과 replay 저장소가 필요하지 않음 |
 | 브라우저 WebSocket | HTTP 101 이후 opaque 양방향 byte relay | MVP 확정 | fragmentation·compression·ping/pong을 재구현하지 않고 보존 |
 | HMR·Fast Refresh | 공식 지원 프레임워크의 MVP 인수 기준 | MVP 확정 | 로컬 개발 서버를 그대로 검토한다는 제품 목적의 핵심 |
-| Origin projection | `local-view` 기본, `proxy-aware` opt-in | 제안 | Host·Origin 계열을 일관되게 유지하면서 proxy-aware 앱도 지원 |
+| Origin projection | `local-view` 기본, `proxy-aware` opt-in | MVP 확정·구현 | Host·Origin 계열을 일관되게 유지하면서 proxy-aware 앱도 지원 |
 | Gateway 내부 경계 | Control Plane과 Relay Data Plane을 논리 모듈로 분리한 단일 배포 단위 | MVP 확정 | 인증·수명주기와 byte 중계의 변경 이유를 분리하면서 초기 운영 복잡도는 늘리지 않음 |
 | Session configuration | 작은 불변 snapshot + revision·digest + 명시적 적용 ACK | MVP 확정 | 설정 전송 성공과 실제 적용 성공을 구분하고 범용 설정 bus를 만들지 않음 |
 | 활성화 gate | Session activation Readiness와 전역 Gateway admission Readiness의 논리곱 | MVP 확정 | Control 연결만 정상인 부분 장애를 사용 가능 상태로 오인하지 않고 Session·배포 상태를 분리 |
@@ -1007,6 +1007,8 @@ POC는 인증과 HTTPS가 빠질 수 있으므로 격리된 개발 환경에서�
 
 이 단계의 보안·품질 인수 기준을 통과한 뒤에만 실제 사내 공유를 허용한다.
 
+2026-08-24 기준 애플리케이션 코드와 로컬 자동 검증은 완료했다. 실제 DNS·TLS·Ingress, secret manager, PostgreSQL 복구 drill, 회사 관리 Chrome·프로젝트와 운영 소유권은 배포 환경 인수 항목으로 남는다. 상세 증거와 실행 절차는 [`poc-status.md`](poc-status.md)와 [`linux-deployment.md`](linux-deployment.md)를 따른다.
+
 ### Phase 3 — 제한된 사내 파일럿
 
 - 소수 개발자와 검토자에게 opt-in 제공
@@ -1042,19 +1044,19 @@ POC는 인증과 HTTPS가 빠질 수 있으므로 격리된 개발 환경에서�
 | --- | --- | --- | --- |
 | D-01 | MVP 접근 정책 | **확정:** 관리자 발급 활성 내부 계정 + `REVIEWER` 권한 + 공유 URL | 완료 |
 | D-02 | 계정 정책 | **확정:** 공개 가입 없음, 관리자 발급, 최초 변경 임시 비밀번호, ADMIN·DEVELOPER·REVIEWER | 완료 |
-| D-03 | Client 로그인 방식 | 내부 계정 로그인 세션을 control API의 짧은 수명·1회용 Carrier credential로 교환 | 구현 중 |
-| D-04 | 도메인·TLS·Ingress 운영 | 사이트 경계와 env 주입은 확정. 실제 host, 인증서 주체, AWS·사내 Ingress와 예약 canary host 확인 필요 | Phase 0 |
-| D-05 | 세션·활성화 정책 | **제품값 확정:** 8시간·30분·2분. activation timeout과 세부 Readiness 값은 POC에서 결정 | Phase 0 |
-| D-06 | 콘텐츠 Cookie 격리 | Public Suffix 정책 / 파일럿 앱의 Domain cookie 비사용 제한 / 별도 격리 방식 | 파일럿 전 |
-| D-07 | Relay 구현과 protocol v1 wire 형식 | 재사용 라이브러리, metadata·Session config canonical encoding, revision·digest·ACK·probe, chunk·END·오류 code, window·queue 초기값 | Phase 1 시작 전 |
-| D-08 | 유형별 제한 | finite HTTP·SSE·WebSocket timeout, 크기, buffer, 동시성, rate | Phase 1 결과 후 |
-| D-09 | 성능·용량 목표 | URL 발급, first-byte·HMR 지연, 활성 Tunnel·Stream 수 | Phase 1 결과 후 |
-| D-10 | 공식 호환 범위 | **부분 확정:** macOS arm64·Chrome·Vite·Next.js. 정확한 Node·bundler·브라우저·프레임워크 버전과 제약 고정 필요 | MVP 전 |
-| D-11 | 로그 정책 | 보존 기간, 접근 권한, 사용자 식별 수준 | 사내 공개 전 |
-| D-12 | 장애 책임 | 운영 소유자, 알림 기준, 사용자 공지·롤백 절차 | 사내 공개 전 |
-| D-13 | Credential 정책 | Carrier TTL·1회 소비·purpose·audience, HMAC key 관리·회전과 Client 저장 범위 | Phase 0 |
-| D-14 | 회수 운영 | PostgreSQL의 계정 `auth_version` 확인 주기, revocation propagation SLO와 kill switch 소유자 | 파일럿 전 |
-| D-15 | Ingress 변경 통제 | pin 대상 버전·config digest, canary 실패 시 신규 활성화·기존 Session 정책과 rollback | Phase 0 |
+| D-03 | Client 로그인 방식 | **구현 완료:** 내부 로그인 세션을 60초·1회용 create/resume Carrier credential로 교환하고 create Tunnel ID는 Gateway가 발급 | 완료 |
+| D-04 | 도메인·TLS·Ingress 운영 | **코드·runbook 완료:** 사이트 경계·env·public-path canary 검증. 실제 host·인증서·Ingress 제품과 digest 승인은 환경별 남음 | 배포 전 |
+| D-05 | 세션·활성화 정책 | **구현 완료:** 8시간·30분·2분, 10초 activation, config ACK·origin·Relay·route·admission gate | 완료 |
+| D-06 | 콘텐츠 Cookie 격리 | **구현 완료:** host-only 유지, effective Domain 제거, parent/shared Domain과 예약 Cookie 거부. 회사 파일럿 앱의 Domain cookie 확인은 환경별 남음 | 파일럿 전 |
+| D-07 | Relay 구현과 protocol v1 wire 형식 | **구현 완료:** canonical config·revision·digest·ACK·probe, generation, 오류 code, window·queue 계약 | 완료 |
+| D-08 | 유형별 제한 | **구현 완료:** finite HTTP·SSE·WebSocket timeout, request·response 크기, buffer, 동시성, 분당 rate를 env로 노출 | 완료 |
+| D-09 | 성능·용량 목표 | 제한과 회귀 테스트는 완료. 실제 first-byte·HMR 지연과 동시 Tunnel 용량 목표는 파일럿 지표로 확정 | 파일럿 중 |
+| D-10 | 공식 호환 범위 | **자동 검증 고정:** Node 24, Chrome, Vite 8.2.2, Next.js 16.3.2, React 19.2.8. 회사 관리 버전·프로젝트 확인은 환경별 남음 | 파일럿 전 |
+| D-11 | 로그 정책 | **코드 완료:** body·secret 비저장, HMAC Tunnel reference와 low-cardinality metrics. 보존 기간·접근 권한은 조직 승인 남음 | 사내 공개 전 |
+| D-12 | 장애 책임 | rollback·drain·kill switch runbook 완료. 운영 소유자·알림 당직·공지 책임자 지정은 조직 승인 남음 | 사내 공개 전 |
+| D-13 | Credential 정책 | **구현 완료:** 60초·1회용·purpose·audience, active/previous HMAC overlap과 메모리 Resume secret | 완료 |
+| D-14 | 회수 운영 | **구현 완료:** 기본 5초 `auth_version` 확인, authorization max-age와 kill switch. 정확한 SLO·소유자는 파일럿 승인 남음 | 파일럿 전 |
+| D-15 | Ingress 변경 통제 | version·digest pinning, canary·admission·drain·rollback 절차와 검사 스크립트 완료. 실제 환경 훈련 남음 | 배포 전 |
 
 ## 16. 향후 확장 후보
 

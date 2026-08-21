@@ -47,5 +47,27 @@ Review Tunnel은 외부 IdP 대신 관리자가 발급하는 내부 계정을 �
 - 계정·권한·비밀번호 변경을 활성 Tunnel과 진행 중 reviewer Stream에 주기적으로 전파
 - PostgreSQL migration, 만료 artifact 정리와 Gateway 재시작 뒤 계정·로그인 세션 유지
 - Gateway 예약 Cookie·내부 header의 로컬 앱 전달 및 덮어쓰기 차단
+- 인증 모드 create 시 Gateway CSPRNG Tunnel ID 발급과 resume purpose 분리
+- active·previous HMAC key overlap을 이용한 로그인 세션 무중단 key 검증 전환
+- `/admin/operations`의 관리자 재인증 kill switch와 현재 Carrier·Stream·resume 회수
+- 별도 bearer로 보호한 `/metrics`와 익명화한 Tunnel 수명주기 로그
 
-실제 공개 운영에는 별도로 DNS·TLS·Ingress, secret manager, PostgreSQL 백업, canary와 파일럿 부하·프레임워크 호환성 검증이 필요하다.
+## 회수와 kill switch
+
+일반 계정 회수는 `/admin/users`에서 수행한다. 계정 정지, 역할 변경, 비밀번호 초기화와 세션 회수는 `auth_version`을 바꾸고 기본 5초 확인 주기 안에 관련 새 요청과 장기 Stream에 적용된다. 개발자 권한 회수는 소유 Tunnel의 Carrier·모든 Stream·resume을 끝내며, 검토자 회수는 그 검토자의 content session과 Stream만 끝낸다.
+
+전체 공유를 즉시 중지해야 하면 control host의 `/admin/operations`에서 kill switch를 켠다. 이 동작은 관리자 비밀번호를 다시 확인하고 다음을 수행한다.
+
+- 신규 content 요청과 Carrier 연결 거부
+- 현재 Tunnel route를 비활성화하고 모든 Stream·Carrier 종료
+- 기존 Resume secret으로 재활성화 금지
+
+kill switch를 해제해도 종료된 URL은 되살아나지 않는다. 원인 제거, key·계정 회수와 public-path canary를 먼저 완료한 뒤 새 Tunnel만 허용한다.
+
+## HMAC key 회전
+
+`AUTH_SESSION_HMAC_KEY`는 새 artifact를 발급하는 active key다. 회전 rollout 동안 직전 key를 `AUTH_SESSION_HMAC_KEY_PREVIOUS`에 넣으면 기존 opaque 로그인 세션·일회용 artifact를 후보 key로 조회할 수 있다. overlap은 로그인 세션 최대 12시간과 시계 오차를 넘긴 뒤 제거한다. Gateway 재시작은 메모리 Tunnel Registry를 잃으므로 maintenance 공지와 함께 수행한다.
+
+## 운영 책임 경계
+
+실제 공개 운영에는 DNS·TLS·Ingress, secret manager, PostgreSQL 백업·복구 drill, public-path canary와 파일럿 부하 검증이 별도로 필요하다. 구체적인 순서와 환경 변수는 [`linux-deployment.md`](linux-deployment.md)를 따른다. 로그 보존 기간, 운영 소유자, 알림 임계치와 revocation propagation SLO는 회사 정책으로 승인하기 전까지 미확정이다.
