@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 
 import {
@@ -14,6 +15,8 @@ export type WebAuthOptions = Readonly<{
   authService: AuthService;
   controlHost: string;
   secureCookies?: boolean;
+  setKillSwitch?: (enabled: boolean, actor: Principal) => void;
+  getKillSwitch?: () => boolean;
 }>;
 
 export type WebAuthHandler = Readonly<{
@@ -63,11 +66,45 @@ export function createWebAuthHandler(options: WebAuthOptions): WebAuthHandler {
           if (purpose !== "create" && purpose !== "resume") {
             throw new AuthError("INVALID_ACCOUNT_INPUT", "올바르지 않은 Carrier 목적입니다.");
           }
+          const tunnelId = purpose === "create"
+            ? randomBytes(16).toString("hex")
+            : requiredFormValue(form, "tunnelId");
           const credential = await options.authService.issueCarrierCredential(clientPrincipal, {
             purpose,
-            tunnelId: requiredFormValue(form, "tunnelId"),
+            tunnelId,
           });
-          writeJson(response, 201, { credential, expiresInSeconds: 60 });
+          writeJson(response, 201, { credential, tunnelId, expiresInSeconds: 60 });
+          return;
+        }
+        if (
+          request.method === "GET" &&
+          url.pathname === "/admin/operations" &&
+          options.getKillSwitch !== undefined
+        ) {
+          requireAdministrator(principal);
+          writeHtml(response, 200, operationsPage(options.getKillSwitch()));
+          return;
+        }
+        if (
+          request.method === "POST" &&
+          url.pathname === "/admin/operations/kill-switch" &&
+          options.setKillSwitch !== undefined &&
+          options.getKillSwitch !== undefined
+        ) {
+          requireSameOrigin(request, scheme);
+          const administrator = requireAdministrator(principal);
+          const form = await readForm(request);
+          await confirmAdministratorPassword(
+            options.authService,
+            administrator,
+            form,
+            request.socket.remoteAddress ?? "unknown",
+          );
+          options.setKillSwitch(
+            requiredFormValue(form, "enabled") === "true",
+            administrator,
+          );
+          writeHtml(response, 200, operationsPage(options.getKillSwitch()));
           return;
         }
         if (request.method === "GET" && url.pathname === "/login") {
@@ -454,6 +491,16 @@ function handleWebError(
 
 function page(title: string, content: string): string {
   return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title><style>body{font:16px system-ui;max-width:960px;margin:48px auto;padding:0 20px;color:#18202a}form{display:grid;gap:12px;max-width:520px}input,button{font:inherit;padding:10px}fieldset{border:1px solid #ccd3da}table{border-collapse:collapse;width:100%}th,td{padding:10px;border-bottom:1px solid #ddd;text-align:left}.error{color:#a40000}.notice{padding:14px;background:#fff4c2;overflow-wrap:anywhere}.actions{display:flex;gap:6px;flex-wrap:wrap}.actions form{display:block}</style></head><body><h1>${escapeHtml(title)}</h1>${content}</body></html>`;
+}
+
+function operationsPage(killSwitchEnabled: boolean): string {
+  const targetState = killSwitchEnabled ? "false" : "true";
+  const action = killSwitchEnabled ? "공유 기능 다시 활성화" : "모든 공유 즉시 중지";
+  const passwordField = `<label>관리자 비밀번호 <input type="password" name="adminPassword" autocomplete="current-password" required></label>`;
+  return page(
+    "운영 제어",
+    `<p>현재 kill switch: <strong>${killSwitchEnabled ? "활성화됨" : "비활성화됨"}</strong></p><p>활성화하면 신규 요청·재연결을 차단하고 현재 Tunnel과 열린 Stream을 종료합니다.</p><form method="post" action="/admin/operations/kill-switch"><input type="hidden" name="enabled" value="${targetState}">${passwordField}<button type="submit">${action}</button></form>`,
+  );
 }
 
 function loginPage(intent: string | null, error: string | undefined): string {

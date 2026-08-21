@@ -1,19 +1,34 @@
+import type { OriginProjection } from "./session-config.ts";
+
 export type HeaderPair = readonly [name: string, value: string];
 
 export type HelloMetadata =
   | Readonly<{
       mode: "create";
       tunnelId: string;
+      localOriginFingerprint: string;
+      originProjection: OriginProjection;
     }>
   | Readonly<{
       mode: "resume";
       tunnelId: string;
       resumeSecret: string;
+      localOriginFingerprint: string;
+      originProjection: OriginProjection;
     }>;
 
 export type SessionActiveMetadata = Readonly<{
   generation: number;
-  resumeSecret: string;
+  tunnelId: string;
+  shareUrl: string;
+  readiness: Readonly<{
+    carrier: true;
+    config: true;
+    origin: true;
+    relay: true;
+    route: true;
+    admission: true;
+  }>;
 }>;
 
 export type OpenHttpMetadata = Readonly<{
@@ -53,6 +68,15 @@ export function decodeHelloMetadata(payload: Uint8Array): HelloMetadata {
   if (typeof value.tunnelId !== "string" || !tunnelIdPattern.test(value.tunnelId)) {
     throw new TypeError("HELLO tunnelId is invalid");
   }
+  if (
+    typeof value.localOriginFingerprint !== "string" ||
+    !/^[A-Za-z0-9_-]{43}$/.test(value.localOriginFingerprint)
+  ) {
+    throw new TypeError("HELLO localOriginFingerprint is invalid");
+  }
+  if (value.originProjection !== "local-view" && value.originProjection !== "proxy-aware") {
+    throw new TypeError("HELLO originProjection is invalid");
+  }
   if (value.mode === "resume") {
     if (
       typeof value.resumeSecret !== "string" ||
@@ -64,9 +88,16 @@ export function decodeHelloMetadata(payload: Uint8Array): HelloMetadata {
       mode: value.mode,
       tunnelId: value.tunnelId,
       resumeSecret: value.resumeSecret,
+      localOriginFingerprint: value.localOriginFingerprint,
+      originProjection: value.originProjection,
     };
   }
-  return { mode: value.mode, tunnelId: value.tunnelId };
+  return {
+    mode: value.mode,
+    tunnelId: value.tunnelId,
+    localOriginFingerprint: value.localOriginFingerprint,
+    originProjection: value.originProjection,
+  };
 }
 
 export function decodeSessionActiveMetadata(
@@ -81,15 +112,38 @@ export function decodeSessionActiveMetadata(
   ) {
     throw new TypeError("SESSION_ACTIVE generation is invalid");
   }
+  if (typeof value.tunnelId !== "string" || !tunnelIdPattern.test(value.tunnelId)) {
+    throw new TypeError("SESSION_ACTIVE tunnelId is invalid");
+  }
+  if (typeof value.shareUrl !== "string" || !isHttpUrl(value.shareUrl)) {
+    throw new TypeError("SESSION_ACTIVE shareUrl is invalid");
+  }
+  const readiness = value.readiness;
   if (
-    typeof value.resumeSecret !== "string" ||
-    !/^[A-Za-z0-9_-]{43}$/.test(value.resumeSecret)
+    readiness === null ||
+    typeof readiness !== "object" ||
+    Array.isArray(readiness) ||
+    !("carrier" in readiness) || readiness.carrier !== true ||
+    !("config" in readiness) || readiness.config !== true ||
+    !("origin" in readiness) || readiness.origin !== true ||
+    !("relay" in readiness) || readiness.relay !== true ||
+    !("route" in readiness) || readiness.route !== true ||
+    !("admission" in readiness) || readiness.admission !== true
   ) {
-    throw new TypeError("SESSION_ACTIVE resumeSecret is invalid");
+    throw new TypeError("SESSION_ACTIVE readiness is invalid");
   }
   return {
     generation: value.generation,
-    resumeSecret: value.resumeSecret,
+    tunnelId: value.tunnelId,
+    shareUrl: value.shareUrl,
+    readiness: {
+      carrier: true,
+      config: true,
+      origin: true,
+      relay: true,
+      route: true,
+      admission: true,
+    },
   };
 }
 
@@ -210,4 +264,18 @@ function parseHeaders(value: unknown): readonly HeaderPair[] {
     }
     return [entry[0], entry[1]] as const;
   });
+}
+
+function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      (url.protocol === "http:" || url.protocol === "https:") &&
+      url.username === "" &&
+      url.password === "" &&
+      url.hash === ""
+    );
+  } catch {
+    return false;
+  }
 }

@@ -20,6 +20,9 @@ if (
     repository,
     passwordHasher,
     sessionHmacKey: config.authSessionHmacKey,
+    ...(config.authSessionHmacPreviousKeys === undefined
+      ? {}
+      : { previousSessionHmacKeys: config.authSessionHmacPreviousKeys }),
     dummyPasswordHash: await passwordHasher.hash("constant-dummy-password-not-used"),
   });
   await authService.cleanupExpiredArtifacts();
@@ -29,6 +32,25 @@ const gateway = createGatewayServer({
   port: config.port,
   contentDomain: config.contentDomain,
   secureCookies: config.secureCookies,
+  initialKillSwitch: config.initialKillSwitch,
+  gatewayAdmissionReady: () => config.gatewayAdmissionReady,
+  logger(event) {
+    console.log(JSON.stringify(event));
+  },
+  ...(config.metricsBearerToken === undefined
+    ? {}
+    : { metricsBearerToken: config.metricsBearerToken }),
+  ...(config.sessionLimits === undefined ? {} : { sessionLimits: config.sessionLimits }),
+  ...(config.heartbeatIntervalMs === undefined
+    ? {}
+    : { heartbeatIntervalMs: config.heartbeatIntervalMs }),
+  ...(config.carrierLeaseMs === undefined ? {} : { carrierLeaseMs: config.carrierLeaseMs }),
+  ...(config.authorizationMaxAgeMs === undefined
+    ? {}
+    : { authorizationMaxAgeMs: config.authorizationMaxAgeMs }),
+  ...(config.authorizationCheckIntervalMs === undefined
+    ? {}
+    : { authorizationCheckIntervalMs: config.authorizationCheckIntervalMs }),
   ...(config.controlHost === undefined ? {} : { controlHost: config.controlHost }),
   ...(authService === undefined ? {} : { authService }),
 });
@@ -42,7 +64,7 @@ let closing = false;
 async function shutdown(signal: string): Promise<void> {
   if (closing) return;
   closing = true;
-  console.log(`Received ${signal}; closing POC Gateway`);
+  console.log(`Received ${signal}; closing Review Tunnel Gateway`);
   await gateway.close();
   await databasePool?.end();
 }

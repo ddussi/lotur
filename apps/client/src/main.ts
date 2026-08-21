@@ -1,23 +1,38 @@
 import { randomBytes } from "node:crypto";
 
 import { readSecrets } from "../../../packages/cli-utils/src/secret-input.ts";
-import { connectTunnelClient } from "./client.ts";
+import { connectResilientTunnelClient } from "./client.ts";
 
 const options = parseArguments(process.argv.slice(2));
-const carrierCredential = options.username === undefined
+const authentication = options.username === undefined
   ? undefined
-  : await loginAndCreateCarrierCredential(options);
-const client = connectTunnelClient({
+  : await loginForCarrier(options);
+const client = connectResilientTunnelClient({
   gatewayUrl: options.gatewayUrl,
-  tunnelId: options.tunnelId,
+  tunnelId: authentication?.tunnelId ?? options.tunnelId,
   localOrigin: options.localOrigin,
-  ...(carrierCredential === undefined ? {} : { carrierCredential }),
+  ...(authentication === undefined
+    ? {}
+    : {
+        carrierCredential: authentication.carrierCredential,
+        issueCarrierCredential: authentication.issueResumeCredential,
+      }),
+  onStatus(status) {
+    if (status.state === "reconnecting") {
+      console.error(
+        `Carrier disconnected (${status.error?.message ?? "transport error"}); ` +
+        `reconnecting (attempt ${status.attempt ?? 1})`,
+      );
+    } else if (status.state === "active" && status.attempt !== undefined) {
+      console.error("Carrier reconnected; the existing share URL is active again");
+    } else if (status.state === "failed") {
+      console.error(`Carrier recovery failed: ${status.error?.message ?? "unknown error"}`);
+    }
+  },
 });
 
-await client.ready;
-console.log(
-  `Tunnel ready: ${options.reviewProtocol}//${options.tunnelId}.${options.contentDomain}:${options.reviewPort}/`,
-);
+const activation = await client.ready;
+console.log(`Tunnel ready: ${activation.shareUrl}`);
 console.log(`Forwarding the complete origin ${options.localOrigin}; press Ctrl+C to stop.`);
 
 let closing = false;
@@ -28,6 +43,9 @@ async function shutdown(): Promise<void> {
 }
 process.once("SIGINT", () => void shutdown());
 process.once("SIGTERM", () => void shutdown());
+void client.closed.then((outcome) => {
+  if (outcome.reason === "failed") process.exitCode = 1;
+});
 
 type ClientOptions = Readonly<{
   localOrigin: string;
@@ -91,20 +109,44 @@ function option(arguments_: readonly string[], name: string): string | undefined
   return value;
 }
 
-async function loginAndCreateCarrierCredential(options: ClientOptions): Promise<string> {
+async function loginForCarrier(options: ClientOptions): Promise<Readonly<{
+  carrierCredential: string;
+  tunnelId: string;
+  issueResumeCredential: (
+    purpose: "resume",
+    tunnelId: string,
+  ) => Promise<string>;
+}>> {
   const [password] = await readSecrets(["Review Tunnel password: "], options.passwordStdin);
   const login = await postForm(`${options.controlUrl}/api/client/login`, {
     username: options.username ?? "",
     password: password ?? "",
   });
   if (typeof login.sessionToken !== "string") throw new Error("Gateway returned an invalid login response");
+  const sessionToken = login.sessionToken;
   const issued = await postForm(
     `${options.controlUrl}/api/carrier-credentials`,
-    { purpose: "create", tunnelId: options.tunnelId },
-    login.sessionToken,
+    { purpose: "create" },
+    sessionToken,
   );
-  if (typeof issued.credential !== "string") throw new Error("Gateway returned an invalid Carrier credential");
-  return issued.credential;
+  if (typeof issued.credential !== "string" || typeof issued.tunnelId !== "string") {
+    throw new Error("Gateway returned an invalid Carrier credential");
+  }
+  return {
+    carrierCredential: issued.credential,
+    tunnelId: issued.tunnelId,
+    async issueResumeCredential(purpose, tunnelId) {
+      const resumed = await postForm(
+        `${options.controlUrl}/api/carrier-credentials`,
+        { purpose, tunnelId },
+        sessionToken,
+      );
+      if (typeof resumed.credential !== "string") {
+        throw new Error("Gateway returned an invalid Carrier credential");
+      }
+      return resumed.credential;
+    },
+  };
 }
 
 async function postForm(

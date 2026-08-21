@@ -477,3 +477,47 @@ test("expired Carrier credentials are rejected and cleaned up", async () => {
   await service.cleanupExpiredArtifacts();
   assert.equal(repository.carrierCredentials.size, 0);
 });
+
+test("HMAC key rotation은 이전 세션을 읽고 새 세션은 active key로만 발급한다", async () => {
+  const repository = new InMemoryAuthRepository();
+  const oldKey = Buffer.alloc(32, 1);
+  const newKey = Buffer.alloc(32, 2);
+  const dependencies = {
+    repository,
+    passwordHasher: new TestHasher(),
+    dummyPasswordHash: "hashed:not-the-password",
+  };
+  const oldService = new AuthService({ ...dependencies, sessionHmacKey: oldKey });
+  const bootstrap = await oldService.bootstrapAdministrator({
+    username: "admin",
+    displayName: "Admin",
+  });
+  const temporary = await oldService.authenticate({
+    username: "admin",
+    password: bootstrap.temporaryPassword,
+    remoteAddress: "127.0.0.1",
+  });
+  await oldService.changeOwnPassword(temporary.principal, {
+    currentPassword: bootstrap.temporaryPassword,
+    newPassword: "administrator-password-2026",
+  });
+  const oldLogin = await oldService.authenticate({
+    username: "admin",
+    password: "administrator-password-2026",
+    remoteAddress: "127.0.0.1",
+  });
+
+  const rotatedService = new AuthService({
+    ...dependencies,
+    sessionHmacKey: newKey,
+    previousSessionHmacKeys: [oldKey],
+  });
+  assert.equal((await rotatedService.resolveSession(oldLogin.sessionToken))?.username, "admin");
+  const newLogin = await rotatedService.authenticate({
+    username: "admin",
+    password: "administrator-password-2026",
+    remoteAddress: "127.0.0.1",
+  });
+  assert.equal((await rotatedService.resolveSession(newLogin.sessionToken))?.username, "admin");
+  assert.equal(await oldService.resolveSession(newLogin.sessionToken), undefined);
+});

@@ -29,6 +29,7 @@ export type AuthServiceDependencies = Readonly<{
   repository: AuthRepository;
   passwordHasher: PasswordHasher;
   sessionHmacKey: Uint8Array;
+  previousSessionHmacKeys?: readonly Uint8Array[];
   dummyPasswordHash: string;
   now?: () => Date;
   createId?: () => string;
@@ -38,7 +39,7 @@ export type AuthServiceDependencies = Readonly<{
 export class AuthService {
   readonly #repository: AuthRepository;
   readonly #passwordHasher: PasswordHasher;
-  readonly #sessionHmacKey: Uint8Array;
+  readonly #sessionHmacKeys: readonly Uint8Array[];
   readonly #dummyPasswordHash: string;
   readonly #now: () => Date;
   readonly #createId: () => string;
@@ -47,7 +48,13 @@ export class AuthService {
   constructor(dependencies: AuthServiceDependencies) {
     this.#repository = dependencies.repository;
     this.#passwordHasher = dependencies.passwordHasher;
-    this.#sessionHmacKey = dependencies.sessionHmacKey;
+    this.#sessionHmacKeys = [
+      dependencies.sessionHmacKey,
+      ...(dependencies.previousSessionHmacKeys ?? []),
+    ];
+    if (this.#sessionHmacKeys.some((key) => key.byteLength < 32)) {
+      throw new TypeError("session HMAC keys must contain at least 32 bytes");
+    }
     this.#dummyPasswordHash = dependencies.dummyPasswordHash;
     this.#now = dependencies.now ?? (() => new Date());
     this.#createId = dependencies.createId ?? (() => randomBytes(16).toString("hex"));
@@ -160,11 +167,15 @@ export class AuthService {
     code: string,
     targetHost: string,
   ): Promise<Readonly<{ principal: Principal; sessionToken: string; targetPath: string }>> {
-    const exchange = await this.#repository.consumeSessionExchange(
-      this.#digestSessionToken(`exchange:${code}`),
-      targetHost,
-      this.#now(),
-    );
+    let exchange;
+    for (const digest of this.#digestSessionTokenCandidates(`exchange:${code}`)) {
+      exchange = await this.#repository.consumeSessionExchange(
+        digest,
+        targetHost,
+        this.#now(),
+      );
+      if (exchange !== undefined) break;
+    }
     if (exchange === undefined) throw new AuthError("FORBIDDEN", "세션 교환 코드가 올바르지 않습니다.");
     const account = await this.#requireAccount(exchange.accountId);
     if (!account.enabled || account.mustChangePassword || !account.roles.includes("REVIEWER")) {
@@ -206,11 +217,15 @@ export class AuthService {
     if (separator < 1 || token.length > 512) throw new AuthError("FORBIDDEN", "Carrier 인증에 실패했습니다.");
     const id = token.slice(0, separator);
     const secret = token.slice(separator + 1);
-    const credential = await this.#repository.consumeCarrierCredential(
-      id,
-      this.#digestSessionToken(`carrier:${id}:${secret}`),
-      this.#now(),
-    );
+    let credential;
+    for (const digest of this.#digestSessionTokenCandidates(`carrier:${id}:${secret}`)) {
+      credential = await this.#repository.consumeCarrierCredential(
+        id,
+        digest,
+        this.#now(),
+      );
+      if (credential !== undefined) break;
+    }
     if (credential === undefined) throw new AuthError("FORBIDDEN", "Carrier 인증에 실패했습니다.");
     const account = await this.#requireAccount(credential.accountId);
     if (
@@ -251,9 +266,11 @@ export class AuthService {
     expectedAudience = "control",
   ): Promise<Principal | undefined> {
     if (sessionToken.length < 20 || sessionToken.length > 512) return undefined;
-    const session = await this.#repository.findSessionByTokenDigest(
-      this.#digestSessionToken(sessionToken),
-    );
+    let session;
+    for (const digest of this.#digestSessionTokenCandidates(sessionToken)) {
+      session = await this.#repository.findSessionByTokenDigest(digest);
+      if (session !== undefined) break;
+    }
     if (session === undefined) return undefined;
     if (session.audience !== expectedAudience) return undefined;
     const account = await this.#repository.findAccountById(session.accountId);
@@ -466,11 +483,19 @@ export class AuthService {
   }
 
   #digestSessionToken(token: string): string {
-    return createHmac("sha256", this.#sessionHmacKey).update(token).digest("base64url");
+    return this.#digestSessionTokenWithKey(this.#sessionHmacKeys[0]!, token);
+  }
+
+  #digestSessionTokenCandidates(token: string): readonly string[] {
+    return this.#sessionHmacKeys.map((key) => this.#digestSessionTokenWithKey(key, token));
+  }
+
+  #digestSessionTokenWithKey(key: Uint8Array, token: string): string {
+    return createHmac("sha256", key).update(token).digest("base64url");
   }
 
   #throttleKey(scope: "account" | "remote", value: string): string {
-    return createHmac("sha256", this.#sessionHmacKey)
+    return createHmac("sha256", this.#sessionHmacKeys[0]!)
       .update(`${scope}\0${value}`)
       .digest("base64url");
   }

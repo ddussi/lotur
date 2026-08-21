@@ -126,19 +126,28 @@ test("internal accounts gate HTTP, admin UI and Carrier, then revoke an active T
     },
   );
   assert.equal(credentialResponse.status, 201);
-  const issued = JSON.parse(credentialResponse.body) as { credential?: string };
-  if (issued.credential === undefined) throw new Error("Carrier credential was not issued");
+  const issued = JSON.parse(credentialResponse.body) as {
+    credential?: string;
+    tunnelId?: string;
+  };
+  if (issued.credential === undefined || issued.tunnelId === undefined) {
+    throw new Error("Carrier credential was not issued");
+  }
+  assert.match(issued.tunnelId, /^[a-f0-9]{32}$/);
+  const securedHost = `${issued.tunnelId}.localhost`;
   const client = connectTunnelClient({
     gatewayUrl: `ws://control.localhost:${gatewayPort}/_review-tunnel/carrier`,
-    tunnelId: "secured-tunnel",
+    tunnelId: issued.tunnelId,
     localOrigin: `http://127.0.0.1:${originAddress.port}`,
     carrierCredential: issued.credential,
   });
 
   try {
     await client.ready;
-    const unauthenticated = await get(gatewayPort, "secured-tunnel.localhost", "/", {});
+    const unauthenticated = await get(gatewayPort, securedHost, "/", {});
     assert.equal(unauthenticated.status, 401);
+    const unknownTunnel = await get(gatewayPort, "unknown-tunnel.localhost", "/", {});
+    assert.equal(unknownTunnel.status, unauthenticated.status);
 
     const adminPage = await get(gatewayPort, "control.localhost", "/admin/users", {
       cookie: `rt_control_dev=${encodeURIComponent(administrator.sessionToken)}`,
@@ -163,7 +172,7 @@ test("internal accounts gate HTTP, admin UI and Carrier, then revoke an active T
     assert.equal(createdByWeb.status, 201);
     assert.match(createdByWeb.body, /다시 표시되지 않습니다/);
 
-    const browserStart = await get(gatewayPort, "secured-tunnel.localhost", "/private", {
+    const browserStart = await get(gatewayPort, securedHost, "/private", {
       accept: "text/html",
     });
     assert.equal(browserStart.status, 303);
@@ -186,7 +195,7 @@ test("internal accounts gate HTTP, admin UI and Carrier, then revoke an active T
     const exchangeLocation = new URL(browserLogin.location ?? "http://invalid");
     const browserExchange = await get(
       gatewayPort,
-      "secured-tunnel.localhost",
+      securedHost,
       exchangeLocation.pathname + exchangeLocation.search,
       { accept: "text/html" },
     );
@@ -194,7 +203,7 @@ test("internal accounts gate HTTP, admin UI and Carrier, then revoke an active T
     const contentCookie = browserExchange.setCookie[0]?.split(";", 1)[0];
     assert.match(contentCookie ?? "", /^rt_session_dev=/);
 
-    const authorized = await get(gatewayPort, "secured-tunnel.localhost", "/private", {
+    const authorized = await get(gatewayPort, securedHost, "/private", {
       cookie: `${contentCookie}; app_session=visible-to-app`,
     });
     assert.equal(authorized.status, 200);
@@ -207,10 +216,59 @@ test("internal accounts gate HTTP, admin UI and Carrier, then revoke an active T
       ["ADMIN"],
     );
     await delay(80);
-    const revoked = await get(gatewayPort, "secured-tunnel.localhost", "/private", {
+    const revoked = await get(gatewayPort, securedHost, "/private", {
       cookie: `${contentCookie}; app_session=visible-to-app`,
     });
-    assert.equal(revoked.status, 503);
+    assert.equal(revoked.status, 404);
+
+    const operator = await authService.authenticate({
+      username: "admin",
+      password: "administrator-password-2026",
+      remoteAddress: "127.0.0.1",
+    });
+    const operationsPage = await get(gatewayPort, "control.localhost", "/admin/operations", {
+      cookie: `rt_control_dev=${encodeURIComponent(operator.sessionToken)}`,
+    });
+    assert.equal(operationsPage.status, 200);
+    assert.match(operationsPage.body, /kill switch/);
+    const enableKillSwitch = await send(
+      gatewayPort,
+      "control.localhost",
+      "/admin/operations/kill-switch",
+      {
+        method: "POST",
+        headers: {
+          origin: "http://control.localhost",
+          cookie: `rt_control_dev=${encodeURIComponent(operator.sessionToken)}`,
+          "content-type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          enabled: "true",
+          adminPassword: "administrator-password-2026",
+        }).toString(),
+      },
+    );
+    assert.equal(enableKillSwitch.status, 200);
+    assert.equal(gateway.isKillSwitchEnabled(), true);
+    const disableKillSwitch = await send(
+      gatewayPort,
+      "control.localhost",
+      "/admin/operations/kill-switch",
+      {
+        method: "POST",
+        headers: {
+          origin: "http://control.localhost",
+          cookie: `rt_control_dev=${encodeURIComponent(operator.sessionToken)}`,
+          "content-type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          enabled: "false",
+          adminPassword: "administrator-password-2026",
+        }).toString(),
+      },
+    );
+    assert.equal(disableKillSwitch.status, 200);
+    assert.equal(gateway.isKillSwitchEnabled(), false);
   } finally {
     await client.disconnect();
     await gateway.close();
