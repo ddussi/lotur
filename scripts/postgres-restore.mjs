@@ -1,15 +1,15 @@
 import { spawn } from "node:child_process";
 import { access } from "node:fs/promises";
 import { resolve } from "node:path";
+import { parsePostgresTarget, postgresEnvironment } from "./postgres-url.mjs";
 
 const databaseUrl = required("RESTORE_DATABASE_URL");
 const inputPath = resolve(requiredOption("--input"));
 await access(inputPath);
-const target = new URL(databaseUrl);
-const databaseName = decodeURIComponent(target.pathname.replace(/^\//, ""));
-if (target.protocol !== "postgres:" && target.protocol !== "postgresql:") {
-  throw new Error("RESTORE_DATABASE_URL must use postgres:// or postgresql://");
-}
+const { target, databaseName } = parsePostgresTarget(
+  databaseUrl,
+  "RESTORE_DATABASE_URL",
+);
 if (databaseName === "" || ["postgres", "template0", "template1"].includes(databaseName)) {
   throw new Error("refusing to restore into a default PostgreSQL database");
 }
@@ -41,34 +41,6 @@ function requiredOption(name) {
   const value = index < 0 ? undefined : process.argv[index + 1];
   if (value === undefined || value.startsWith("--")) throw new Error(`${name} is required`);
   return value;
-}
-
-function postgresEnvironment(targetUrl) {
-  const environment = { ...process.env };
-  delete environment.PGSERVICE;
-  delete environment.PGSERVICEFILE;
-  environment.PGHOST = targetUrl.hostname;
-  environment.PGPORT = targetUrl.port || "5432";
-  environment.PGDATABASE = decodeURIComponent(targetUrl.pathname.replace(/^\//, ""));
-  environment.PGUSER = decodeURIComponent(targetUrl.username);
-  environment.PGPASSWORD = decodeURIComponent(targetUrl.password);
-  const supportedParameters = new Map([
-    ["sslmode", "PGSSLMODE"],
-    ["sslrootcert", "PGSSLROOTCERT"],
-    ["sslcert", "PGSSLCERT"],
-    ["sslkey", "PGSSLKEY"],
-    ["connect_timeout", "PGCONNECT_TIMEOUT"],
-    ["target_session_attrs", "PGTARGETSESSIONATTRS"],
-    ["application_name", "PGAPPNAME"],
-  ]);
-  for (const [name, value] of targetUrl.searchParams) {
-    const environmentName = supportedParameters.get(name);
-    if (environmentName === undefined) {
-      throw new Error(`unsupported RESTORE_DATABASE_URL parameter: ${name}`);
-    }
-    environment[environmentName] = value;
-  }
-  return environment;
 }
 
 function run(command, arguments_, environment) {

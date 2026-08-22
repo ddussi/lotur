@@ -3,7 +3,10 @@ import { WebSocket } from "ws";
 
 const marker = "review-tunnel-canary-v1";
 const baseUrl = requiredUrl("CANARY_CONTENT_URL", ["https:", "http:"]);
-const sessionCookie = required("CANARY_SESSION_COOKIE");
+const bearerToken = required("CANARY_BEARER_TOKEN");
+if (bearerToken.length < 32) {
+  throw new Error("CANARY_BEARER_TOKEN must contain at least 32 characters");
+}
 const allowInsecure = process.env.ALLOW_INSECURE_CANARY === "true";
 if (!allowInsecure && baseUrl.protocol !== "https:") {
   throw new Error("CANARY_CONTENT_URL must use HTTPS unless ALLOW_INSECURE_CANARY=true");
@@ -58,7 +61,9 @@ await sseReader.cancel();
 
 const websocketUrl = new URL("/websocket", baseUrl);
 websocketUrl.protocol = websocketUrl.protocol === "https:" ? "wss:" : "ws:";
-const socket = new WebSocket(websocketUrl, { headers: { cookie: sessionCookie } });
+const socket = new WebSocket(websocketUrl, {
+  headers: { authorization: `Bearer ${bearerToken}` },
+});
 await onceWebSocket(socket, "open", 2_000);
 const expected = randomBytes(32);
 socket.send(expected);
@@ -74,7 +79,11 @@ console.log("Public-path canary passed: auth, request streaming, SSE, and WebSoc
 function canaryFetch(path, init = {}) {
   return fetch(new URL(path, baseUrl), {
     ...init,
-    headers: { ...init.headers, cookie: sessionCookie, "cache-control": "no-store" },
+    headers: {
+      ...init.headers,
+      authorization: `Bearer ${bearerToken}`,
+      "cache-control": "no-store",
+    },
   });
 }
 

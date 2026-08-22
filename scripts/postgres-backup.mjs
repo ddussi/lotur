@@ -1,8 +1,10 @@
 import { spawn } from "node:child_process";
 import { mkdir, chmod, rename, stat, unlink } from "node:fs/promises";
 import { resolve } from "node:path";
+import { parsePostgresTarget, postgresEnvironment } from "./postgres-url.mjs";
 
 const databaseUrl = required("DATABASE_URL");
+const { target } = parsePostgresTarget(databaseUrl, "DATABASE_URL");
 const outputDirectory = resolve(option("--output-dir") ?? "backups");
 await mkdir(outputDirectory, { recursive: true, mode: 0o700 });
 const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
@@ -16,7 +18,7 @@ try {
     "--no-acl",
     "--file",
     temporaryPath,
-  ], { ...process.env, PGDATABASE: databaseUrl });
+  ], postgresEnvironment(target));
   const information = await stat(temporaryPath);
   if (information.size === 0) throw new Error("pg_dump produced an empty backup");
   await chmod(temporaryPath, 0o600);
