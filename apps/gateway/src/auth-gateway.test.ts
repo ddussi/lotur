@@ -74,6 +74,13 @@ test("internal accounts gate HTTP, admin UI and Carrier, then revoke an active T
     password: "reviewer-password-2026",
     remoteAddress: "127.0.0.1",
   });
+  const realAuthorizationCheck = authService.isAccountAuthorized.bind(authService);
+  let authorizationDatabaseAvailable = true;
+  authService.isAccountAuthorized = async (...arguments_) => {
+    if (!authorizationDatabaseAvailable) throw new Error("database unavailable");
+    return realAuthorizationCheck(...arguments_);
+  };
+  const gatewayEvents: string[] = [];
 
   const origin = createServer((incoming, response) => {
     assert.equal(incoming.headers.cookie, "app_session=visible-to-app");
@@ -87,6 +94,7 @@ test("internal accounts gate HTTP, admin UI and Carrier, then revoke an active T
   await once(origin, "listening");
   const originAddress = origin.address();
   assert.ok(originAddress !== null && typeof originAddress !== "string");
+  const persistedKillSwitchValues: boolean[] = [];
   const gateway = createGatewayServer({
     host: "127.0.0.1",
     port: 0,
@@ -95,6 +103,13 @@ test("internal accounts gate HTTP, admin UI and Carrier, then revoke an active T
     authService,
     secureCookies: false,
     authorizationCheckIntervalMs: 20,
+    async persistKillSwitch(enabled) {
+      await delay(5);
+      persistedKillSwitchValues.push(enabled);
+    },
+    logger(event) {
+      gatewayEvents.push(event.event);
+    },
   });
   const gatewayPort = await gateway.listen();
   const clientLoginResponse = await send(gatewayPort, "control.localhost", "/api/client/login", {
@@ -210,16 +225,14 @@ test("internal accounts gate HTTP, admin UI and Carrier, then revoke an active T
     assert.equal(authorized.body, "private preview");
     assert.deepEqual(authorized.setCookie, ["app_session=updated; Path=/"]);
 
-    await authService.setAccountRoles(
-      administrator.principal,
-      administrator.principal.accountId,
-      ["ADMIN"],
-    );
+    authorizationDatabaseAvailable = false;
     await delay(80);
+    authorizationDatabaseAvailable = true;
     const revoked = await get(gatewayPort, securedHost, "/private", {
       cookie: `${contentCookie}; app_session=visible-to-app`,
     });
     assert.equal(revoked.status, 404);
+    assert.ok(gatewayEvents.includes("authorization.revalidation_failed"));
 
     const operator = await authService.authenticate({
       username: "admin",
@@ -269,6 +282,7 @@ test("internal accounts gate HTTP, admin UI and Carrier, then revoke an active T
     );
     assert.equal(disableKillSwitch.status, 200);
     assert.equal(gateway.isKillSwitchEnabled(), false);
+    assert.deepEqual(persistedKillSwitchValues, [true, false]);
   } finally {
     await client.disconnect();
     await gateway.close();

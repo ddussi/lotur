@@ -3,6 +3,13 @@ import test from "node:test";
 
 import { readGatewayConfig } from "./config.ts";
 
+const deploymentEnvironment = {
+  DEPLOYMENT_ID: "release-42",
+  DEPLOYMENT_CONFIG_DIGEST: `sha256:${"d".repeat(64)}`,
+  CANARY_HOST: "canary.preview.example.com",
+  CANARY_BEARER_TOKEN: "c".repeat(32),
+};
+
 test("POC Gateway는 기본적으로 loopback localhost content domain만 사용한다", () => {
   assert.deepEqual(readGatewayConfig({}), {
     host: "127.0.0.1",
@@ -44,19 +51,61 @@ test("내부 계정 모드는 DB, control host와 32-byte HMAC key를 함께 요
   const config = readGatewayConfig({
     GATEWAY_HOST: "0.0.0.0",
     CONTENT_DOMAIN: "preview.example.com",
+    PUBLIC_CONTENT_ORIGIN: "https://preview.example.com",
     CONTROL_HOST: "control.example.net",
     DATABASE_URL: "postgres://lotur@example.invalid/lotur",
     AUTH_SESSION_HMAC_KEY: key,
+    ...deploymentEnvironment,
   });
   assert.equal(config.controlHost, "control.example.net");
+  assert.equal(config.publicContentOrigin, "https://preview.example.com");
   assert.equal(config.authSessionHmacKey?.byteLength, 32);
   assert.throws(() => readGatewayConfig({ DATABASE_URL: "postgres://example.invalid/db" }));
   assert.throws(() => readGatewayConfig({
     CONTENT_DOMAIN: "preview.example.com",
+    PUBLIC_CONTENT_ORIGIN: "https://preview.example.com",
     CONTROL_HOST: "control.example.com",
     DATABASE_URL: "postgres://example.invalid/db",
     AUTH_SESSION_HMAC_KEY: key,
+    ...deploymentEnvironment,
   }), /different browser site boundaries/);
+});
+
+test("인증 모드는 listener와 분리된 canonical public content origin을 요구한다", () => {
+  const key = Buffer.alloc(32, 7).toString("base64url");
+  const authenticated = {
+    GATEWAY_HOST: "0.0.0.0",
+    CONTENT_DOMAIN: "preview.example.com",
+    CONTROL_HOST: "control.example.net",
+    DATABASE_URL: "postgres://lotur@example.invalid/lotur",
+    AUTH_SESSION_HMAC_KEY: key,
+    ...deploymentEnvironment,
+  };
+
+  assert.throws(
+    () => readGatewayConfig(authenticated),
+    /PUBLIC_CONTENT_ORIGIN is required/,
+  );
+  assert.throws(
+    () => readGatewayConfig({
+      ...authenticated,
+      PUBLIC_CONTENT_ORIGIN: "https://other.example.com",
+    }),
+    /must match CONTENT_DOMAIN/,
+  );
+  assert.throws(
+    () => readGatewayConfig({
+      ...authenticated,
+      PUBLIC_CONTENT_ORIGIN: "https://preview.example.com/path",
+    }),
+    /canonical HTTP origin/,
+  );
+
+  const nonstandard = readGatewayConfig({
+    ...authenticated,
+    PUBLIC_CONTENT_ORIGIN: "https://preview.example.com:8443",
+  });
+  assert.equal(nonstandard.publicContentOrigin, "https://preview.example.com:8443");
 });
 
 test("metrics token과 초기 kill switch를 명시적으로 검증한다", () => {
@@ -99,14 +148,79 @@ test("이전 HMAC key는 active key와 함께 rotation window에만 주입한다
   const previous = Buffer.alloc(32, 2).toString("base64url");
   const config = readGatewayConfig({
     CONTENT_DOMAIN: "preview.example.com",
+    PUBLIC_CONTENT_ORIGIN: "https://preview.example.com",
     CONTROL_HOST: "control.example.net",
     DATABASE_URL: "postgres://example.invalid/db",
     AUTH_SESSION_HMAC_KEY: active,
     AUTH_SESSION_HMAC_KEY_PREVIOUS: previous,
+    ...deploymentEnvironment,
   });
   assert.equal(config.authSessionHmacPreviousKeys?.[0]?.byteLength, 32);
   assert.throws(
     () => readGatewayConfig({ AUTH_SESSION_HMAC_KEY_PREVIOUS: previous }),
     /requires AUTH_SESSION_HMAC_KEY/,
+  );
+});
+
+test("인증 운영 모드는 배포 identity를 요구하고 메모리 admission·kill env를 거부한다", () => {
+  const key = Buffer.alloc(32, 6).toString("base64url");
+  const authenticated = {
+    CONTENT_DOMAIN: "preview.example.com",
+    PUBLIC_CONTENT_ORIGIN: "https://preview.example.com",
+    CONTROL_HOST: "control.example.net",
+    DATABASE_URL: "postgres://example.invalid/db",
+    AUTH_SESSION_HMAC_KEY: key,
+  };
+  assert.throws(() => readGatewayConfig(authenticated), /DEPLOYMENT_ID/);
+  const config = readGatewayConfig({ ...authenticated, ...deploymentEnvironment });
+  assert.deepEqual(config.deploymentIdentity, {
+    deploymentId: "release-42",
+    configDigest: `sha256:${"d".repeat(64)}`,
+  });
+  assert.throws(
+    () => readGatewayConfig({
+      ...authenticated,
+      ...deploymentEnvironment,
+      GATEWAY_ADMISSION_READY: "true",
+    }),
+    /PostgreSQL operational state/,
+  );
+  assert.throws(
+    () => readGatewayConfig({
+      ...authenticated,
+      ...deploymentEnvironment,
+      KILL_SWITCH_ENABLED: "true",
+    }),
+    /PostgreSQL operational state/,
+  );
+});
+
+test("인증 운영 모드는 콘텐츠 domain 안의 전용 authenticated canary host를 요구한다", () => {
+  const key = Buffer.alloc(32, 8).toString("base64url");
+  const authenticated = {
+    CONTENT_DOMAIN: "preview.example.com",
+    PUBLIC_CONTENT_ORIGIN: "https://preview.example.com",
+    CONTROL_HOST: "control.example.net",
+    DATABASE_URL: "postgres://example.invalid/db",
+    AUTH_SESSION_HMAC_KEY: key,
+    DEPLOYMENT_ID: "release-42",
+    DEPLOYMENT_CONFIG_DIGEST: `sha256:${"e".repeat(64)}`,
+  };
+  assert.throws(() => readGatewayConfig(authenticated), /CANARY_HOST/);
+  assert.throws(
+    () => readGatewayConfig({
+      ...authenticated,
+      CANARY_HOST: "canary.other.example.com",
+      CANARY_BEARER_TOKEN: "c".repeat(32),
+    }),
+    /subdomain of CONTENT_DOMAIN/,
+  );
+  assert.throws(
+    () => readGatewayConfig({
+      ...authenticated,
+      CANARY_HOST: "canary.preview.example.com",
+      CANARY_BEARER_TOKEN: "short",
+    }),
+    /at least 32/,
   );
 });

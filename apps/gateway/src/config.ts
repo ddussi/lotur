@@ -1,10 +1,16 @@
 import type { SessionLimits } from "../../../packages/protocol/src/index.ts";
+import {
+  parseDeploymentIdentity,
+  type DeploymentIdentity,
+} from "../../../packages/operations/src/index.ts";
 import { getDomain } from "tldts";
+import { parsePublicContentOrigin } from "./public-content-origin.ts";
 
 export type GatewayConfig = Readonly<{
   host: string;
   port: number;
   contentDomain: string;
+  publicContentOrigin?: string;
   controlHost?: string;
   databaseUrl?: string;
   authSessionHmacKey?: Uint8Array;
@@ -14,11 +20,15 @@ export type GatewayConfig = Readonly<{
   initialKillSwitch: boolean;
   gatewayAdmissionReady: boolean;
   metricsBearerToken?: string;
+  canaryHost?: string;
+  canaryBearerToken?: string;
   sessionLimits?: Partial<SessionLimits>;
   heartbeatIntervalMs?: number;
   carrierLeaseMs?: number;
   authorizationMaxAgeMs?: number;
   authorizationCheckIntervalMs?: number;
+  deploymentIdentity?: DeploymentIdentity;
+  operationalStatePollIntervalMs?: number;
 }>;
 
 export function readGatewayConfig(
@@ -27,6 +37,7 @@ export function readGatewayConfig(
   const host = environment.GATEWAY_HOST ?? "127.0.0.1";
   const port = parsePort(environment.GATEWAY_PORT ?? "8787");
   const contentDomain = parseDomain(environment.CONTENT_DOMAIN ?? "localhost");
+  const publicContentOriginText = environment.PUBLIC_CONTENT_ORIGIN;
   const insecureExternalPoc = environment.ALLOW_INSECURE_POC === "true";
   const databaseUrl = environment.DATABASE_URL;
   const controlHost = environment.CONTROL_HOST;
@@ -34,6 +45,8 @@ export function readGatewayConfig(
   const previousHmacKeyText = environment.AUTH_SESSION_HMAC_KEY_PREVIOUS;
   const insecureHttpAuth = environment.ALLOW_INSECURE_HTTP_AUTH === "true";
   const metricsBearerToken = environment.METRICS_BEARER_TOKEN;
+  const canaryHostText = environment.CANARY_HOST;
+  const canaryBearerToken = environment.CANARY_BEARER_TOKEN;
   const sessionLimits = compactSessionLimits(environment);
   const heartbeatIntervalMs = optionalPositiveInteger(environment.HEARTBEAT_INTERVAL_MS, "HEARTBEAT_INTERVAL_MS");
   const carrierLeaseMs = optionalPositiveInteger(environment.CARRIER_LEASE_MS, "CARRIER_LEASE_MS");
@@ -45,8 +58,14 @@ export function readGatewayConfig(
     environment.REVOCATION_CHECK_INTERVAL_MS,
     "REVOCATION_CHECK_INTERVAL_MS",
   );
-  const gatewayAdmissionReady = environment.GATEWAY_ADMISSION_READY === "true" ||
-    (databaseUrl === undefined && isLoopbackBindHost(host));
+  const operationalStatePollIntervalMs = optionalPositiveInteger(
+    environment.OPERATIONAL_STATE_POLL_INTERVAL_MS,
+    "OPERATIONAL_STATE_POLL_INTERVAL_MS",
+  );
+  const deploymentId = environment.DEPLOYMENT_ID;
+  const deploymentConfigDigest = environment.DEPLOYMENT_CONFIG_DIGEST;
+  const gatewayAdmissionReady = databaseUrl === undefined &&
+    (environment.GATEWAY_ADMISSION_READY === "true" || isLoopbackBindHost(host));
   if (
     (carrierLeaseMs ?? 45_000) <= (heartbeatIntervalMs ?? 15_000)
   ) {
@@ -62,8 +81,48 @@ export function readGatewayConfig(
   if (databaseUrl !== undefined && (controlHost === undefined || authSessionHmacKeyText === undefined)) {
     throw new Error("DATABASE_URL auth mode requires CONTROL_HOST and AUTH_SESSION_HMAC_KEY");
   }
+  if (databaseUrl !== undefined && publicContentOriginText === undefined) {
+    throw new Error("PUBLIC_CONTENT_ORIGIN is required in authenticated mode");
+  }
+  if (
+    databaseUrl !== undefined &&
+    (deploymentId === undefined || deploymentConfigDigest === undefined)
+  ) {
+    throw new Error(
+      "authenticated mode requires DEPLOYMENT_ID and DEPLOYMENT_CONFIG_DIGEST",
+    );
+  }
+  if (
+    databaseUrl !== undefined &&
+    (canaryHostText === undefined || canaryBearerToken === undefined)
+  ) {
+    throw new Error(
+      "authenticated mode requires CANARY_HOST and CANARY_BEARER_TOKEN",
+    );
+  }
+  if (
+    databaseUrl !== undefined &&
+    (environment.GATEWAY_ADMISSION_READY !== undefined ||
+      environment.KILL_SWITCH_ENABLED !== undefined)
+  ) {
+    throw new Error(
+      "authenticated mode reads admission and kill switch from PostgreSQL operational state",
+    );
+  }
   if (databaseUrl === undefined && (controlHost !== undefined || authSessionHmacKeyText !== undefined)) {
     throw new Error("DATABASE_URL, CONTROL_HOST and AUTH_SESSION_HMAC_KEY must be configured together");
+  }
+  if (
+    databaseUrl === undefined &&
+    (deploymentId !== undefined || deploymentConfigDigest !== undefined)
+  ) {
+    throw new Error("DEPLOYMENT_ID and DEPLOYMENT_CONFIG_DIGEST require DATABASE_URL");
+  }
+  if (
+    databaseUrl === undefined &&
+    (canaryHostText !== undefined || canaryBearerToken !== undefined)
+  ) {
+    throw new Error("CANARY_HOST and CANARY_BEARER_TOKEN require DATABASE_URL");
   }
   if (previousHmacKeyText !== undefined && authSessionHmacKeyText === undefined) {
     throw new Error("AUTH_SESSION_HMAC_KEY_PREVIOUS requires AUTH_SESSION_HMAC_KEY");
@@ -79,6 +138,12 @@ export function readGatewayConfig(
       .map((value, index) =>
         decodeHmacKey(value.trim(), `AUTH_SESSION_HMAC_KEY_PREVIOUS[${index}]`)
       );
+  const publicContentOrigin = publicContentOriginText === undefined
+    ? undefined
+    : parsePublicContentOrigin(publicContentOriginText, contentDomain).origin;
+  const deploymentIdentity = deploymentId === undefined || deploymentConfigDigest === undefined
+    ? undefined
+    : parseDeploymentIdentity(deploymentId, deploymentConfigDigest);
   if (controlHost !== undefined) {
     const normalizedControlHost = parseDomain(controlHost);
     if (siteBoundary(normalizedControlHost) === siteBoundary(contentDomain)) {
@@ -91,16 +156,32 @@ export function readGatewayConfig(
   if (metricsBearerToken !== undefined && metricsBearerToken.length < 32) {
     throw new Error("METRICS_BEARER_TOKEN must contain at least 32 characters");
   }
+  const canaryHost = canaryHostText === undefined ? undefined : parseDomain(canaryHostText);
+  if (
+    canaryHost !== undefined &&
+    (canaryHost === contentDomain || !canaryHost.endsWith(`.${contentDomain}`))
+  ) {
+    throw new Error("CANARY_HOST must be a strict subdomain of CONTENT_DOMAIN");
+  }
+  if (canaryHost !== undefined && canaryHost === controlHost) {
+    throw new Error("CANARY_HOST must differ from CONTROL_HOST");
+  }
+  if (canaryBearerToken !== undefined && canaryBearerToken.length < 32) {
+    throw new Error("CANARY_BEARER_TOKEN must contain at least 32 characters");
+  }
 
   return {
     host,
     port,
     contentDomain,
+    ...(publicContentOrigin === undefined ? {} : { publicContentOrigin }),
     secureCookies: databaseUrl !== undefined && !insecureHttpAuth,
     autoMigrate: environment.AUTO_MIGRATE !== "false",
-    initialKillSwitch: environment.KILL_SWITCH_ENABLED === "true",
+    initialKillSwitch: databaseUrl === undefined && environment.KILL_SWITCH_ENABLED === "true",
     gatewayAdmissionReady,
     ...(metricsBearerToken === undefined ? {} : { metricsBearerToken }),
+    ...(canaryHost === undefined ? {} : { canaryHost }),
+    ...(canaryBearerToken === undefined ? {} : { canaryBearerToken }),
     ...(Object.keys(sessionLimits).length === 0 ? {} : { sessionLimits }),
     ...(heartbeatIntervalMs === undefined ? {} : { heartbeatIntervalMs }),
     ...(carrierLeaseMs === undefined ? {} : { carrierLeaseMs }),
@@ -108,6 +189,10 @@ export function readGatewayConfig(
     ...(authorizationCheckIntervalMs === undefined
       ? {}
       : { authorizationCheckIntervalMs }),
+    ...(operationalStatePollIntervalMs === undefined
+      ? {}
+      : { operationalStatePollIntervalMs }),
+    ...(deploymentIdentity === undefined ? {} : { deploymentIdentity }),
     ...(databaseUrl === undefined ? {} : { databaseUrl }),
     ...(controlHost === undefined ? {} : { controlHost: parseDomain(controlHost) }),
     ...(authSessionHmacKey === undefined ? {} : { authSessionHmacKey }),

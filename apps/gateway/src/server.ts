@@ -32,11 +32,15 @@ import {
   DEFAULT_SESSION_POLICY,
   DEFAULT_SESSION_LIMITS,
   FrameType,
+  INITIAL_SESSION_STATE,
   isResumeAllowed,
+  SessionTransitionError,
+  transitionSession,
   type ConnectionErrorCode,
   type SessionConfigMetadata,
   type SessionPolicy,
   type SessionLimits,
+  type SessionState,
 } from "../../../packages/protocol/src/index.ts";
 import {
   headerPairsToOutgoingHeaders,
@@ -54,6 +58,11 @@ import {
 } from "../../../packages/relay/src/index.ts";
 import { createWebAuthHandler } from "./web-auth.ts";
 import { GatewayMetrics } from "./metrics.ts";
+import {
+  buildTunnelShareUrl,
+  parsePublicContentOrigin,
+  type PublicContentOrigin,
+} from "./public-content-origin.ts";
 
 const CARRIER_PATH = "/_review-tunnel/carrier";
 const CONFIG_ACK_RETRY_MS = DEFAULT_ACTIVATION_TIMEOUT_MS / 2;
@@ -107,10 +116,7 @@ type GatewaySession = {
   generation: number;
   revision: number;
   config: SessionConfigMetadata;
-  active: boolean;
-  everActive: boolean;
-  activatedAt?: number;
-  lastStreamClosedAt?: number;
+  lifecycle: SessionState;
   lastPongAt: number;
   developerAuthorizedAt: number;
   readonly now: () => number;
@@ -129,7 +135,6 @@ type GatewaySession = {
     clientEnded: boolean;
   };
   readonly resumeDigest: Buffer;
-  disconnectedAt?: number;
   expiryTimer?: NodeJS.Timeout;
   terminal: boolean;
   nextStreamId: number;
@@ -158,6 +163,7 @@ export type GatewayServerOptions = Readonly<{
   host?: string;
   port?: number;
   contentDomain?: string;
+  publicContentOrigin?: string;
   controlHost?: string;
   authService?: AuthService;
   secureCookies?: boolean;
@@ -172,8 +178,11 @@ export type GatewayServerOptions = Readonly<{
   now?: () => number;
   sessionLimits?: Partial<SessionLimits>;
   initialKillSwitch?: boolean;
+  persistKillSwitch?: (enabled: boolean, actor: Principal) => Promise<void>;
   logger?: (event: GatewayLogEvent) => void;
   metricsBearerToken?: string;
+  canaryHost?: string;
+  canaryBearerToken?: string;
 }>;
 
 export function createGatewayServer(
@@ -182,6 +191,9 @@ export function createGatewayServer(
   const host = options.host ?? "127.0.0.1";
   const port = options.port ?? 0;
   const contentDomain = options.contentDomain ?? "localhost";
+  const configuredPublicContentOrigin = options.publicContentOrigin === undefined
+    ? undefined
+    : parsePublicContentOrigin(options.publicContentOrigin, contentDomain);
   const activationTimeoutMs = options.activationTimeoutMs ?? DEFAULT_ACTIVATION_TIMEOUT_MS;
   const gatewayAdmissionReady = options.gatewayAdmissionReady ?? (() => true);
   const sessionPolicy = options.sessionPolicy ?? DEFAULT_SESSION_POLICY;
@@ -203,7 +215,8 @@ export function createGatewayServer(
     authService: options.authService,
     controlHost: options.controlHost ?? `control.${contentDomain}`,
     secureCookies: options.secureCookies ?? true,
-    setKillSwitch(enabled) {
+    async setKillSwitch(enabled, actor) {
+      await options.persistKillSwitch?.(enabled, actor);
       updateKillSwitch(enabled);
     },
     getKillSwitch() {
@@ -215,6 +228,12 @@ export function createGatewayServer(
   const metricsTokenDigest = options.metricsBearerToken === undefined
     ? undefined
     : digestOperationalToken(resumeHmacKey, options.metricsBearerToken);
+  const canaryTokenDigest = options.canaryBearerToken === undefined
+    ? undefined
+    : digestOperationalToken(resumeHmacKey, options.canaryBearerToken);
+  const canaryHostname = options.canaryHost === undefined
+    ? undefined
+    : hostnameOf(options.canaryHost);
   const metrics = new GatewayMetrics();
   const sessions = new Map<string, GatewaySession>();
   const emit = (
@@ -239,6 +258,13 @@ export function createGatewayServer(
       try {
         let reviewer: Principal | undefined;
         const requestPath = new URL(request.url ?? "/", "http://gateway.invalid").pathname;
+        if (
+          canaryHostname !== undefined &&
+          hostnameOf(request.headers.host) === canaryHostname
+        ) {
+          handleCanaryRequest(request, response, resumeHmacKey, canaryTokenDigest);
+          return;
+        }
         if (hostnameOf(request.headers.host) === controlHostname && requestPath === "/health/live") {
           writeHealth(response, 200);
           return;
@@ -305,10 +331,42 @@ export function createGatewayServer(
       return protocols.has(CARRIER_PROFILE) ? CARRIER_PROFILE : false;
     },
   });
+  const canaryWebSockets = new WebSocketServer({
+    noServer: true,
+    perMessageDeflate: false,
+    maxPayload: 64 * 1024,
+  });
+  canaryWebSockets.on("connection", (socket) => {
+    socket.on("message", (data, isBinary) => {
+      socket.send(data, { binary: isBinary });
+    });
+  });
   const carrierAuthorizations = new WeakMap<WebSocket, DeveloperAuthorization>();
 
   server.on("upgrade", (request, socket, head) => {
     const url = new URL(request.url ?? "/", "http://gateway.invalid");
+    if (
+      canaryHostname !== undefined &&
+      hostnameOf(request.headers.host) === canaryHostname
+    ) {
+      const bearer = readBearerToken(request.headers.authorization);
+      if (
+        canaryTokenDigest === undefined ||
+        bearer === undefined ||
+        !operationalTokenMatches(resumeHmacKey, bearer, canaryTokenDigest)
+      ) {
+        writeRawError(socket, 401, "AUTHENTICATION_REQUIRED");
+        return;
+      }
+      if (url.pathname !== "/websocket") {
+        writeRawError(socket, 404, "NOT_FOUND");
+        return;
+      }
+      canaryWebSockets.handleUpgrade(request, socket, head, (webSocket) => {
+        canaryWebSockets.emit("connection", webSocket, request);
+      });
+      return;
+    }
     if (killSwitchEnabled) {
       writeRawError(socket, 503, "SERVICE_DISABLED");
       return;
@@ -376,6 +434,7 @@ export function createGatewayServer(
     const developerAuthorization = carrierAuthorizations.get(socket);
     let session: GatewaySession | undefined;
     let connectionMode: "create" | "resume" | undefined;
+    let resumeAttemptId: string | undefined;
     let receiveQueue = Promise.resolve();
     const helloTimer = setTimeout(() => {
       if (session === undefined) socket.close(1008, "HELLO timeout");
@@ -414,6 +473,7 @@ export function createGatewayServer(
                 hello.tunnelId,
                 contentDomain,
                 options.secureCookies ?? options.authService !== undefined,
+                configuredPublicContentOrigin,
               );
               const snapshot = createSessionConfigSnapshot({
                 generation,
@@ -441,8 +501,7 @@ export function createGatewayServer(
                   digest: digestSessionConfig(snapshot),
                   snapshot,
                 },
-                active: false,
-                everActive: false,
+                lifecycle: INITIAL_SESSION_STATE,
                 lastPongAt: now(),
                 developerAuthorizedAt: now(),
                 now,
@@ -467,8 +526,8 @@ export function createGatewayServer(
               const existing = sessions.get(hello.tunnelId);
               if (
                 existing === undefined ||
-                existing.disconnectedAt === undefined ||
-                !isResumeAllowed(now(), existing.disconnectedAt, sessionPolicy) ||
+                existing.lifecycle.status !== "RECONNECTING" ||
+                !isResumeAllowed(now(), existing.lifecycle.disconnectedAt, sessionPolicy) ||
                 !resumeSecretMatches(
                   resumeHmacKey,
                   hello.resumeSecret,
@@ -476,10 +535,6 @@ export function createGatewayServer(
                 )
               ) {
                 await rejectCarrier(socket, 0, "RESUME_REJECTED");
-                return;
-              }
-              if (existing.socket.readyState === WebSocket.OPEN) {
-                await rejectCarrier(socket, 0, "RESUME_IN_PROGRESS", 500);
                 return;
               }
               if (
@@ -497,11 +552,41 @@ export function createGatewayServer(
                 await rejectCarrier(socket, 0, "CONFIG_APPLY_FAILED");
                 return;
               }
+              const attemptId = randomBytes(16).toString("base64url");
+              try {
+                const nextLifecycle = transitionSession(existing.lifecycle, {
+                  type: "START_RESUME",
+                  now: now(),
+                  attemptId,
+                }, sessionPolicy);
+                if (nextLifecycle.status !== "RECONNECTING") {
+                  existing.lifecycle = nextLifecycle;
+                  sessions.delete(existing.tunnelId);
+                  await rejectCarrier(socket, 0, "RESUME_REJECTED");
+                  return;
+                }
+                existing.lifecycle = nextLifecycle;
+              } catch (error) {
+                if (
+                  error instanceof SessionTransitionError &&
+                  error.code === "RESUME_IN_PROGRESS"
+                ) {
+                  await rejectCarrier(socket, 0, "RESUME_IN_PROGRESS", 500);
+                  return;
+                }
+                throw error;
+              }
+              session = existing;
+              resumeAttemptId = attemptId;
+              disposeActivationCandidate(existing);
               existing.socket = socket;
               existing.outboundFlow = new OutboundFlowWindow(
                 INITIAL_CONNECTION_WINDOW_BYTES,
               );
-              existing.generation += 1;
+              if (existing.lifecycle.candidateGeneration === undefined) {
+                throw new Error("resume candidate has no generation");
+              }
+              existing.generation = existing.lifecycle.candidateGeneration;
               existing.revision += 1;
               const snapshot = createSessionConfigSnapshot({
                 generation: existing.generation,
@@ -518,12 +603,10 @@ export function createGatewayServer(
                 digest: digestSessionConfig(snapshot),
                 snapshot,
               };
-              existing.active = false;
               existing.lastPongAt = now();
               existing.developerAuthorizedAt = now();
               existing.configSendCount = 0;
               existing.nextStreamId = 1;
-              session = existing;
             }
             connectionMode = hello.mode;
             if (hello.mode === "create") {
@@ -566,7 +649,7 @@ export function createGatewayServer(
             });
             return;
           }
-          if (!session.active) {
+          if (session.lifecycle.status !== "ACTIVE") {
             if (envelope.type === FrameType.ConfigApplied) {
               const applied = decodeConfigAppliedMetadata(envelope.payload);
               if (
@@ -676,6 +759,29 @@ export function createGatewayServer(
               }
               session.outboundFlow.closeStream(probe.streamId);
               delete session.probe;
+              const resumed = session.lifecycle.status === "RECONNECTING";
+              if (session.lifecycle.status === "CREATING") {
+                session.lifecycle = transitionSession(
+                  session.lifecycle,
+                  { type: "ACTIVATE", now: now() },
+                  sessionPolicy,
+                );
+              } else {
+                if (resumeAttemptId === undefined) {
+                  throw new Error("resume candidate has no attempt ID");
+                }
+                session.lifecycle = transitionSession(session.lifecycle, {
+                  type: "RESUME_COMMITTED",
+                  now: now(),
+                  attemptId: resumeAttemptId,
+                }, sessionPolicy);
+              }
+              if (
+                session.lifecycle.status !== "ACTIVE" ||
+                session.lifecycle.generation !== session.generation
+              ) {
+                throw new Error("activation commit generation mismatch");
+              }
               await sendCarrierFrame(socket, {
                 type: FrameType.SessionActive,
                 generation: session.generation,
@@ -702,12 +808,6 @@ export function createGatewayServer(
                 clearTimeout(session.expiryTimer);
                 delete session.expiryTimer;
               }
-              delete session.disconnectedAt;
-              const resumed = session.everActive;
-              session.active = true;
-              session.everActive = true;
-              session.activatedAt ??= now();
-              session.lastStreamClosedAt ??= now();
               metrics.increment(resumed ? "tunnel_resumed" : "tunnel_active");
               emit(resumed ? "tunnel.resumed" : "tunnel.active", session);
               return;
@@ -727,7 +827,10 @@ export function createGatewayServer(
         });
     });
 
+    let cleanedUp = false;
     const cleanup = () => {
+      if (cleanedUp) return;
+      cleanedUp = true;
       clearTimeout(helloTimer);
       if (
         session === undefined ||
@@ -735,13 +838,8 @@ export function createGatewayServer(
         session.socket !== socket
       ) return;
       const current = session;
-      const wasActive = current.active;
-      if (current.configAckTimer !== undefined) {
-        clearTimeout(current.configAckTimer);
-        delete current.configAckTimer;
-      }
-      current.active = false;
-      current.outboundFlow.close();
+      const wasActive = current.lifecycle.status === "ACTIVE";
+      disposeActivationCandidate(current);
       for (const stream of current.streams.values()) {
         stream.cancelled = true;
         clearGatewayStreamTimers(stream);
@@ -754,37 +852,65 @@ export function createGatewayServer(
         }
       }
       current.streams.clear();
-      if (current.terminal || !current.everActive) {
-        metrics.increment(current.terminal ? "tunnel_closed" : "activation_failed");
-        emit(
-          current.terminal ? "tunnel.closed" : "tunnel.activation_failed",
-          current,
-        );
+      if (current.terminal) {
+        metrics.increment("tunnel_closed");
+        emit("tunnel.closed", current);
         sessions.delete(current.tunnelId);
         return;
       }
-      if (!wasActive) {
+      if (current.lifecycle.status === "CREATING") {
         metrics.increment("activation_failed");
         emit("tunnel.activation_failed", current);
-      } else {
+        sessions.delete(current.tunnelId);
+        return;
+      }
+      if (wasActive) {
+        current.lifecycle = transitionSession(
+          current.lifecycle,
+          { type: "CARRIER_LOST", now: now() },
+          sessionPolicy,
+        );
         metrics.increment("tunnel_reconnecting");
         emit("tunnel.reconnecting", current);
+      } else if (current.lifecycle.status === "RECONNECTING") {
+        if (
+          resumeAttemptId !== undefined &&
+          current.lifecycle.candidateAttemptId === resumeAttemptId
+        ) {
+          current.lifecycle = transitionSession(current.lifecycle, {
+            type: "RESUME_FAILED",
+            attemptId: resumeAttemptId,
+          }, sessionPolicy);
+        }
+        metrics.increment("activation_failed");
+        emit(
+          "tunnel.activation_failed",
+          current,
+        );
+      } else {
+        return;
       }
-      current.disconnectedAt ??= now();
       if (current.expiryTimer !== undefined) clearTimeout(current.expiryTimer);
+      if (current.lifecycle.status !== "RECONNECTING") return;
       const reconnectDelay = Math.max(
         0,
-        current.disconnectedAt + current.config.snapshot.reconnectGraceMs - now() + 10,
+        current.lifecycle.disconnectedAt + current.config.snapshot.reconnectGraceMs - now() + 10,
       );
       current.expiryTimer = setTimeout(() => {
         if (
           sessions.get(current.tunnelId) === current &&
-          current.disconnectedAt !== undefined &&
-          !isResumeAllowed(now(), current.disconnectedAt, sessionPolicy)
+          current.lifecycle.status === "RECONNECTING"
         ) {
-          sessions.delete(current.tunnelId);
-          metrics.increment("tunnel_expired");
-          emit("tunnel.expired", current, { reason: "RECONNECT_TIMEOUT" });
+          current.lifecycle = transitionSession(
+            current.lifecycle,
+            { type: "TICK", now: now() },
+            sessionPolicy,
+          );
+          if (current.lifecycle.status === "EXPIRED") {
+            sessions.delete(current.tunnelId);
+            metrics.increment("tunnel_expired");
+            emit("tunnel.expired", current, { reason: current.lifecycle.reason });
+          }
         }
       }, reconnectDelay);
       current.expiryTimer.unref();
@@ -794,28 +920,50 @@ export function createGatewayServer(
   });
 
   let revocationCheckRunning = false;
+  const revocationAuthService = options.authService;
   const revocationTimer = setInterval(() => {
-    if (options.authService === undefined || revocationCheckRunning) return;
+    if (revocationAuthService === undefined || revocationCheckRunning) return;
     revocationCheckRunning = true;
     void (async () => {
       for (const session of sessions.values()) {
         if (session.ownerAccountId !== undefined && session.ownerAuthVersion !== undefined) {
-          if (!await options.authService?.isAccountAuthorized(
-            session.ownerAccountId,
-            session.ownerAuthVersion,
-            "DEVELOPER",
-          )) {
+          let developerAuthorized: boolean;
+          try {
+            developerAuthorized = await revocationAuthService.isAccountAuthorized(
+              session.ownerAccountId,
+              session.ownerAuthVersion,
+              "DEVELOPER",
+            );
+          } catch (error) {
+            emit("authorization.revalidation_failed", session, {
+              reason: toSafeErrorReason(error),
+            });
+            session.terminal = true;
+            session.socket.close(1011, "developer authorization unavailable");
+            continue;
+          }
+          if (!developerAuthorized) {
             session.terminal = true;
             session.socket.close(1008, "developer authorization revoked");
           }
         }
         for (const [streamId, stream] of session.streams) {
           if (stream.reviewerAccountId === undefined || stream.reviewerAuthVersion === undefined) continue;
-          if (!await options.authService?.isAccountAuthorized(
-            stream.reviewerAccountId,
-            stream.reviewerAuthVersion,
-            "REVIEWER",
-          )) {
+          let reviewerAuthorized: boolean;
+          try {
+            reviewerAuthorized = await revocationAuthService.isAccountAuthorized(
+              stream.reviewerAccountId,
+              stream.reviewerAuthVersion,
+              "REVIEWER",
+            );
+          } catch (error) {
+            emit("authorization.revalidation_failed", session, {
+              streamId,
+              reason: toSafeErrorReason(error),
+            });
+            reviewerAuthorized = false;
+          }
+          if (!reviewerAuthorized) {
             stream.cancelled = true;
             removeGatewayStream(session, streamId);
             session.outboundFlow.closeStream(streamId);
@@ -825,9 +973,19 @@ export function createGatewayServer(
           }
         }
       }
-    })().finally(() => {
-      revocationCheckRunning = false;
-    });
+    })()
+      .catch((error: unknown) => {
+        for (const session of sessions.values()) {
+          emit("authorization.revalidation_failed", session, {
+            reason: toSafeErrorReason(error),
+          });
+          session.terminal = true;
+          session.socket.close(1011, "authorization revalidation unavailable");
+        }
+      })
+      .finally(() => {
+        revocationCheckRunning = false;
+      });
   }, options.authorizationCheckIntervalMs ?? 5_000);
   revocationTimer.unref();
   const authCleanupTimer = setInterval(() => {
@@ -857,29 +1015,30 @@ export function createGatewayServer(
   const sessionTimer = setInterval(() => {
     const checkedAt = now();
     for (const session of sessions.values()) {
-      if (!session.active || session.activatedAt === undefined) continue;
-      const maxExpired = checkedAt >= session.activatedAt + sessionPolicy.maxTtlMs;
-      const idleExpired =
-        session.streams.size === 0 &&
-        session.lastStreamClosedAt !== undefined &&
-        checkedAt >= session.lastStreamClosedAt + sessionPolicy.idleTimeoutMs;
+      if (session.lifecycle.status !== "ACTIVE") continue;
+      const nextLifecycle = transitionSession(
+        session.lifecycle,
+        { type: "TICK", now: checkedAt },
+        sessionPolicy,
+      );
       const developerAuthorizationExpired =
         checkedAt >= session.developerAuthorizedAt + authorizationMaxAgeMs;
-      if (maxExpired || idleExpired || developerAuthorizationExpired) {
+      if (nextLifecycle.status === "EXPIRED" || developerAuthorizationExpired) {
+        session.lifecycle = nextLifecycle;
         metrics.increment("tunnel_expired");
         emit("tunnel.expired", session, {
           reason: developerAuthorizationExpired
             ? "AUTHORIZATION_EXPIRED"
-            : maxExpired
-              ? "MAX_TTL"
-              : "IDLE_TIMEOUT",
+            : nextLifecycle.status === "EXPIRED"
+              ? nextLifecycle.reason
+              : "UNKNOWN",
         });
         session.terminal = true;
         session.socket.close(
           1008,
           developerAuthorizationExpired
             ? "developer authorization expired"
-            : maxExpired
+            : nextLifecycle.status === "EXPIRED" && nextLifecycle.reason === "MAX_TTL"
               ? "session maximum TTL expired"
               : "session idle timeout",
         );
@@ -927,9 +1086,11 @@ export function createGatewayServer(
       }
       sessions.clear();
       for (const socket of carriers.clients) socket.terminate();
+      for (const socket of canaryWebSockets.clients) socket.terminate();
       for (const socket of serverSockets) socket.destroy();
       await closeHttpServer(server);
       await new Promise<void>((resolve) => carriers.close(() => resolve()));
+      await new Promise<void>((resolve) => canaryWebSockets.close(() => resolve()));
     },
     setKillSwitch(enabled) {
       updateKillSwitch(enabled);
@@ -949,7 +1110,6 @@ export function createGatewayServer(
     emit(enabled ? "kill_switch.enabled" : "kill_switch.disabled");
     if (!enabled) return;
     for (const session of sessions.values()) {
-      session.active = false;
       session.terminal = true;
       for (const [streamId, stream] of session.streams) {
         stream.cancelled = true;
@@ -967,8 +1127,8 @@ export function createGatewayServer(
     let reconnectingTunnels = 0;
     let activeStreams = 0;
     for (const session of sessions.values()) {
-      if (session.active) activeTunnels += 1;
-      else if (session.disconnectedAt !== undefined) reconnectingTunnels += 1;
+      if (session.lifecycle.status === "ACTIVE") activeTunnels += 1;
+      else if (session.lifecycle.status === "RECONNECTING") reconnectingTunnels += 1;
       activeStreams += session.streams.size;
     }
     return {
@@ -992,7 +1152,7 @@ async function handleReviewerRequest(
   const session = tunnelId === undefined ? undefined : sessions.get(tunnelId);
   if (
     session === undefined ||
-    !session.active ||
+    session.lifecycle.status !== "ACTIVE" ||
     session.socket.readyState !== WebSocket.OPEN
   ) {
     writeGatewayError(
@@ -1033,6 +1193,10 @@ async function handleReviewerRequest(
       reviewerAuthorizedAt: session.now(),
     }),
   };
+  session.lifecycle = transitionSession(session.lifecycle, {
+    type: "STREAM_OPEN",
+    now: session.now(),
+  });
   session.streams.set(streamId, stream);
   session.metrics.increment("stream_opened");
   const expireStream = (code: string) => {
@@ -1235,7 +1399,12 @@ function removeGatewayStream(session: GatewaySession, streamId: number): void {
   const stream = session.streams.get(streamId);
   if (stream === undefined || !session.streams.delete(streamId)) return;
   clearGatewayStreamTimers(stream);
-  if (session.streams.size === 0) session.lastStreamClosedAt = session.now();
+  if (session.lifecycle.status === "ACTIVE") {
+    session.lifecycle = transitionSession(session.lifecycle, {
+      type: "STREAM_CLOSED",
+      now: session.now(),
+    });
+  }
 }
 
 function touchRequestInactivity(
@@ -1329,7 +1498,7 @@ async function handleReviewerUpgrade(
   const session = tunnelId === undefined ? undefined : sessions.get(tunnelId);
   if (
     session === undefined ||
-    !session.active ||
+    session.lifecycle.status !== "ACTIVE" ||
     session.socket.readyState !== WebSocket.OPEN
   ) {
     writeRawError(
@@ -1370,6 +1539,10 @@ async function handleReviewerUpgrade(
       reviewerAuthorizedAt: session.now(),
     }),
   };
+  session.lifecycle = transitionSession(session.lifecycle, {
+    type: "STREAM_OPEN",
+    now: session.now(),
+  });
   session.streams.set(streamId, stream);
   session.metrics.increment("stream_opened");
   stream.durationTimer = setTimeout(() => {
@@ -1552,6 +1725,74 @@ function writeRawError(socket: Duplex, statusCode: number, code: string): void {
   );
 }
 
+function handleCanaryRequest(
+  request: IncomingMessage,
+  response: ServerResponse,
+  hmacKey: Uint8Array,
+  tokenDigest: Buffer | undefined,
+): void {
+  const bearer = readBearerToken(request.headers.authorization);
+  if (
+    tokenDigest === undefined ||
+    bearer === undefined ||
+    !operationalTokenMatches(hmacKey, bearer, tokenDigest)
+  ) {
+    writeGatewayError(response, 401, "AUTHENTICATION_REQUIRED");
+    return;
+  }
+  const path = new URL(request.url ?? "/", "http://canary.invalid").pathname;
+  const marker = "review-tunnel-canary-v1";
+  if (request.method === "GET" && path === "/") {
+    response.writeHead(200, {
+      "content-type": "text/plain",
+      "cache-control": "no-store",
+    });
+    response.end(`${marker}\n`);
+    return;
+  }
+  if (request.method === "GET" && path === "/stream") {
+    response.writeHead(200, {
+      "content-type": "text/event-stream",
+      "cache-control": "no-store",
+      "x-accel-buffering": "no",
+    });
+    response.write(`data: ${marker}-first\n\n`);
+    setTimeout(() => {
+      if (!response.destroyed) response.end(`data: ${marker}-second\n\n`);
+    }, 500).unref();
+    return;
+  }
+  if (request.method === "POST" && path === "/request-stream") {
+    let responseStarted = false;
+    let receivedBytes = 0;
+    const startResponse = () => {
+      if (responseStarted || response.destroyed) return;
+      responseStarted = true;
+      response.writeHead(200, {
+        "content-type": "text/plain",
+        "cache-control": "no-store",
+      });
+      response.write(`${marker}-request-first\n`);
+    };
+    request.on("data", (chunk: Buffer) => {
+      receivedBytes += chunk.byteLength;
+      if (receivedBytes > 64 * 1024) {
+        response.destroy();
+        request.destroy();
+        return;
+      }
+      startResponse();
+    });
+    request.once("end", () => {
+      startResponse();
+      if (!response.destroyed) response.end(`${marker}-request-end\n`);
+    });
+    request.once("error", () => response.destroy());
+    return;
+  }
+  writeGatewayError(response, 404, "NOT_FOUND");
+}
+
 function toSafeErrorReason(value: unknown): string {
   const message = value instanceof Error ? value.message : "unknown carrier failure";
   return message.replace(/[\r\n]/g, " ").slice(0, 160);
@@ -1581,6 +1822,16 @@ async function sendSessionConfig(session: GatewaySession): Promise<void> {
   });
 }
 
+function disposeActivationCandidate(session: GatewaySession): void {
+  if (session.configAckTimer !== undefined) {
+    clearTimeout(session.configAckTimer);
+    delete session.configAckTimer;
+  }
+  delete session.probe;
+  session.configSendCount = 0;
+  session.outboundFlow.close();
+}
+
 function armActivationTimeout(
   session: GatewaySession,
   socket: WebSocket,
@@ -1591,14 +1842,22 @@ function armActivationTimeout(
   }
   const retryDelay = Math.floor(activationTimeoutMs / 2);
   session.configAckTimer = setTimeout(() => {
-    if (session.active || session.socket !== socket || socket.readyState !== WebSocket.OPEN) {
+    if (
+      session.lifecycle.status === "ACTIVE" ||
+      session.socket !== socket ||
+      socket.readyState !== WebSocket.OPEN
+    ) {
       return;
     }
     if (session.probe === undefined && session.configSendCount === 1) {
       void sendSessionConfig(session).catch(() => socket.close(1011, "config resend failed"));
     }
     session.configAckTimer = setTimeout(() => {
-      if (session.active || session.socket !== socket || socket.readyState !== WebSocket.OPEN) {
+      if (
+        session.lifecycle.status === "ACTIVE" ||
+        session.socket !== socket ||
+        socket.readyState !== WebSocket.OPEN
+      ) {
         return;
       }
       void rejectCarrier(
@@ -1637,7 +1896,11 @@ function shareUrlFor(
   tunnelId: string,
   contentDomain: string,
   secure: boolean,
+  configuredPublicOrigin?: PublicContentOrigin,
 ): string {
+  if (configuredPublicOrigin !== undefined) {
+    return buildTunnelShareUrl(tunnelId, configuredPublicOrigin);
+  }
   const address = server.address();
   if (address === null || typeof address === "string") {
     throw new Error("Gateway must be listening before a Session is provisioned");
@@ -1645,7 +1908,12 @@ function shareUrlFor(
   const protocol = secure ? "https" : "http";
   const defaultPort = secure ? 443 : 80;
   const port = address.port === defaultPort ? "" : `:${address.port}`;
-  return `${protocol}://${tunnelId}.${contentDomain}${port}/`;
+  return buildTunnelShareUrl(tunnelId, {
+    protocol: `${protocol}:`,
+    hostname: contentDomain,
+    port: port.replace(/^:/, ""),
+    origin: `${protocol}://${contentDomain}${port}`,
+  });
 }
 
 function getTunnelId(

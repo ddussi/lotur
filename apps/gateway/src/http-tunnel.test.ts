@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { createServer, request, type Server } from "node:http";
 import { connect as connectTcp } from "node:net";
 import test from "node:test";
@@ -10,6 +11,14 @@ import {
   connectTunnelClient,
   TunnelConnectionError,
 } from "../../client/src/client.ts";
+import {
+  CARRIER_PROFILE,
+  decodeEnvelope,
+  decodeSessionConfigMetadata,
+  encodeEnvelope,
+  encodeMetadata,
+  FrameType,
+} from "../../../packages/protocol/src/index.ts";
 import { createGatewayServer } from "./server.ts";
 
 test("generic CONNECT와 WebSocket 이외 Upgrade를 명시적으로 거부한다", async (context) => {
@@ -72,6 +81,73 @@ test("activation gate가 실패하면 공유 URL을 한 번도 열지 않는다"
   });
   assert.equal(result.statusCode, 503);
   await rejected;
+});
+
+test("전용 authenticated canary는 admission과 kill switch에 의존하지 않는다", async (context) => {
+  const token = "canary-token-that-is-at-least-32-bytes";
+  const gateway = createGatewayServer({
+    gatewayAdmissionReady: () => false,
+    initialKillSwitch: true,
+    canaryHost: "canary.localhost",
+    canaryBearerToken: token,
+  });
+  const gatewayPort = await gateway.listen();
+  context.after(() => gateway.close());
+
+  const negative = await sendRequest({
+    port: gatewayPort,
+    host: "canary.localhost",
+    method: "GET",
+    path: "/",
+    chunks: [],
+  });
+  assert.equal(negative.statusCode, 401);
+
+  const authorized = await sendRequest({
+    port: gatewayPort,
+    host: "canary.localhost",
+    method: "GET",
+    path: "/",
+    chunks: [],
+    headers: { authorization: `Bearer ${token}` },
+  });
+  assert.equal(authorized.statusCode, 200);
+  assert.match(authorized.body.toString(), /review-tunnel-canary-v1/);
+
+  let uploadEnded = false;
+  const upload = request({
+    host: "127.0.0.1",
+    port: gatewayPort,
+    method: "POST",
+    path: "/request-stream",
+    headers: {
+      host: "canary.localhost",
+      authorization: `Bearer ${token}`,
+      "content-type": "application/octet-stream",
+    },
+  });
+  const streamedResponse = onceEvent<[import("node:http").IncomingMessage]>(upload, "response");
+  upload.write("first");
+  const [incoming] = await streamedResponse;
+  assert.equal(uploadEnded, false);
+  uploadEnded = true;
+  upload.end("second");
+  assert.match((await collect(incoming)).toString(), /request-first/);
+
+  const socket = new WebSocket(`ws://127.0.0.1:${gatewayPort}/websocket`, {
+    headers: {
+      host: "canary.localhost",
+      authorization: `Bearer ${token}`,
+    },
+  });
+  context.after(() => socket.terminate());
+  await onceEvent(socket, "open");
+  const message = onceEvent<[Buffer, boolean]>(socket, "message");
+  socket.send(Buffer.from("canary-echo"));
+  const [received, binary] = await message;
+  assert.equal(binary, true);
+  assert.equal(received.toString(), "canary-echo");
+  socket.close(1000);
 });
 
 test("초기 로컬 origin 점검 실패는 activation 전에 종료한다", async (context) => {
@@ -252,6 +328,27 @@ test("CLI 연결 관리자가 단절 뒤 같은 URL을 자동 resume한다", asy
   assert.equal(result.statusCode, 200);
   assert.equal(result.body.toString(), "auto resumed");
   assert.equal(new URL(initial.shareUrl).hostname, "automatic-resume-test.localhost");
+});
+
+test("공유 URL은 내부 listener가 아니라 명시한 public content origin을 사용한다", async (context) => {
+  const origin = createServer((_incoming, response) => response.end("public origin"));
+  const originPort = await listen(origin);
+  context.after(() => close(origin));
+  const gateway = createGatewayServer({
+    contentDomain: "preview.example.com",
+    publicContentOrigin: "https://preview.example.com",
+  });
+  const gatewayPort = await gateway.listen();
+  context.after(() => gateway.close());
+  const client = connectTunnelClient({
+    gatewayUrl: `ws://127.0.0.1:${gatewayPort}/_review-tunnel/carrier`,
+    tunnelId: "public-origin-test",
+    localOrigin: `http://127.0.0.1:${originPort}`,
+  });
+  context.after(() => client.close());
+
+  const active = await client.ready;
+  assert.equal(active.shareUrl, "https://public-origin-test.preview.example.com/");
 });
 
 test("Origin·forwarding·Location·Cookie를 local-view 경계로 투영한다", async (context) => {
@@ -834,6 +931,74 @@ test("Carrier 단절 뒤 Resume secret으로 같은 URL을 generation 2에서 �
   assert.equal(result.body.toString(), "resumed");
 });
 
+test("resume probe 도중 후보가 끊겨도 다음 generation이 같은 URL을 복구한다", async (context) => {
+  const origin = createServer((_incoming, response) => response.end("resumed after candidate loss"));
+  const originPort = await listen(origin);
+  context.after(() => close(origin));
+  const gateway = createGatewayServer({ activationTimeoutMs: 300 });
+  const gatewayPort = await gateway.listen();
+  context.after(() => gateway.close());
+  const gatewayUrl = `ws://127.0.0.1:${gatewayPort}/_review-tunnel/carrier`;
+
+  const initialClient = connectTunnelClient({
+    gatewayUrl,
+    tunnelId: "resume-candidate-loss",
+    localOrigin: `http://127.0.0.1:${originPort}`,
+  });
+  const initial = await initialClient.ready;
+  await initialClient.disconnect();
+  await delay(10);
+
+  const interrupted = new WebSocket(gatewayUrl, CARRIER_PROFILE);
+  await onceEvent(interrupted, "open");
+  interrupted.send(encodeEnvelope({
+    type: FrameType.Hello,
+    flags: 0,
+    generation: 0,
+    streamId: 0,
+    payload: encodeMetadata({
+      mode: "resume",
+      tunnelId: initial.tunnelId,
+      resumeSecret: initial.resumeSecret,
+      localOriginFingerprint: createHash("sha256")
+        .update("review-tunnel.v1.local-origin\0", "utf8")
+        .update(`http://127.0.0.1:${originPort}`, "utf8")
+        .digest("base64url"),
+      originProjection: "local-view",
+    }),
+  }));
+  const configEnvelope = await nextCarrierEnvelope(interrupted, FrameType.SessionConfig);
+  const config = decodeSessionConfigMetadata(configEnvelope.payload);
+  const probeStarted = nextCarrierEnvelope(interrupted, FrameType.OpenProbe);
+  interrupted.send(encodeEnvelope({
+    type: FrameType.ConfigApplied,
+    flags: 0,
+    generation: configEnvelope.generation,
+    streamId: 0,
+    payload: encodeMetadata({
+      revision: config.revision,
+      digest: config.digest,
+      result: "APPLIED",
+      localOriginReady: true,
+    }),
+  }));
+  await probeStarted;
+  interrupted.terminate();
+  await onceEvent(interrupted, "close");
+  await delay(10);
+
+  const recovered = connectTunnelClient({
+    gatewayUrl,
+    tunnelId: initial.tunnelId,
+    localOrigin: `http://127.0.0.1:${originPort}`,
+    resumeSecret: initial.resumeSecret,
+  });
+  context.after(() => recovered.close());
+  const activation = await recovered.ready;
+  assert.equal(activation.generation, 3);
+  assert.equal(activation.shareUrl, initial.shareUrl);
+});
+
 test("명시적 Client 종료는 URL과 Resume secret을 즉시 폐기한다", async (context) => {
   const origin = createServer((_incoming, response) => response.end("should-not-run"));
   const originPort = await listen(origin);
@@ -880,6 +1045,41 @@ async function listen(server: Server): Promise<number> {
     throw new Error("server did not bind a TCP port");
   }
   return address.port;
+}
+
+function nextCarrierEnvelope(
+  socket: WebSocket,
+  expectedType: number,
+): Promise<ReturnType<typeof decodeEnvelope>> {
+  return new Promise((resolve, reject) => {
+    const onMessage = (data: import("ws").RawData, isBinary: boolean) => {
+      if (!isBinary) return;
+      try {
+        const bytes = data instanceof ArrayBuffer
+          ? new Uint8Array(data)
+          : Array.isArray(data)
+            ? Buffer.concat(data)
+            : new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+        const envelope = decodeEnvelope(bytes);
+        if (envelope.type !== expectedType) return;
+        cleanup();
+        resolve(envelope);
+      } catch (error) {
+        cleanup();
+        reject(error);
+      }
+    };
+    const onError = (error: Error) => {
+      cleanup();
+      reject(error);
+    };
+    const cleanup = () => {
+      socket.off("message", onMessage);
+      socket.off("error", onError);
+    };
+    socket.on("message", onMessage);
+    socket.once("error", onError);
+  });
 }
 
 async function close(server: Server): Promise<void> {

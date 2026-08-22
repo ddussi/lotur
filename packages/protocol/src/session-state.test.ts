@@ -155,6 +155,10 @@ test("실패한 resume candidate를 제거하면 다음 candidate가 시작할 �
     second.status === "RECONNECTING" ? second.candidateAttemptId : undefined,
     "candidate-b",
   );
+  assert.equal(
+    second.status === "RECONNECTING" ? second.candidateGeneration : undefined,
+    3,
+  );
 });
 
 test("재연결 유예를 1ms 넘기면 RECONNECT_TIMEOUT이 된다", () => {

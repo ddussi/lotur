@@ -27,6 +27,8 @@ export type SessionState =
       disconnectedAt: number;
       lastStreamClosedAt: number;
       candidateAttemptId?: string;
+      candidateGeneration?: number;
+      lastIssuedGeneration?: number;
     }>
   | Readonly<{
       status: "EXPIRED";
@@ -131,7 +133,13 @@ export function transitionSession(
           "another resume candidate already exists",
         );
       }
-      return { ...state, candidateAttemptId: event.attemptId };
+      const candidateGeneration = (state.lastIssuedGeneration ?? state.generation) + 1;
+      return {
+        ...state,
+        candidateAttemptId: event.attemptId,
+        candidateGeneration,
+        lastIssuedGeneration: candidateGeneration,
+      };
     case "RESUME_FAILED":
       if (state.candidateAttemptId !== event.attemptId) {
         throw new SessionTransitionError(
@@ -153,7 +161,7 @@ export function transitionSession(
       return {
         status: "ACTIVE",
         activatedAt: state.activatedAt,
-        generation: state.generation + 1,
+        generation: state.candidateGeneration ?? state.generation + 1,
         activeStreamCount: 0,
         lastStreamClosedAt: state.lastStreamClosedAt,
       };
@@ -200,6 +208,7 @@ function withoutCandidate(
 ): SessionState {
   const {
     candidateAttemptId: _candidateAttemptId,
+    candidateGeneration: _candidateGeneration,
     ...remaining
   } = state;
   return remaining;

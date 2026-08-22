@@ -15,7 +15,7 @@ export type WebAuthOptions = Readonly<{
   authService: AuthService;
   controlHost: string;
   secureCookies?: boolean;
-  setKillSwitch?: (enabled: boolean, actor: Principal) => void;
+  setKillSwitch?: (enabled: boolean, actor: Principal) => Promise<void>;
   getKillSwitch?: () => boolean;
 }>;
 
@@ -100,7 +100,7 @@ export function createWebAuthHandler(options: WebAuthOptions): WebAuthHandler {
             form,
             request.socket.remoteAddress ?? "unknown",
           );
-          options.setKillSwitch(
+          await options.setKillSwitch(
             requiredFormValue(form, "enabled") === "true",
             administrator,
           );
