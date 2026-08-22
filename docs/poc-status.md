@@ -21,22 +21,24 @@
 - 인증 정책을 Tunnel 조회보다 먼저 적용해 미인증 사용자에게 Tunnel 존재 여부를 노출하지 않는 경계
 - 개발자·검토자 authorization max-age와 `auth_version` 회수, 현재 Stream·Carrier·resume 폐기
 - HMAC 익명 Tunnel reference를 쓰는 구조화 수명주기 로그, low-cardinality Prometheus 메트릭과 별도 bearer 보호
-- 관리자 재인증이 필요한 운영 kill switch와 초기 환경 admission gate
+- PostgreSQL에 영속되는 관리자 재인증 kill switch, 배포 identity별 canary 결과와 별도 admission 승인 gate
 - PostgreSQL custom-format 원자 백업 및 확인 문자열이 필요한 파괴적 복구 스크립트
-- 미인증 차단·request streaming·SSE·WebSocket을 검사하는 고정 public-path canary
+- admission·kill switch·Tunnel과 독립된 bearer 인증 예약 host에서 미인증 차단·request streaming·SSE·WebSocket을 검사하는 public-path canary
+- 실패한 resume candidate의 정리와 generation 재사용 방지, 권한 DB 재검증 장애의 fail-closed 종료
+- Gateway·Admin CLI·Client·canary-check 역할별 non-root Docker target
 
 ## 자동 검증 결과
 
-2026-08-24 로컬 검증 결과는 다음과 같다.
+2026-08-24 기준 자동 검증 항목은 다음과 같다. 정확한 테스트 수는 현재 `npm run check:mvp` 출력으로 확인한다.
 
-- `npm test`: 87개 중 86개 통과, 실패 0, PostgreSQL 실연동 1개는 `TEST_DATABASE_URL`이 없어 건너뜀
+- `npm test`: 전체 단위·통합 테스트 통과, PostgreSQL 실연동 1개는 `TEST_DATABASE_URL`이 없을 때만 건너뜀
 - `npm run test:frameworks`: 2개 통과
   - Vite 8.2.2: 초기 화면, 정적 모듈, 상호작용과 HMR
   - Next.js 16.3.2·React 19.2.8: RSC, Route Handler, Server Action, client navigation, 상태 보존 Fast Refresh
 - `npm run typecheck`, 아키텍처 경계 검사와 `npm run build` 통과
 - npm audit: 알려진 취약점 0개
 
-PostgreSQL 검증은 [`compose.test.yml`](../compose.test.yml)의 PostgreSQL 17.6과 `npm run test:postgres`로 재현한다. 이번 작업 환경에서는 Docker daemon이 실행 중이지 않아 실연동 테스트를 다시 실행하지 못했다. 실행 순서는 [`linux-deployment.md`](linux-deployment.md)에 고정했다.
+PostgreSQL 검증은 [`compose.test.yml`](../compose.test.yml)의 PostgreSQL 17.6과 `npm run test:postgres`로 재현한다. 2026-08-24에 실제 컨테이너에서 계정·opaque session, canary→승인 순서, 재시작 후 admission·kill switch 유지와 실패 시 승인 해제를 통과했다. 실행 순서는 [`linux-deployment.md`](linux-deployment.md)에 고정했다.
 
 ## 실제 환경에서 남은 인수 작업
 
@@ -44,8 +46,8 @@ PostgreSQL 검증은 [`compose.test.yml`](../compose.test.yml)의 PostgreSQL 17.
 
 1. 콘텐츠 wildcard와 control host를 서로 다른 사이트 경계에 배치하고 승인된 TLS·Ingress 버전과 config digest를 고정한다.
 2. secret manager로 active·previous HMAC key와 metrics token을 주입하고 key overlap 회전·철회를 훈련한다.
-3. 후보 Ingress에서 public-path canary를 통과한 뒤에만 신규 Session admission과 사용자 트래픽을 연다.
-4. 실제 PostgreSQL 백업을 별도 보안 저장소에 보관하고 격리 DB에 복구한 뒤 로그인·감사·세션 스키마를 확인한다.
+3. 후보 Ingress의 예약 host에서 public-path canary를 통과하고 결과 기록과 별도 admission 승인을 완료한 뒤에만 사용자 트래픽을 연다.
+4. 실제 PostgreSQL 백업을 별도 보안 저장소에 보관하고 격리 DB에 복구한 뒤 로그인·감사·세션 및 operational state를 확인한다.
 5. 관리되는 macOS arm64·Chrome과 회사 표준 Vite·Next.js 프로젝트 버전을 호환성 매트릭스에 고정한다.
 6. 운영 소유자, 알림 임계치, 로그 보존 기간, 회수 전파 SLO와 kill switch 권한자를 조직 정책으로 승인한다.
 

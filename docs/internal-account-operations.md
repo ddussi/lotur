@@ -45,11 +45,13 @@ Review Tunnel은 외부 IdP 대신 관리자가 발급하는 내부 계정을 �
 - 관리자 웹 UI와 서버 CLI의 생성·권한·정지·초기화·세션 회수
 - `DEVELOPER` 로그인 세션을 60초·1회용 Carrier credential로 교환
 - 계정·권한·비밀번호 변경을 활성 Tunnel과 진행 중 reviewer Stream에 주기적으로 전파
+- 권한 재검증 중 PostgreSQL 오류가 나면 관련 Carrier·Stream을 유지하지 않고 fail-closed 종료
 - PostgreSQL migration, 만료 artifact 정리와 Gateway 재시작 뒤 계정·로그인 세션 유지
 - Gateway 예약 Cookie·내부 header의 로컬 앱 전달 및 덮어쓰기 차단
 - 인증 모드 create 시 Gateway CSPRNG Tunnel ID 발급과 resume purpose 분리
 - active·previous HMAC key overlap을 이용한 로그인 세션 무중단 key 검증 전환
-- `/admin/operations`의 관리자 재인증 kill switch와 현재 Carrier·Stream·resume 회수
+- `/admin/operations`의 관리자 재인증 kill switch, PostgreSQL 영속화와 현재 Carrier·Stream·resume 회수
+- 배포 identity별 synthetic canary 결과와 별도 admission 승인·폐쇄, Gateway DB 장애 시 신규 활성화 차단
 - 별도 bearer로 보호한 `/metrics`와 익명화한 Tunnel 수명주기 로그
 
 ## 회수와 kill switch
@@ -62,7 +64,20 @@ Review Tunnel은 외부 IdP 대신 관리자가 발급하는 내부 계정을 �
 - 현재 Tunnel route를 비활성화하고 모든 Stream·Carrier 종료
 - 기존 Resume secret으로 재활성화 금지
 
-kill switch를 해제해도 종료된 URL은 되살아나지 않는다. 원인 제거, key·계정 회수와 public-path canary를 먼저 완료한 뒤 새 Tunnel만 허용한다.
+kill switch 변경은 PostgreSQL에 감사 이벤트와 함께 저장되고 모든 Gateway가 기본 2초 주기로 반영한다. Gateway 재시작이나 rollback이 이 값을 자동 해제하지 않는다. kill switch를 해제해도 종료된 URL은 되살아나지 않는다. 원인 제거, key·계정 회수, 전용 public-path canary 성공 기록과 해당 배포 admission 재승인을 먼저 완료한 뒤 새 Tunnel만 허용한다.
+
+## Admission 변경
+
+`CANARY_HOST`는 일반 Tunnel과 분리된 synthetic fixture이며 `CANARY_BEARER_TOKEN`으로만 접근한다. 일반 내부 계정 Cookie나 실제 프로젝트 payload를 쓰지 않는다. canary 성공 후 `record-canary`를 실행해도 공유는 아직 닫혀 있으며, 동일한 `DEPLOYMENT_ID`와 `DEPLOYMENT_CONFIG_DIGEST`에 `approve-admission`을 별도로 실행해야 신규 Session이 활성화된다. 실패 기록은 그 identity의 기존 승인을 지운다.
+
+```bash
+npm run admin -- record-canary --as release-admin --result passed \
+  --deployment-id "$DEPLOYMENT_ID" --config-digest "$DEPLOYMENT_CONFIG_DIGEST"
+npm run admin -- approve-admission --as release-admin \
+  --deployment-id "$DEPLOYMENT_ID" --config-digest "$DEPLOYMENT_CONFIG_DIGEST"
+```
+
+긴급하게 신규 활성화만 막을 때는 `close-admission`, 전체 기존·신규 공유를 끝낼 때는 kill switch를 사용한다. 둘은 목적이 다르며 admission 폐쇄만으로 이미 `ACTIVE`인 Session을 자동 종료하지 않는다.
 
 ## HMAC key 회전
 

@@ -367,6 +367,7 @@ SSE는 별도 도메인 파이프라인이 아니라 종료가 늦는 HTTP respo
 - Ingress·Load Balancer와 필수 플러그인 버전을 floating tag 없이 고정하고, 배포 전후 실제 콘텐츠 도메인의 public-path canary와 명시적인 배포 차단·롤백 판단 기준 운영
 - canary는 두 경로로 나눈다. 외부의 미인증 negative probe는 실제 DNS·TLS·Load Balancer·Ingress를 거쳐 인증 장벽에서 차단되는지 확인하고, 별도의 synthetic 검토자 자격 또는 네트워크 제한을 적용한 authenticated fixture는 request streaming, SSE no-buffer와 WebSocket Upgrade를 확인한다.
 - 예약 canary host는 Tunnel ID namespace와 분리하고 strict rate limit을 적용한다. fixture는 Tunnel·사용자 payload를 사용하거나 반환하지 않으며 익명 우회 endpoint가 되어서는 안 된다. 두 canary 모두 Session activation이나 `gateway_admission_ready`에 의존하지 않아 순환 판정을 만들지 않는다.
+- canary 결과와 admission 승인은 `(deployment_id, config_digest)`별 PostgreSQL record로 분리한다. 성공 probe가 승인을 자동 생성하지 않으며 명시적 관리자·배포 파이프라인 승인 뒤에만 해당 identity의 신규 Session을 연다. 실패는 그 identity의 승인을 제거하고 전역 kill switch도 PostgreSQL에 영속한다.
 - Gateway 콘텐츠 listener를 승인된 Ingress source로 제한하고, Ingress가 외부 `Forwarded`·`X-Forwarded-*`를 제거한 뒤 검증한 값을 재작성함
 - Ingress·WAF·CDN·APM 등 실제 앞단 계층에 원문 URI, query, Cookie와 Authorization 비수집 정책 적용
 - 구체적인 제품 선택은 배포 환경이 정해진 뒤 결정
@@ -847,7 +848,7 @@ Session·Stream lifecycle 로그의 최소 필드이며 이벤트 유형에 해�
 
 Gateway는 process liveness, instance traffic readiness와 Gateway admission readiness를 구분한다. liveness는 프로세스가 이벤트 루프와 기본 내부 점검에 응답하는지만 나타낸다. Load Balancer가 사용하는 instance traffic readiness는 Control Plane 의존성, Relay Data Plane 초기화, Registry 쓰기·조회와 credential 검증기처럼 인스턴스 내부 조건만 반영한다. 외부 Ingress canary는 이 신호에 넣지 않고 신규 Session 허용과 배포 판단에 쓰는 Gateway admission readiness로만 관리해 LB 제거와 canary 실패의 피드백 루프를 막는다. 외부 health endpoint에는 내부 주소·버전·정책을 노출하지 않고 세부 원인은 내부 메트릭과 운영 로그에서만 확인한다.
 
-배포 시스템은 단순 HTTP `200`이나 Control WSS 연결만으로 후보 버전을 공개 트래픽에 투입하지 않는다. 후보는 pin된 version·config digest와 두 public-path canary를 먼저 통과해야 배포 admission을 얻는다. 운영 중 canary 실패는 신규 Session 활성화 차단과 알림을 발생시키되, 메모리 Session을 보존해야 하는 가용성 장애에서는 자동 재시작·rollback하지 않는다. 운영자가 drain 또는 기존 Session 손실을 동반한 수동 rollback을 선택하며, 인증 우회 위험은 kill switch 뒤 긴급 rollback한다.
+배포 시스템은 단순 HTTP `200`이나 Control WSS 연결만으로 후보 버전을 공개 트래픽에 투입하지 않는다. 후보는 pin된 version·config digest의 두 public-path probe를 먼저 통과하고 결과를 기록한 뒤 별도 승인을 받아야 배포 admission을 얻는다. 성공 기록만으로 자동 승인하지 않는다. 운영 중 canary 실패는 해당 identity의 승인을 폐기해 신규 Session 활성화를 차단하고 알림을 발생시키되, 메모리 Session을 보존해야 하는 가용성 장애에서는 자동 재시작·rollback하지 않는다. 운영자가 drain 또는 기존 Session 손실을 동반한 수동 rollback을 선택하며, 인증 우회 위험은 PostgreSQL에 영속되는 kill switch 뒤 긴급 rollback한다.
 
 ## 12. 기술 결정
 
@@ -1045,7 +1046,7 @@ POC는 인증과 HTTPS가 빠질 수 있으므로 격리된 개발 환경에서�
 | D-01 | MVP 접근 정책 | **확정:** 관리자 발급 활성 내부 계정 + `REVIEWER` 권한 + 공유 URL | 완료 |
 | D-02 | 계정 정책 | **확정:** 공개 가입 없음, 관리자 발급, 최초 변경 임시 비밀번호, ADMIN·DEVELOPER·REVIEWER | 완료 |
 | D-03 | Client 로그인 방식 | **구현 완료:** 내부 로그인 세션을 60초·1회용 create/resume Carrier credential로 교환하고 create Tunnel ID는 Gateway가 발급 | 완료 |
-| D-04 | 도메인·TLS·Ingress 운영 | **코드·runbook 완료:** 사이트 경계·env·public-path canary 검증. 실제 host·인증서·Ingress 제품과 digest 승인은 환경별 남음 | 배포 전 |
+| D-04 | 도메인·TLS·Ingress 운영 | **코드·runbook 완료:** canonical public origin, 사이트 경계, 예약 bearer canary host와 배포 identity 검증. 실제 host·인증서·Ingress 제품과 digest 승인은 환경별 남음 | 배포 전 |
 | D-05 | 세션·활성화 정책 | **구현 완료:** 8시간·30분·2분, 10초 activation, config ACK·origin·Relay·route·admission gate | 완료 |
 | D-06 | 콘텐츠 Cookie 격리 | **구현 완료:** host-only 유지, effective Domain 제거, parent/shared Domain과 예약 Cookie 거부. 회사 파일럿 앱의 Domain cookie 확인은 환경별 남음 | 파일럿 전 |
 | D-07 | Relay 구현과 protocol v1 wire 형식 | **구현 완료:** canonical config·revision·digest·ACK·probe, generation, 오류 code, window·queue 계약 | 완료 |
@@ -1055,8 +1056,8 @@ POC는 인증과 HTTPS가 빠질 수 있으므로 격리된 개발 환경에서�
 | D-11 | 로그 정책 | **코드 완료:** body·secret 비저장, HMAC Tunnel reference와 low-cardinality metrics. 보존 기간·접근 권한은 조직 승인 남음 | 사내 공개 전 |
 | D-12 | 장애 책임 | rollback·drain·kill switch runbook 완료. 운영 소유자·알림 당직·공지 책임자 지정은 조직 승인 남음 | 사내 공개 전 |
 | D-13 | Credential 정책 | **구현 완료:** 60초·1회용·purpose·audience, active/previous HMAC overlap과 메모리 Resume secret | 완료 |
-| D-14 | 회수 운영 | **구현 완료:** 기본 5초 `auth_version` 확인, authorization max-age와 kill switch. 정확한 SLO·소유자는 파일럿 승인 남음 | 파일럿 전 |
-| D-15 | Ingress 변경 통제 | version·digest pinning, canary·admission·drain·rollback 절차와 검사 스크립트 완료. 실제 환경 훈련 남음 | 배포 전 |
+| D-14 | 회수 운영 | **구현 완료:** 기본 5초 `auth_version` 확인, DB 오류 fail-closed, authorization max-age와 PostgreSQL 영속 kill switch. 정확한 SLO·소유자는 파일럿 승인 남음 | 파일럿 전 |
+| D-15 | Ingress 변경 통제 | version·digest pinning, admission과 독립된 canary, 결과 기록 뒤 별도 PostgreSQL 승인, drain·rollback 절차와 검사 스크립트 완료. 실제 환경 훈련 남음 | 배포 전 |
 
 ## 16. 향후 확장 후보
 

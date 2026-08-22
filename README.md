@@ -38,17 +38,18 @@ Client가 출력한 `http://<tunnel-id>.localhost:8787/` 주소로 접속한다.
 
 ## 내부 계정 모드
 
-`DATABASE_URL`, `CONTROL_HOST`, `AUTH_SESSION_HMAC_KEY`를 함께 설정하면 Gateway가 내부 계정 인증 모드로 시작한다. 최초 관리자는 Linux 서버 CLI에서 만들고 이후에는 control host의 `/admin/users` 웹 UI에서 계정을 관리한다. 공개 회원가입은 없다.
+`DATABASE_URL`, `CONTROL_HOST`, `PUBLIC_CONTENT_ORIGIN`, 배포 identity, 전용 canary와 `AUTH_SESSION_HMAC_KEY`를 설정하면 Gateway가 내부 계정 인증 모드로 시작한다. 최초 관리자는 Linux 서버의 one-off Admin CLI에서 만들고 이후에는 control host의 `/admin/users` 웹 UI에서 계정을 관리한다. 공개 회원가입은 없다. admission과 kill switch는 환경변수가 아니라 PostgreSQL에 유지된다.
 
 운영 절차는 [`docs/internal-account-operations.md`](docs/internal-account-operations.md)와 [`docs/linux-deployment.md`](docs/linux-deployment.md)를 따른다. TLS·Ingress public-path canary, secret manager와 PostgreSQL 복구 훈련을 실제 환경에서 통과하기 전에는 인터넷에 공개하지 않는다.
 
 ## 운영 검증 도구
 
 ```bash
-npm run canary:origin
 npm run verify:public-path
 npm run backup:postgres -- --output-dir /secure/backup/path
 npm run restore:postgres -- --input /secure/backup/path/review-tunnel.dump
 ```
+
+Dockerfile은 기본 Gateway image와 `admin-cli`, `client`, `canary-check`, `db-backup`, `db-restore` one-off target을 제공한다. 정확한 build·실행·승인 순서는 배포 문서를 따른다.
 
 각 명령에 필요한 환경 변수와 안전한 실행 순서는 [`docs/linux-deployment.md`](docs/linux-deployment.md)에 있다.
