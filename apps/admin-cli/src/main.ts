@@ -7,9 +7,19 @@ import {
   normalizeUsername,
   type Principal,
 } from "../../../packages/auth/src/index.ts";
-import { PostgresAuthRepository } from "../../../packages/storage-postgres/src/index.ts";
+import {
+  OperationalStateCache,
+  OperationalStateError,
+  parseDeploymentIdentity,
+  type DeploymentIdentity,
+  type OperationalState,
+} from "../../../packages/operations/src/index.ts";
+import {
+  PostgresAuthRepository,
+  PostgresOperationalStateRepository,
+} from "../../../packages/storage-postgres/src/index.ts";
 import { readSecrets } from "../../../packages/cli-utils/src/secret-input.ts";
-import { parseAdminCommand } from "./arguments.ts";
+import { parseAdminCommand, type AdminCommand } from "./arguments.ts";
 
 const databaseUrl = process.env.DATABASE_URL;
 const hmacKeyText = process.env.AUTH_SESSION_HMAC_KEY;
@@ -21,6 +31,7 @@ if (hmacKey.byteLength < 32) throw new Error("AUTH_SESSION_HMAC_KEY must decode 
 const pool = new Pool({ connectionString: databaseUrl, max: 4 });
 try {
   const repository = new PostgresAuthRepository(pool);
+  const operationalRepository = new PostgresOperationalStateRepository(pool);
   const command = parseAdminCommand(process.argv.slice(2));
   if (command.kind === "migrate") {
     await repository.migrate();
@@ -53,6 +64,46 @@ try {
         newPassword: newPassword ?? "",
       });
       console.log("Password changed. Existing sessions were revoked.");
+    } else if (isOperationalCommand(command)) {
+      const actor = await authenticateAdministrator(
+        service,
+        command.actorUsername,
+        command.passwordStdin,
+      );
+      const identity = command.kind === "set-kill-switch"
+        ? deploymentIdentityFromEnvironment()
+        : parseDeploymentIdentity(command.deploymentId, command.configDigest);
+      let state: OperationalState;
+      if (command.kind === "record-canary") {
+        state = await operationalRepository.recordCanaryResult(
+          identity,
+          command.result,
+          actor.accountId,
+          new Date(),
+        );
+      } else if (command.kind === "approve-admission") {
+        state = await operationalRepository.approveAdmission(
+          identity,
+          actor.accountId,
+          new Date(),
+        );
+      } else if (command.kind === "close-admission") {
+        state = await operationalRepository.closeAdmission(
+          identity,
+          actor.accountId,
+          new Date(),
+        );
+      } else if (command.kind === "set-kill-switch") {
+        state = await operationalRepository.setKillSwitch(
+          identity,
+          command.enabled,
+          actor.accountId,
+          new Date(),
+        );
+      } else {
+        state = await operationalRepository.getOperationalState(identity);
+      }
+      printOperationalState(state);
     } else {
       const actor = await authenticateAdministrator(service, command.actorUsername, command.passwordStdin);
       if (command.kind === "create-user") {
@@ -91,12 +142,59 @@ try {
 } catch (error) {
   if (error instanceof AuthError) {
     console.error(`${error.code}: ${error.message}`);
+  } else if (error instanceof OperationalStateError) {
+    console.error(`${error.code}: ${error.message}`);
   } else {
     console.error(error instanceof Error ? error.message : String(error));
   }
   process.exitCode = 1;
 } finally {
   await pool.end();
+}
+
+function isOperationalCommand(
+  command: AdminCommand,
+): command is Extract<AdminCommand, { kind:
+  | "record-canary"
+  | "approve-admission"
+  | "close-admission"
+  | "admission-status"
+  | "set-kill-switch"
+}> {
+  return [
+    "record-canary",
+    "approve-admission",
+    "close-admission",
+    "admission-status",
+    "set-kill-switch",
+  ].includes(command.kind);
+}
+
+function deploymentIdentityFromEnvironment(): DeploymentIdentity {
+  const deploymentId = process.env.DEPLOYMENT_ID;
+  const configDigest = process.env.DEPLOYMENT_CONFIG_DIGEST;
+  if (deploymentId === undefined || configDigest === undefined) {
+    throw new Error(
+      "DEPLOYMENT_ID and DEPLOYMENT_CONFIG_DIGEST are required for kill switch commands",
+    );
+  }
+  return parseDeploymentIdentity(deploymentId, configDigest);
+}
+
+function printOperationalState(state: OperationalState): void {
+  const cache = new OperationalStateCache(state.identity);
+  cache.apply(state);
+  console.log(JSON.stringify({
+    deploymentId: state.identity.deploymentId,
+    configDigest: state.identity.configDigest,
+    killSwitchEnabled: state.killSwitchEnabled,
+    canaryStatus: state.canaryStatus,
+    canaryCheckedAt: state.canaryCheckedAt?.toISOString() ?? null,
+    admissionApprovedAt: state.admissionApprovedAt?.toISOString() ?? null,
+    admissionApprovedBy: state.admissionApprovedBy ?? null,
+    admissionReady: cache.isAdmissionReady(),
+    updatedAt: state.updatedAt.toISOString(),
+  }));
 }
 
 async function authenticateAdministrator(

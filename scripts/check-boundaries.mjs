@@ -73,7 +73,8 @@ function enforceBoundary(source, target) {
     sourcePath.startsWith("packages/storage-postgres/") &&
     targetPath.startsWith("packages/") &&
     !targetPath.startsWith("packages/storage-postgres/") &&
-    !targetPath.startsWith("packages/auth/")
+    !targetPath.startsWith("packages/auth/") &&
+    !targetPath.startsWith("packages/operations/")
   ) {
     violations.push(`${sourcePath} PostgreSQL adapter must only depend on auth core`);
   }

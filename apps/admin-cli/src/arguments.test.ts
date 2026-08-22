@@ -37,3 +37,50 @@ test("unknown roles and commands fail closed", () => {
   );
   assert.throws(() => parseAdminCommand(["delete-everything"]), /Usage:/);
 });
+
+test("운영 admission과 kill switch 명령은 배포 identity와 관리자 재인증을 요구한다", () => {
+  const digest = `sha256:${"b".repeat(64)}`;
+  assert.deepEqual(
+    parseAdminCommand([
+      "record-canary", "--as", "admin", "--result", "passed",
+      "--deployment-id", "release-42", "--config-digest", digest, "--password-stdin",
+    ]),
+    {
+      kind: "record-canary",
+      actorUsername: "admin",
+      result: "PASSED",
+      deploymentId: "release-42",
+      configDigest: digest,
+      passwordStdin: true,
+    },
+  );
+  assert.deepEqual(
+    parseAdminCommand([
+      "approve-admission", "--as", "admin", "--deployment-id", "release-42",
+      "--config-digest", digest,
+    ]),
+    {
+      kind: "approve-admission",
+      actorUsername: "admin",
+      deploymentId: "release-42",
+      configDigest: digest,
+      passwordStdin: false,
+    },
+  );
+  assert.deepEqual(
+    parseAdminCommand(["enable-kill-switch", "--as", "admin"]),
+    {
+      kind: "set-kill-switch",
+      enabled: true,
+      actorUsername: "admin",
+      passwordStdin: false,
+    },
+  );
+  assert.throws(
+    () => parseAdminCommand([
+      "record-canary", "--as", "admin", "--result", "unknown",
+      "--deployment-id", "release-42", "--config-digest", digest,
+    ]),
+    /--result/,
+  );
+});

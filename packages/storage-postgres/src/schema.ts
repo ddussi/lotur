@@ -84,10 +84,37 @@ CREATE TABLE IF NOT EXISTS rt_audit_events (
 );
 CREATE INDEX IF NOT EXISTS rt_audit_events_occurred_at_idx ON rt_audit_events(occurred_at DESC);
 
+CREATE TABLE IF NOT EXISTS rt_operational_controls (
+  singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton),
+  kill_switch_enabled boolean NOT NULL DEFAULT false,
+  updated_at timestamptz NOT NULL
+);
+INSERT INTO rt_operational_controls(singleton, kill_switch_enabled, updated_at)
+VALUES (true, false, now())
+ON CONFLICT (singleton) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS rt_deployment_admissions (
+  deployment_id text NOT NULL,
+  config_digest text NOT NULL,
+  canary_status text NOT NULL DEFAULT 'UNKNOWN'
+    CHECK (canary_status IN ('UNKNOWN', 'PASSED', 'FAILED')),
+  canary_checked_at timestamptz,
+  admission_approved_at timestamptz,
+  admission_approved_by text REFERENCES rt_accounts(id) ON DELETE SET NULL,
+  updated_at timestamptz NOT NULL,
+  PRIMARY KEY (deployment_id, config_digest),
+  CONSTRAINT rt_deployment_id_format
+    CHECK (deployment_id ~ '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$'),
+  CONSTRAINT rt_config_digest_format
+    CHECK (config_digest ~ '^sha256:[a-f0-9]{64}$')
+);
+
 INSERT INTO rt_schema_migrations(version) VALUES (1)
 ON CONFLICT (version) DO NOTHING;
 INSERT INTO rt_schema_migrations(version) VALUES (2)
 ON CONFLICT (version) DO NOTHING;
 INSERT INTO rt_schema_migrations(version) VALUES (3)
+ON CONFLICT (version) DO NOTHING;
+INSERT INTO rt_schema_migrations(version) VALUES (4)
 ON CONFLICT (version) DO NOTHING;
 `;

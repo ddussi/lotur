@@ -4,7 +4,9 @@ import { test } from "node:test";
 import { Pool } from "pg";
 
 import { Argon2idPasswordHasher, AuthService } from "../../auth/src/index.ts";
+import { OperationalStateError, parseDeploymentIdentity } from "../../operations/src/index.ts";
 import { PostgresAuthRepository } from "./postgres-auth-repository.ts";
+import { PostgresOperationalStateRepository } from "./postgres-operational-state-repository.ts";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 
@@ -48,6 +50,53 @@ test("PostgreSQL persists Argon2id accounts and opaque sessions", {
       dummyPasswordHash: await hasher.hash("constant-dummy-password-not-used"),
     });
     assert.equal((await restartedService.resolveSession(login.sessionToken))?.username, "admin");
+
+    const identity = parseDeploymentIdentity("release-42", `sha256:${"c".repeat(64)}`);
+    const operational = new PostgresOperationalStateRepository(pool);
+    assert.equal((await operational.getOperationalState(identity)).canaryStatus, "UNKNOWN");
+    await assert.rejects(
+      operational.approveAdmission(identity, stored?.id ?? "", new Date()),
+      (error: unknown) =>
+        error instanceof OperationalStateError && error.code === "CANARY_REQUIRED",
+    );
+    const canary = await operational.recordCanaryResult(
+      identity,
+      "PASSED",
+      stored?.id ?? "",
+      new Date(),
+    );
+    assert.equal(canary.admissionApprovedAt, undefined);
+    const approved = await operational.approveAdmission(
+      identity,
+      stored?.id ?? "",
+      new Date(),
+    );
+    assert.ok(approved.admissionApprovedAt instanceof Date);
+    const restartedOperational = new PostgresOperationalStateRepository(pool);
+    assert.ok((await restartedOperational.getOperationalState(identity)).admissionApprovedAt);
+    const failed = await operational.recordCanaryResult(
+      identity,
+      "FAILED",
+      stored?.id ?? "",
+      new Date(),
+    );
+    assert.equal(failed.admissionApprovedAt, undefined);
+    await operational.recordCanaryResult(
+      identity,
+      "PASSED",
+      stored?.id ?? "",
+      new Date(),
+    );
+    await operational.approveAdmission(identity, stored?.id ?? "", new Date());
+    const killed = await operational.setKillSwitch(
+      identity,
+      true,
+      stored?.id ?? "",
+      new Date(),
+    );
+    assert.equal(killed.killSwitchEnabled, true);
+    assert.equal(killed.canaryStatus, "UNKNOWN");
+    assert.equal(killed.admissionApprovedAt, undefined);
   } finally {
     await pool.end();
     await administratorPool.query(`DROP SCHEMA ${schema} CASCADE`);

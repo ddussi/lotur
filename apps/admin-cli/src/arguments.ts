@@ -33,6 +33,27 @@ export type AdminCommand =
       actorUsername: string;
       targetUsername: string;
       passwordStdin: boolean;
+    }>
+  | Readonly<{
+      kind: "record-canary";
+      actorUsername: string;
+      result: "PASSED" | "FAILED";
+      deploymentId: string;
+      configDigest: string;
+      passwordStdin: boolean;
+    }>
+  | Readonly<{
+      kind: "approve-admission" | "close-admission" | "admission-status";
+      actorUsername: string;
+      deploymentId: string;
+      configDigest: string;
+      passwordStdin: boolean;
+    }>
+  | Readonly<{
+      kind: "set-kill-switch";
+      enabled: boolean;
+      actorUsername: string;
+      passwordStdin: boolean;
     }>;
 
 export function parseAdminCommand(arguments_: readonly string[]): AdminCommand {
@@ -95,6 +116,41 @@ export function parseAdminCommand(arguments_: readonly string[]): AdminCommand {
       passwordStdin: arguments_.includes("--password-stdin"),
     };
   }
+  if (command === "record-canary") {
+    const result = requiredOption(arguments_, "--result").toUpperCase();
+    if (result !== "PASSED" && result !== "FAILED") {
+      throw new Error(`--result must be passed or failed\n\n${usage()}`);
+    }
+    return {
+      kind: "record-canary",
+      actorUsername: requiredOption(arguments_, "--as"),
+      result,
+      deploymentId: requiredOption(arguments_, "--deployment-id"),
+      configDigest: requiredOption(arguments_, "--config-digest"),
+      passwordStdin: arguments_.includes("--password-stdin"),
+    };
+  }
+  if (
+    command === "approve-admission" ||
+    command === "close-admission" ||
+    command === "admission-status"
+  ) {
+    return {
+      kind: command,
+      actorUsername: requiredOption(arguments_, "--as"),
+      deploymentId: requiredOption(arguments_, "--deployment-id"),
+      configDigest: requiredOption(arguments_, "--config-digest"),
+      passwordStdin: arguments_.includes("--password-stdin"),
+    };
+  }
+  if (command === "enable-kill-switch" || command === "disable-kill-switch") {
+    return {
+      kind: "set-kill-switch",
+      enabled: command === "enable-kill-switch",
+      actorUsername: requiredOption(arguments_, "--as"),
+      passwordStdin: arguments_.includes("--password-stdin"),
+    };
+  }
   throw new Error(usage());
 }
 
@@ -108,6 +164,9 @@ export function usage(): string {
   npm run admin -- enable-user|disable-user --as <admin> --username <id>
   npm run admin -- set-roles --as <admin> --username <id> --roles <roles>
   npm run admin -- reset-password|revoke-sessions --as <admin> --username <id>
+  npm run admin -- record-canary --as <admin> --result passed|failed --deployment-id <id> --config-digest <sha256>
+  npm run admin -- approve-admission|close-admission|admission-status --as <admin> --deployment-id <id> --config-digest <sha256>
+  npm run admin -- enable-kill-switch|disable-kill-switch --as <admin>
 
 Roles are comma-separated: ADMIN,DEVELOPER,REVIEWER`;
 }
