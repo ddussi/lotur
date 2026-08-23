@@ -36,6 +36,12 @@ const CONTROL_FRAME_TYPES = new Set<FrameTypeValue>([
   FrameType.ConnectionError,
   FrameType.CloseSession,
 ]);
+const EMPTY_PAYLOAD_FRAME_TYPES = new Set<FrameTypeValue>([
+  FrameType.Ping,
+  FrameType.Pong,
+  FrameType.EndStream,
+  FrameType.CloseSession,
+]);
 
 export type EnvelopeInput = Readonly<{
   type: FrameTypeValue;
@@ -55,7 +61,10 @@ export type EnvelopeDecodeErrorCode =
   | "MAGIC_INVALID"
   | "VERSION_UNSUPPORTED"
   | "FRAME_TYPE_UNKNOWN"
+  | "FLAGS_UNSUPPORTED"
+  | "RESERVED_NONZERO"
   | "LENGTH_MISMATCH"
+  | "PAYLOAD_UNEXPECTED"
   | "STREAM_ID_INVALID";
 
 export class EnvelopeDecodeError extends Error {
@@ -73,9 +82,15 @@ export class EnvelopeDecodeError extends Error {
 
 export function encodeEnvelope(input: EnvelopeInput): Uint8Array {
   assertUnsignedByte(input.flags, "flags");
+  if (input.flags !== 0) {
+    throw new RangeError("protocol v1 does not define envelope flags");
+  }
   assertUint32(input.generation, "generation");
   assertUint32(input.streamId, "streamId");
   assertStreamId(input.type, input.streamId);
+  if (EMPTY_PAYLOAD_FRAME_TYPES.has(input.type) && input.payload.byteLength !== 0) {
+    throw new RangeError("protocol v1 frame type requires an empty payload");
+  }
   if (input.payload.byteLength > MAX_ENVELOPE_PAYLOAD_BYTES) {
     throw new RangeError(
       `payload exceeds ${MAX_ENVELOPE_PAYLOAD_BYTES} byte envelope limit`,
@@ -120,6 +135,19 @@ export function decodeEnvelope(input: Uint8Array): Envelope {
   }
 
   const flags = view.getUint8(4);
+  if (flags !== 0) {
+    throw new EnvelopeDecodeError(
+      "FLAGS_UNSUPPORTED",
+      `protocol v1 does not support envelope flags: ${flags}`,
+    );
+  }
+  const reserved = view.getUint8(5);
+  if (reserved !== 0) {
+    throw new EnvelopeDecodeError(
+      "RESERVED_NONZERO",
+      "protocol v1 reserved byte must be zero",
+    );
+  }
   const generation = view.getUint32(6);
   const streamId = view.getUint32(10);
   const payloadLength = view.getUint16(14);
@@ -137,6 +165,12 @@ export function decodeEnvelope(input: Uint8Array): Envelope {
     throw new EnvelopeDecodeError(
       "STREAM_ID_INVALID",
       error instanceof Error ? error.message : "invalid stream ID",
+    );
+  }
+  if (EMPTY_PAYLOAD_FRAME_TYPES.has(type) && payloadLength !== 0) {
+    throw new EnvelopeDecodeError(
+      "PAYLOAD_UNEXPECTED",
+      "protocol v1 frame type requires an empty payload",
     );
   }
 

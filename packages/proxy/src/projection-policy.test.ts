@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   projectRequestHeaders,
   projectResponseHeaders,
+  stripUntrustedForwardingHeaders,
 } from "./projection-policy.ts";
 
 const reserved = new Set(["__Host-rt_session", "rt_session_dev"]);
@@ -34,6 +35,31 @@ test("proxy-aware는 공격자 forwarding 값을 버리고 공개 origin 기준 
   const projected = projectRequestHeaders([
     ["Host", "attacker.example"],
     ["X-Forwarded-Proto", "http"],
+    ["X-Forwarded-User", "admin"],
+    ["X-Forwarded-Client-Cert", "spoofed-cert"],
+    ["X-Real-IP", "203.0.113.10"],
+    ["True-Client-IP", "203.0.113.11"],
+    ["CF-Connecting-IP", "203.0.113.12"],
+    ["Client-IP", "203.0.113.13"],
+    ["X-Client-IP", "203.0.113.14"],
+    ["X-Original-Forwarded-For", "203.0.113.15"],
+    ["Fastly-Client-IP", "203.0.113.16"],
+    ["Fly-Client-IP", "203.0.113.17"],
+    ["X-Cluster-Client-IP", "203.0.113.18"],
+    ["X-Appengine-User-IP", "203.0.113.19"],
+    ["X-Envoy-External-Address", "203.0.113.20"],
+    ["X-ProxyUser-IP", "203.0.113.21"],
+    ["CF-Connecting-IPv6", "2001:db8::1"],
+    ["CloudFront-Viewer-Address", "203.0.113.22:12345"],
+    ["X-Original-Client-IP", "203.0.113.23"],
+    ["X-Originating-IP", "203.0.113.24"],
+    ["X-Remote-IP", "203.0.113.25"],
+    ["X-Remote-Addr", "203.0.113.26"],
+    ["X-Azure-ClientIP", "203.0.113.27"],
+    ["X-NF-Client-Connection-IP", "203.0.113.28"],
+    ["X-Vercel-Forwarded-For", "203.0.113.29"],
+    ["Authorization", "Bearer application-token"],
+    ["Cookie", "app_session=kept"],
   ], {
     originProjection: "proxy-aware",
     localOrigin: "http://127.0.0.1:3000",
@@ -41,11 +67,24 @@ test("proxy-aware는 공격자 forwarding 값을 버리고 공개 origin 기준 
   });
 
   assert.deepEqual(projected, [
+    ["Authorization", "Bearer application-token"],
+    ["Cookie", "app_session=kept"],
     ["Host", "demo.preview.example"],
     ["Forwarded", 'host="demo.preview.example";proto=https'],
     ["X-Forwarded-Host", "demo.preview.example"],
     ["X-Forwarded-Proto", "https"],
     ["X-Forwarded-Port", "443"],
+  ]);
+});
+
+test("임의 suffix의 X-Forwarded-*와 Forwarded를 모두 제거한다", () => {
+  assert.deepEqual(stripUntrustedForwardingHeaders([
+    ["Forwarded", "for=attacker"],
+    ["X-Forwarded-User", "admin"],
+    ["x-forwarded-client-cert", "spoofed-cert"],
+    ["X-Forward", "kept"],
+  ]), [
+    ["X-Forward", "kept"],
   ]);
 });
 

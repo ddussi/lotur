@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
 import { lookup } from "node:dns/promises";
-import { once } from "node:events";
 import { request, type ClientRequest, type IncomingMessage } from "node:http";
 import { connect as connectTcp, isIP } from "node:net";
 import type { Duplex } from "node:stream";
@@ -21,6 +20,7 @@ import {
   encodeWindowUpdate,
   CARRIER_PROFILE,
   FrameType,
+  MAX_ENVELOPE_PAYLOAD_BYTES,
   type HeaderPair,
   type OriginProjection,
   type SessionConfigMetadata,
@@ -39,6 +39,19 @@ import {
   sendCarrierFrame,
   sendFlowControlledData,
 } from "../../../packages/relay/src/index.ts";
+import { InboundFlowWindow } from "./inbound-flow.ts";
+import { ApplicationOperationBudget } from "./application-operation-budget.ts";
+import { RemoteStreamLifecycle } from "./remote-stream-lifecycle.ts";
+import { waitForWritableDrain } from "./writable-drain.ts";
+
+const ENVELOPE_HEADER_BYTES = 16;
+const MAX_PENDING_ACTIVATION_FRAMES = 64;
+const MAX_PENDING_CONTROL_FRAMES = 64;
+const MAX_PENDING_STREAM_OPERATIONS = 1_024;
+const MAX_PENDING_APPLICATION_OPERATIONS = 4_096;
+export const DEFAULT_CARRIER_HANDSHAKE_TIMEOUT_MS = 10_000;
+export const DEFAULT_CARRIER_ACTIVATION_TIMEOUT_MS = 15_000;
+export const DEFAULT_CARRIER_CLOSE_TIMEOUT_MS = 1_000;
 
 type ClientStream = {
   readonly kind: "HTTP" | "WEBSOCKET";
@@ -46,13 +59,18 @@ type ClientStream = {
   response?: IncomingMessage;
   localSocket?: Duplex;
   requestEnded: boolean;
+  requestBytes: number;
   responseEnded: boolean;
   cancelled: boolean;
+  inboundQueue: Promise<void>;
+  pendingInboundOperations: number;
   responseHeaderTimer?: NodeJS.Timeout;
   inactivityTimer?: NodeJS.Timeout;
   durationTimer?: NodeJS.Timeout;
   terminate?: (code: string) => void;
 };
+
+type ResetStreamSender = (streamId: number, code: string) => void;
 
 const RESERVED_GATEWAY_COOKIES = new Set([
   "__Host-rt_control",
@@ -81,6 +99,9 @@ export type TunnelClientInput = Readonly<{
   carrierCredential?: string;
   originProjection?: OriginProjection;
   pinnedLocalAddress?: string;
+  handshakeTimeoutMs?: number;
+  activationTimeoutMs?: number;
+  closeTimeoutMs?: number;
 }>;
 
 export type TunnelClientClosure = Awaited<TunnelClient["closed"]>;
@@ -108,16 +129,36 @@ export type TunnelClient = Readonly<{
 
 export function connectTunnelClient(input: TunnelClientInput): TunnelClient {
   const origin = parseLoopbackOrigin(input.localOrigin);
+  const handshakeTimeoutMs = positiveTimeout(
+    input.handshakeTimeoutMs ?? DEFAULT_CARRIER_HANDSHAKE_TIMEOUT_MS,
+    "handshakeTimeoutMs",
+  );
+  const activationTimeoutMs = positiveTimeout(
+    input.activationTimeoutMs ?? DEFAULT_CARRIER_ACTIVATION_TIMEOUT_MS,
+    "activationTimeoutMs",
+  );
+  const closeTimeoutMs = positiveTimeout(
+    input.closeTimeoutMs ?? DEFAULT_CARRIER_CLOSE_TIMEOUT_MS,
+    "closeTimeoutMs",
+  );
   const originProjection = input.originProjection ?? "local-view";
   const localOriginFingerprint = fingerprintLocalOrigin(origin);
   const socket = new WebSocket(input.gatewayUrl, CARRIER_PROFILE, {
+    autoPong: false,
     perMessageDeflate: false,
+    maxPayload: ENVELOPE_HEADER_BYTES + MAX_ENVELOPE_PAYLOAD_BYTES,
+    handshakeTimeout: handshakeTimeoutMs,
     ...(input.carrierCredential === undefined ? {} : {
       headers: { authorization: `Bearer ${input.carrierCredential}` },
     }),
   });
   const streams = new Map<number, ClientStream>();
+  const streamLifecycle = new RemoteStreamLifecycle();
+  const applicationOperations = new ApplicationOperationBudget(
+    MAX_PENDING_APPLICATION_OPERATIONS,
+  );
   let outboundFlow: OutboundFlowWindow | undefined;
+  let inboundFlow: InboundFlowWindow | undefined;
   let provisioned: SessionProvisionedMetadata | undefined;
   let configured: SessionConfigMetadata | undefined;
   let localOriginReady: boolean | undefined;
@@ -139,7 +180,11 @@ export function connectTunnelClient(input: TunnelClientInput): TunnelClient {
   let closeIntent: "closed" | "disconnected" | undefined;
   let failure: Error | undefined;
   let resourcesClosed = false;
+  let protocolClosing = false;
+  let protocolCloseTimer: NodeJS.Timeout | undefined;
   let activationCandidateSettled = false;
+  let activationTimer: NodeJS.Timeout | undefined;
+  let pendingPongs = 0;
   let activationCandidateResolve!: (value: Readonly<{
     resumeSecret: string;
     pinnedLocalAddress: string;
@@ -181,6 +226,20 @@ export function connectTunnelClient(input: TunnelClientInput): TunnelClient {
   });
 
   socket.once("open", () => {
+    if (socket.protocol !== CARRIER_PROFILE) {
+      const error = new Error(`Carrier did not negotiate ${CARRIER_PROFILE}`);
+      failure ??= error;
+      readyReject(error);
+      socket.close(1002, "subprotocol required");
+      return;
+    }
+    activationTimer = setTimeout(() => {
+      const error = new Error("Carrier activation timed out");
+      failure ??= error;
+      readyReject(error);
+      socket.terminate();
+    }, activationTimeoutMs);
+    activationTimer.unref();
     void sendCarrierFrame(socket, {
       type: FrameType.Hello,
       generation: 0,
@@ -204,13 +263,96 @@ export function connectTunnelClient(input: TunnelClientInput): TunnelClient {
     }).catch(readyReject);
   });
 
+  const closeForProtocolError = (error: unknown) => {
+    if (protocolClosing) return;
+    protocolClosing = true;
+    failure ??= toError(error);
+    if (!active) readyReject(failure);
+    socket.close(1002, "protocol error");
+    protocolCloseTimer = setTimeout(() => socket.terminate(), closeTimeoutMs);
+    protocolCloseTimer.unref();
+  };
+  const resetStream: ResetStreamSender = (streamId, code) => {
+    void settleBeforeDeadline(
+      sendReset(socket, generation, streamId, code),
+      Date.now() + closeTimeoutMs,
+      `RESET_STREAM ${streamId} delivery`,
+    ).catch((error: unknown) => {
+      closeForProtocolError(new Error(
+        `Failed to deliver RESET_STREAM ${streamId}`,
+        { cause: error },
+      ));
+    });
+  };
+  socket.on("ping", () => {
+    closeForProtocolError(new Error("Carrier WebSocket control PING is forbidden"));
+  });
+  socket.on("pong", () => {
+    closeForProtocolError(new Error("Carrier WebSocket control PONG is forbidden"));
+  });
+  const dispatchActiveEnvelope = (envelope: ReturnType<typeof decodeEnvelope>) => {
+    if (envelope.generation !== generation) {
+      throw new Error("stale Carrier generation");
+    }
+    if (envelope.type === FrameType.Ping && envelope.streamId === 0) {
+      if (envelope.payload.byteLength !== 0) throw new Error("PING payload must be empty");
+      if (pendingPongs >= MAX_PENDING_CONTROL_FRAMES) {
+        throw new Error("too many pending Carrier PING frames");
+      }
+      pendingPongs += 1;
+      void sendCarrierFrame(socket, {
+        type: FrameType.Pong,
+        generation,
+        streamId: 0,
+      }).finally(() => {
+        pendingPongs -= 1;
+      }).catch(closeForProtocolError);
+      return;
+    }
+    if (configured === undefined) throw new Error("active Session has no configuration");
+    if (localConnectAddress === undefined) {
+      throw new Error("active Session has no pinned local origin address");
+    }
+    handleGatewayFrame(
+      socket,
+      streams,
+      streamLifecycle,
+      applicationOperations,
+      requireOutboundFlow(outboundFlow),
+      requireInboundFlow(inboundFlow),
+      origin,
+      localConnectAddress,
+      configured.snapshot,
+      generation,
+      envelope,
+      closeForProtocolError,
+      resetStream,
+    );
+  };
+
   let receiveQueue = Promise.resolve();
+  let pendingActivationFrames = 0;
   socket.on("message", (data, isBinary) => {
+    if (protocolClosing) return;
+    if (active) {
+      try {
+        if (!isBinary) throw new Error("Carrier accepts binary frames only");
+        dispatchActiveEnvelope(decodeEnvelope(asBytes(data)));
+      } catch (error) {
+        closeForProtocolError(error);
+      }
+      return;
+    }
+    pendingActivationFrames += 1;
+    if (pendingActivationFrames > MAX_PENDING_ACTIVATION_FRAMES) {
+      closeForProtocolError(new Error("too many pending Carrier activation frames"));
+      return;
+    }
     receiveQueue = receiveQueue
       .then(async () => {
         if (!isBinary) throw new Error("Carrier accepts binary frames only");
         const envelope = decodeEnvelope(asBytes(data));
-        if (envelope.type === FrameType.Ping && envelope.streamId === 0) {
+        if (!active && envelope.type === FrameType.Ping && envelope.streamId === 0) {
           if (envelope.payload.byteLength !== 0) throw new Error("PING payload must be empty");
           await sendCarrierFrame(socket, {
             type: FrameType.Pong,
@@ -259,6 +401,9 @@ export function connectTunnelClient(input: TunnelClientInput): TunnelClient {
             outboundFlow ??= new OutboundFlowWindow(
               received.snapshot.initialConnectionWindowBytes,
             );
+            inboundFlow ??= new InboundFlowWindow(
+              received.snapshot.initialConnectionWindowBytes,
+            );
             if (localOriginReady === undefined) {
               localConnectAddress = await (
                 input.pinnedLocalAddress === undefined
@@ -292,8 +437,13 @@ export function connectTunnelClient(input: TunnelClientInput): TunnelClient {
             }
             const probe = decodeOpenProbeMetadata(envelope.payload);
             if (probeStreamId !== undefined) throw new Error("duplicate OPEN_PROBE");
+            streamLifecycle.open(envelope.streamId);
             probeStreamId = envelope.streamId;
             outboundFlow.openStream(envelope.streamId, probe.initialWindowBytes);
+            requireInboundFlow(inboundFlow).openStream(
+              envelope.streamId,
+              configured.snapshot.initialStreamWindowBytes,
+            );
             return;
           }
           if (probeStreamId !== undefined && envelope.streamId === probeStreamId) {
@@ -306,12 +456,15 @@ export function connectTunnelClient(input: TunnelClientInput): TunnelClient {
               return;
             }
             if (envelope.type === FrameType.Data) {
+              const receivedFlow = requireInboundFlow(inboundFlow);
+              receivedFlow.consume(envelope.streamId, envelope.payload.byteLength);
               await sendWindowUpdate(
                 socket,
                 generation,
                 envelope.streamId,
                 envelope.payload.byteLength,
               );
+              receivedFlow.release(envelope.streamId, envelope.payload.byteLength);
               await sendFlowControlledData(socket, outboundFlow, {
                 generation,
                 streamId: envelope.streamId,
@@ -322,6 +475,8 @@ export function connectTunnelClient(input: TunnelClientInput): TunnelClient {
             if (envelope.type === FrameType.EndStream) {
               if (probeEnded) throw new Error("duplicate Relay probe END");
               probeEnded = true;
+              streamLifecycle.close(envelope.streamId);
+              inboundFlow?.closeStream(envelope.streamId);
               await sendCarrierFrame(socket, {
                 type: FrameType.EndStream,
                 generation,
@@ -347,6 +502,10 @@ export function connectTunnelClient(input: TunnelClientInput): TunnelClient {
           }
           generation = activated.generation;
           active = true;
+          if (activationTimer !== undefined) {
+            clearTimeout(activationTimer);
+            activationTimer = undefined;
+          }
           if (probeStreamId !== undefined) outboundFlow?.closeStream(probeStreamId);
           readyResolve({
             ...activated,
@@ -355,43 +514,35 @@ export function connectTunnelClient(input: TunnelClientInput): TunnelClient {
           });
           return;
         }
-        if (envelope.generation !== generation) {
-          throw new Error("stale Carrier generation");
-        }
-        if (configured === undefined) throw new Error("active Session has no configuration");
-        if (localConnectAddress === undefined) {
-          throw new Error("active Session has no pinned local origin address");
-        }
-        await handleGatewayFrame(
-          socket,
-          streams,
-          requireOutboundFlow(outboundFlow),
-          origin,
-          localConnectAddress,
-          configured.snapshot,
-          generation,
-          envelope,
-        );
+        dispatchActiveEnvelope(envelope);
       })
-      .catch((error: unknown) => {
-        failure ??= toError(error);
-        if (!active) readyReject(failure);
-        socket.close(1002, "protocol error");
-      });
+      .finally(() => {
+        pendingActivationFrames -= 1;
+      })
+      .catch(closeForProtocolError);
   });
 
   const fail = (error: Error) => {
     failure ??= error;
+    if (protocolCloseTimer !== undefined) {
+      clearTimeout(protocolCloseTimer);
+      protocolCloseTimer = undefined;
+    }
+    if (activationTimer !== undefined) {
+      clearTimeout(activationTimer);
+      activationTimer = undefined;
+    }
     if (!active) readyReject(error);
     settleActivationCandidate(undefined);
     if (resourcesClosed) return;
     resourcesClosed = true;
-    for (const stream of streams.values()) {
+    for (const [streamId, stream] of streams) {
       stream.cancelled = true;
       clearClientStreamTimers(stream);
       stream.request.destroy(error);
       stream.response?.destroy(error);
       stream.localSocket?.destroy(error);
+      inboundFlow?.closeStream(streamId);
     }
     streams.clear();
     outboundFlow?.close();
@@ -416,24 +567,28 @@ export function connectTunnelClient(input: TunnelClientInput): TunnelClient {
     async close() {
       if (socket.readyState === WebSocket.CLOSED) return;
       closeIntent = "closed";
-      const closed = once(socket, "close").then(() => undefined);
+      const deadline = Date.now() + closeTimeoutMs;
       if (active && socket.readyState === WebSocket.OPEN) {
-        await sendCarrierFrame(socket, {
-          type: FrameType.CloseSession,
-          generation,
-          streamId: 0,
-        });
+        await settleBeforeDeadline(
+          sendCarrierFrame(socket, {
+            type: FrameType.CloseSession,
+            generation,
+            streamId: 0,
+          }),
+          deadline,
+          "Carrier CLOSE_SESSION send",
+        ).catch(() => undefined);
       } else {
         socket.close(1000, "client closed");
       }
-      await closed;
+      await closeSocketBeforeDeadline(socket, deadline);
     },
     async disconnect() {
       if (socket.readyState === WebSocket.CLOSED) return;
       closeIntent = "disconnected";
-      const closed = once(socket, "close").then(() => undefined);
+      const deadline = Date.now() + closeTimeoutMs;
       socket.terminate();
-      await closed;
+      await closeSocketBeforeDeadline(socket, deadline);
     },
   };
 }
@@ -445,10 +600,14 @@ export function connectResilientTunnelClient(input: Readonly<{
   carrierCredential?: string;
   originProjection?: OriginProjection;
   reconnectGraceMs?: number;
+  handshakeTimeoutMs?: number;
+  activationTimeoutMs?: number;
+  closeTimeoutMs?: number;
   connectionFactory?: (input: TunnelClientInput) => TunnelClient;
   issueCarrierCredential?: (
     purpose: "resume",
     tunnelId: string,
+    signal: AbortSignal,
   ) => Promise<string>;
   onStatus?: (status: Readonly<{
     state: "reconnecting" | "active" | "failed";
@@ -457,7 +616,13 @@ export function connectResilientTunnelClient(input: Readonly<{
   }>) => void;
 }>): TunnelClient {
   const reconnectGraceMs = input.reconnectGraceMs ?? 2 * 60_000;
+  positiveTimeout(reconnectGraceMs, "reconnectGraceMs");
+  const closeTimeoutMs = positiveTimeout(
+    input.closeTimeoutMs ?? DEFAULT_CARRIER_CLOSE_TIMEOUT_MS,
+    "closeTimeoutMs",
+  );
   const connectionFactory = input.connectionFactory ?? connectTunnelClient;
+  const stopController = new AbortController();
   let current = connectionFactory({
     gatewayUrl: input.gatewayUrl,
     tunnelId: input.tunnelId,
@@ -468,6 +633,13 @@ export function connectResilientTunnelClient(input: Readonly<{
     ...(input.originProjection === undefined
       ? {}
       : { originProjection: input.originProjection }),
+    ...(input.handshakeTimeoutMs === undefined
+      ? {}
+      : { handshakeTimeoutMs: input.handshakeTimeoutMs }),
+    ...(input.activationTimeoutMs === undefined
+      ? {}
+      : { activationTimeoutMs: input.activationTimeoutMs }),
+    closeTimeoutMs,
   });
   let activation: Awaited<TunnelClient["ready"]> | undefined;
   let stopped = false;
@@ -549,42 +721,112 @@ export function connectResilientTunnelClient(input: Readonly<{
     const deadline = Date.now() + reconnectGraceMs;
     let attempt = 0;
     let lastError = initialError;
-    await delay(Math.min(50, reconnectGraceMs));
-    while (!stopped && Date.now() < deadline) {
-      attempt += 1;
-      input.onStatus?.({ state: "reconnecting", attempt, error: lastError });
-      let candidate: TunnelClient | undefined;
-      try {
-        const credential = await input.issueCarrierCredential?.("resume", input.tunnelId);
-        candidate = connectionFactory({
-          gatewayUrl: input.gatewayUrl,
-          tunnelId: input.tunnelId,
-          localOrigin: input.localOrigin,
-          resumeSecret: context.resumeSecret,
-          pinnedLocalAddress: context.pinnedLocalAddress,
-          ...(credential === undefined ? {} : { carrierCredential: credential }),
-          ...(input.originProjection === undefined
-            ? {}
-            : { originProjection: input.originProjection }),
-        });
-        current = candidate;
-        const resumed = await candidate.ready;
-        input.onStatus?.({ state: "active", attempt });
-        return resumed;
-      } catch (error) {
-        await candidate?.closed;
-        lastError = toError(error);
-        if (!isTransientReconnectError(lastError)) break;
-        const requestedDelay = lastError instanceof TunnelConnectionError
-          ? lastError.retryAfterMs
-          : undefined;
-        const exponentialDelay = Math.min(2_000, 100 * 2 ** Math.min(attempt - 1, 4));
-        const remaining = deadline - Date.now();
-        if (remaining <= 0) break;
-        await delay(Math.min(remaining, requestedDelay ?? exponentialDelay));
+    const reconnectDeadlineController = new AbortController();
+    const reconnectDeadlineTimer = setTimeout(
+      () => reconnectDeadlineController.abort(
+        new Error("Carrier reconnect deadline exceeded"),
+      ),
+      Math.max(1, deadline - Date.now()),
+    );
+    reconnectDeadlineTimer.unref();
+    const reconnectSignal = AbortSignal.any([
+      stopController.signal,
+      reconnectDeadlineController.signal,
+    ]);
+    try {
+      await settleBeforeDeadline(
+        delay(Math.min(50, reconnectGraceMs), undefined, { signal: reconnectSignal }),
+        deadline,
+        "initial reconnect delay",
+        reconnectSignal,
+      );
+      while (!stopped && Date.now() < deadline) {
+        attempt += 1;
+        input.onStatus?.({ state: "reconnecting", attempt, error: lastError });
+        let candidate: TunnelClient | undefined;
+        try {
+          const credentialRequest = input.issueCarrierCredential?.(
+            "resume",
+            input.tunnelId,
+            reconnectSignal,
+          );
+          const credential = credentialRequest === undefined
+            ? undefined
+            : await settleBeforeDeadline(
+                credentialRequest,
+                deadline,
+                "Carrier credential issuance",
+                reconnectSignal,
+              );
+          if (stopped) throw new Error("Tunnel client stopped during reconnect");
+          candidate = connectionFactory({
+            gatewayUrl: input.gatewayUrl,
+            tunnelId: input.tunnelId,
+            localOrigin: input.localOrigin,
+            resumeSecret: context.resumeSecret,
+            pinnedLocalAddress: context.pinnedLocalAddress,
+            ...(credential === undefined ? {} : { carrierCredential: credential }),
+            ...(input.originProjection === undefined
+              ? {}
+              : { originProjection: input.originProjection }),
+            ...(input.handshakeTimeoutMs === undefined
+              ? {}
+              : { handshakeTimeoutMs: input.handshakeTimeoutMs }),
+            ...(input.activationTimeoutMs === undefined
+              ? {}
+              : { activationTimeoutMs: input.activationTimeoutMs }),
+            closeTimeoutMs,
+          });
+          current = candidate;
+          const resumed = await settleBeforeDeadline(
+            candidate.ready,
+            deadline,
+            "Carrier resume activation",
+            reconnectSignal,
+          );
+          input.onStatus?.({ state: "active", attempt });
+          return resumed;
+        } catch (error) {
+          lastError = toError(error);
+          if (candidate !== undefined) {
+            void candidate.disconnect().catch(() => undefined);
+            await settleBeforeDeadline(
+              candidate.closed,
+              Math.min(deadline, Date.now() + closeTimeoutMs),
+              "failed Carrier shutdown",
+              stopController.signal,
+            ).catch(() => undefined);
+          }
+          if (stopped) break;
+          if (!isTransientReconnectError(lastError)) break;
+          const requestedDelay = lastError instanceof TunnelConnectionError
+            ? lastError.retryAfterMs
+            : undefined;
+          const exponentialDelay = Math.min(2_000, 100 * 2 ** Math.min(attempt - 1, 4));
+          const remaining = deadline - Date.now();
+          if (remaining <= 0) break;
+          await settleBeforeDeadline(
+            delay(
+              Math.min(remaining, requestedDelay ?? exponentialDelay),
+              undefined,
+              { signal: reconnectSignal },
+            ),
+            deadline,
+            "reconnect backoff",
+            reconnectSignal,
+          );
+        }
+      }
+      if (Date.now() >= deadline) {
+        throw new Error("Carrier reconnect deadline exceeded", { cause: lastError });
+      }
+      throw lastError;
+    } finally {
+      clearTimeout(reconnectDeadlineTimer);
+      if (!reconnectDeadlineController.signal.aborted) {
+        reconnectDeadlineController.abort(new Error("Carrier reconnect attempt finished"));
       }
     }
-    throw lastError;
   }
 
   return {
@@ -603,7 +845,14 @@ export function connectResilientTunnelClient(input: Readonly<{
         return;
       }
       stopped = true;
-      await current.close();
+      stopController.abort(new Error("Tunnel client closed"));
+      await settleBeforeDeadline(
+        current.close(),
+        Date.now() + closeTimeoutMs,
+        "Tunnel client close",
+      ).catch(() => {
+        void current.disconnect().catch(() => undefined);
+      });
       settleClosure({ reason: "closed" });
     },
     async disconnect() {
@@ -612,20 +861,32 @@ export function connectResilientTunnelClient(input: Readonly<{
   };
 }
 
-async function handleGatewayFrame(
+function handleGatewayFrame(
   socket: WebSocket,
   streams: Map<number, ClientStream>,
+  streamLifecycle: RemoteStreamLifecycle,
+  applicationOperations: ApplicationOperationBudget,
   outboundFlow: OutboundFlowWindow,
+  inboundFlow: InboundFlowWindow,
   origin: URL,
   localConnectAddress: string,
   configuration: SessionConfigSnapshot,
   generation: number,
   envelope: ReturnType<typeof decodeEnvelope>,
-): Promise<void> {
+  onProtocolError: (error: Error) => void,
+  resetStream: ResetStreamSender,
+): void {
   if (envelope.type === FrameType.OpenHttp) {
-    if (streams.has(envelope.streamId)) throw new Error("duplicate stream ID");
+    if (streams.size >= configuration.maxConcurrentStreams) {
+      throw new Error("Gateway exceeded configured concurrent stream limit");
+    }
     const metadata = decodeOpenHttpMetadata(envelope.payload);
+    streamLifecycle.open(envelope.streamId);
     outboundFlow.openStream(envelope.streamId, metadata.initialWindowBytes);
+    inboundFlow.openStream(
+      envelope.streamId,
+      configuration.initialStreamWindowBytes,
+    );
     const localRequest = request({
       protocol: origin.protocol,
       hostname: localConnectAddress,
@@ -643,37 +904,41 @@ async function handleGatewayFrame(
       kind: metadata.kind,
       request: localRequest,
       requestEnded: metadata.requestBodyEnded,
+      requestBytes: 0,
       responseEnded: false,
       cancelled: false,
+      inboundQueue: Promise.resolve(),
+      pendingInboundOperations: 0,
     };
     streams.set(envelope.streamId, stream);
     const terminate = (code: string) => {
       if (stream.cancelled) return;
-      stream.cancelled = true;
-      clearClientStreamTimers(stream);
-      streams.delete(envelope.streamId);
-      outboundFlow.closeStream(envelope.streamId);
       const error = new Error(code);
+      cancelClientStream(
+        streams,
+        streamLifecycle,
+        outboundFlow,
+        inboundFlow,
+        envelope.streamId,
+        stream,
+        "LOCAL_RESET",
+      );
       stream.request.destroy(error);
       stream.response?.destroy(error);
       stream.localSocket?.destroy(error);
-      void sendReset(socket, generation, envelope.streamId, code);
+      resetStream(envelope.streamId, code);
     };
     stream.terminate = terminate;
-    stream.responseHeaderTimer = setTimeout(
-      () => terminate("HEADER_TIMEOUT"),
-      configuration.responseHeaderTimeoutMs,
-    );
-    stream.responseHeaderTimer.unref();
     stream.durationTimer = setTimeout(
       () => terminate("LIMIT_EXCEEDED"),
       configuration.maxStreamDurationMs,
     );
     stream.durationTimer.unref();
+    touchClientStream(stream, configuration.streamInactivityTimeoutMs);
 
     if (metadata.kind === "WEBSOCKET") {
       localRequest.once("upgrade", (response, localSocket, head) => {
-        if (!hasValidWebSocketAccept(metadata.headers, response)) {
+        if (!hasValidWebSocketUpgrade(metadata.headers, response)) {
           localSocket.destroy();
           terminate("INVALID_WEBSOCKET_ACCEPT");
           return;
@@ -685,8 +950,11 @@ async function handleGatewayFrame(
         void activateLocalWebSocket(
           socket,
           streams,
+          streamLifecycle,
           outboundFlow,
+          inboundFlow,
           generation,
+          resetStream,
           envelope.streamId,
           stream,
           response,
@@ -704,9 +972,12 @@ async function handleGatewayFrame(
       void forwardLocalResponse(
         socket,
         streams,
+        streamLifecycle,
         outboundFlow,
-        generation,
-        envelope.streamId,
+          inboundFlow,
+          generation,
+          resetStream,
+          envelope.streamId,
         stream,
         response,
         origin,
@@ -715,74 +986,102 @@ async function handleGatewayFrame(
     });
     localRequest.once("error", () => {
       if (stream.cancelled) return;
-      stream.cancelled = true;
-      clearClientStreamTimers(stream);
-      streams.delete(envelope.streamId);
-      outboundFlow.closeStream(envelope.streamId);
-      void sendReset(socket, generation, envelope.streamId, "LOCAL_ORIGIN_ERROR");
+      cancelClientStream(
+        streams,
+        streamLifecycle,
+        outboundFlow,
+        inboundFlow,
+        envelope.streamId,
+        stream,
+        "LOCAL_RESET",
+      );
+      resetStream(envelope.streamId, "LOCAL_ORIGIN_ERROR");
     });
-    if (metadata.requestBodyEnded) localRequest.end();
+    if (metadata.requestBodyEnded) {
+      localRequest.end();
+      armResponseHeaderTimer(stream, configuration.responseHeaderTimeoutMs);
+    }
     return;
   }
 
+  if (streamLifecycle.isRetired(envelope.streamId)) {
+    validateRetiredGatewayFrame(envelope, inboundFlow);
+    return;
+  }
   const stream = streams.get(envelope.streamId);
-  if (stream === undefined || stream.cancelled) return;
+  streamLifecycle.requireActive(envelope.streamId);
+  if (stream === undefined || stream.cancelled) {
+    throw new Error(`active stream ${envelope.streamId} has no client state`);
+  }
   if (envelope.type === FrameType.WindowUpdate) {
     outboundFlow.update(envelope.streamId, decodeWindowUpdate(envelope.payload));
     return;
   }
   if (envelope.type === FrameType.Data) {
+    if (stream.kind === "HTTP") {
+      if (stream.requestBytes + envelope.payload.byteLength > configuration.maxRequestBodyBytes) {
+        throw new Error("Gateway exceeded configured request body limit");
+      }
+      stream.requestBytes += envelope.payload.byteLength;
+    }
     touchClientStream(stream, configuration.streamInactivityTimeoutMs);
+    inboundFlow.consume(envelope.streamId, envelope.payload.byteLength);
   }
 
   switch (envelope.type) {
-    case FrameType.Data:
-      if (stream.kind === "WEBSOCKET" && stream.localSocket !== undefined) {
-        if (!stream.localSocket.write(envelope.payload)) {
-          socket.pause();
-          await once(stream.localSocket, "drain");
-          socket.resume();
+    case FrameType.Data: {
+      const bytes = envelope.payload.byteLength;
+      enqueueInboundOperation(stream, async () => {
+        if (stream.cancelled) return;
+        if (stream.kind === "WEBSOCKET" && stream.localSocket !== undefined) {
+          if (!stream.localSocket.write(envelope.payload)) {
+            await waitForWritableDrain(stream.localSocket);
+          }
+        } else {
+          if (stream.requestEnded) throw new Error("request DATA after END");
+          if (!stream.request.write(envelope.payload)) {
+            await waitForWritableDrain(stream.request);
+          }
         }
-        await sendWindowUpdate(
-          socket,
-          generation,
-          envelope.streamId,
-          envelope.payload.byteLength,
-        );
-        break;
-      }
-      if (stream.requestEnded) throw new Error("request DATA after END");
-      if (!stream.request.write(envelope.payload)) {
-        socket.pause();
-        await once(stream.request, "drain");
-        socket.resume();
-      }
-      await sendWindowUpdate(
-        socket,
-        generation,
-        envelope.streamId,
-        envelope.payload.byteLength,
-      );
+        if (stream.cancelled) return;
+        await sendWindowUpdate(socket, generation, envelope.streamId, bytes);
+        if (!stream.cancelled) inboundFlow.release(envelope.streamId, bytes);
+      }, applicationOperations, onProtocolError);
       break;
+    }
     case FrameType.EndStream:
-      if (stream.kind === "WEBSOCKET" && stream.localSocket !== undefined) {
-        if (stream.requestEnded) throw new Error("duplicate raw END");
-        stream.requestEnded = true;
-        stream.localSocket.end();
-        maybeDeleteStream(streams, outboundFlow, envelope.streamId, stream);
-        break;
-      }
-      if (stream.requestEnded) throw new Error("duplicate request END");
-      stream.requestEnded = true;
-      stream.request.end();
-      maybeDeleteStream(streams, outboundFlow, envelope.streamId, stream);
+      enqueueInboundOperation(stream, async () => {
+        if (stream.cancelled) return;
+        if (stream.kind === "WEBSOCKET" && stream.localSocket !== undefined) {
+          if (stream.requestEnded) throw new Error("duplicate raw END");
+          stream.requestEnded = true;
+          stream.localSocket.end();
+        } else {
+          if (stream.requestEnded) throw new Error("duplicate request END");
+          stream.requestEnded = true;
+          stream.request.end();
+          armResponseHeaderTimer(stream, configuration.responseHeaderTimeoutMs);
+        }
+        maybeDeleteStream(
+          streams,
+          streamLifecycle,
+          outboundFlow,
+          inboundFlow,
+          envelope.streamId,
+          stream,
+        );
+      }, applicationOperations, onProtocolError);
       break;
     case FrameType.ResetStream: {
       const reset = decodeResetStreamMetadata(envelope.payload);
-      stream.cancelled = true;
-      clearClientStreamTimers(stream);
-      streams.delete(envelope.streamId);
-      outboundFlow.closeStream(envelope.streamId);
+      cancelClientStream(
+        streams,
+        streamLifecycle,
+        outboundFlow,
+        inboundFlow,
+        envelope.streamId,
+        stream,
+      );
       const error = new Error(reset.code);
       stream.request.destroy(error);
       stream.response?.destroy(error);
@@ -794,11 +1093,38 @@ async function handleGatewayFrame(
   }
 }
 
+function validateRetiredGatewayFrame(
+  envelope: ReturnType<typeof decodeEnvelope>,
+  inboundFlow: InboundFlowWindow,
+): void {
+  switch (envelope.type) {
+    case FrameType.Data:
+      if (envelope.payload.byteLength === 0) {
+        throw new Error("Gateway DATA payload must not be empty");
+      }
+      inboundFlow.consumeRetiredData(envelope.streamId, envelope.payload.byteLength);
+      return;
+    case FrameType.EndStream:
+      return;
+    case FrameType.WindowUpdate:
+      decodeWindowUpdate(envelope.payload);
+      return;
+    case FrameType.ResetStream:
+      decodeResetStreamMetadata(envelope.payload);
+      return;
+    default:
+      throw new Error(`unexpected retired gateway frame type ${envelope.type}`);
+  }
+}
+
 async function activateLocalWebSocket(
   socket: WebSocket,
   streams: Map<number, ClientStream>,
+  streamLifecycle: RemoteStreamLifecycle,
   outboundFlow: OutboundFlowWindow,
+  inboundFlow: InboundFlowWindow,
   generation: number,
+  resetStream: ResetStreamSender,
   streamId: number,
   stream: ClientStream,
   response: IncomingMessage,
@@ -808,7 +1134,74 @@ async function activateLocalWebSocket(
   configuration: SessionConfigSnapshot,
 ): Promise<void> {
   localSocket.pause();
-  try {
+  stream.requestEnded = false;
+  let localEnded = false;
+  let producerBusy = true;
+  let pendingProducer: Promise<void> | undefined;
+  const failLocalSocket = () => {
+    if (stream.cancelled) return;
+    cancelClientStream(
+      streams,
+      streamLifecycle,
+      outboundFlow,
+      inboundFlow,
+      streamId,
+      stream,
+      "LOCAL_RESET",
+    );
+    localSocket.destroy();
+    resetStream(streamId, "LOCAL_IO_ERROR");
+  };
+  localSocket.once("error", failLocalSocket);
+  localSocket.once("close", () => {
+    if (!localEnded) failLocalSocket();
+  });
+  localSocket.on("data", (chunk: Buffer) => {
+    if (stream.cancelled) return;
+    if (producerBusy) {
+      failLocalSocket();
+      return;
+    }
+    producerBusy = true;
+    localSocket.pause();
+    touchClientStream(stream, configuration.streamInactivityTimeoutMs);
+    const sending = sendFlowControlledData(socket, outboundFlow, {
+      generation,
+      streamId,
+      chunk,
+    });
+    pendingProducer = sending;
+    void sending
+      .then(() => {
+        if (pendingProducer === sending) pendingProducer = undefined;
+        producerBusy = false;
+        if (!stream.cancelled && !localEnded) localSocket.resume();
+      })
+      .catch(failLocalSocket);
+  });
+  localSocket.once("end", () => {
+    localEnded = true;
+    void (pendingProducer ?? Promise.resolve()).then(async () => {
+        if (stream.cancelled) return;
+        stream.responseEnded = true;
+        await sendCarrierFrame(socket, {
+          type: FrameType.EndStream,
+          generation,
+          streamId,
+        });
+        maybeDeleteStream(
+          streams,
+          streamLifecycle,
+          outboundFlow,
+          inboundFlow,
+          streamId,
+          stream,
+        );
+      })
+      .catch(failLocalSocket);
+  });
+
+  const activating = (async () => {
     await sendCarrierFrame(socket, {
       type: FrameType.ResponseHeaders,
       generation,
@@ -831,64 +1224,26 @@ async function activateLocalWebSocket(
         chunk: head,
       });
     }
-
-    let sendQueue = Promise.resolve();
-    localSocket.on("data", (chunk: Buffer) => {
-      touchClientStream(stream, configuration.streamInactivityTimeoutMs);
-      sendQueue = sendQueue
-        .then(() =>
-          sendFlowControlledData(socket, outboundFlow, {
-            generation,
-            streamId,
-            chunk,
-          }),
-        )
-        .catch(() => {
-          stream.cancelled = true;
-          clearClientStreamTimers(stream);
-          streams.delete(streamId);
-          outboundFlow.closeStream(streamId);
-          localSocket.destroy();
-        });
-    });
-    localSocket.once("end", () => {
-      sendQueue = sendQueue
-        .then(async () => {
-          stream.responseEnded = true;
-          await sendCarrierFrame(socket, {
-            type: FrameType.EndStream,
-            generation,
-            streamId,
-          });
-          maybeDeleteStream(streams, outboundFlow, streamId, stream);
-        })
-        .catch(() => undefined);
-    });
-    localSocket.once("error", () => {
-      if (stream.cancelled) return;
-      stream.cancelled = true;
-      clearClientStreamTimers(stream);
-      streams.delete(streamId);
-      outboundFlow.closeStream(streamId);
-      void sendReset(socket, generation, streamId, "LOCAL_IO_ERROR");
-    });
-    stream.requestEnded = false;
-    localSocket.resume();
+  })();
+  pendingProducer = activating;
+  try {
+    await activating;
+    if (pendingProducer === activating) pendingProducer = undefined;
+    producerBusy = false;
+    if (!stream.cancelled && !localEnded) localSocket.resume();
   } catch {
-    stream.cancelled = true;
-    clearClientStreamTimers(stream);
-    streams.delete(streamId);
-    outboundFlow.closeStream(streamId);
-    localSocket.destroy();
-    await sendReset(socket, generation, streamId, "LOCAL_IO_ERROR");
+    failLocalSocket();
   }
 }
 
 async function forwardLocalResponse(
   socket: WebSocket,
   streams: Map<number, ClientStream>,
+  streamLifecycle: RemoteStreamLifecycle,
   outboundFlow: OutboundFlowWindow,
+  inboundFlow: InboundFlowWindow,
   generation: number,
+  resetStream: ResetStreamSender,
   streamId: number,
   stream: ClientStream,
   response: IncomingMessage,
@@ -930,28 +1285,100 @@ async function forwardLocalResponse(
       generation,
       streamId,
     });
-    maybeDeleteStream(streams, outboundFlow, streamId, stream);
+    maybeDeleteStream(
+      streams,
+      streamLifecycle,
+      outboundFlow,
+      inboundFlow,
+      streamId,
+      stream,
+    );
   } catch {
     if (stream.cancelled) return;
-    stream.cancelled = true;
-    clearClientStreamTimers(stream);
-    streams.delete(streamId);
-    outboundFlow.closeStream(streamId);
-    await sendReset(socket, generation, streamId, "LOCAL_RESPONSE_ERROR");
+    cancelClientStream(
+      streams,
+      streamLifecycle,
+      outboundFlow,
+      inboundFlow,
+      streamId,
+      stream,
+      "LOCAL_RESET",
+    );
+    resetStream(streamId, "LOCAL_RESPONSE_ERROR");
   }
 }
 
 function maybeDeleteStream(
   streams: Map<number, ClientStream>,
+  streamLifecycle: RemoteStreamLifecycle,
   outboundFlow: OutboundFlowWindow,
+  inboundFlow: InboundFlowWindow,
   streamId: number,
   stream: ClientStream,
 ): void {
   if (stream.requestEnded && stream.responseEnded) {
     clearClientStreamTimers(stream);
     streams.delete(streamId);
+    streamLifecycle.close(streamId);
     outboundFlow.closeStream(streamId);
+    inboundFlow.closeStream(streamId);
   }
+}
+
+function cancelClientStream(
+  streams: Map<number, ClientStream>,
+  streamLifecycle: RemoteStreamLifecycle,
+  outboundFlow: OutboundFlowWindow,
+  inboundFlow: InboundFlowWindow,
+  streamId: number,
+  stream: ClientStream,
+  retirement: "LOCAL_RESET" | "REMOTE_RESET" = "REMOTE_RESET",
+): void {
+  if (stream.cancelled) return;
+  stream.cancelled = true;
+  clearClientStreamTimers(stream);
+  streams.delete(streamId);
+  streamLifecycle.close(streamId);
+  outboundFlow.closeStream(streamId);
+  if (retirement === "LOCAL_RESET") inboundFlow.retireStream(streamId);
+  else inboundFlow.closeStream(streamId);
+}
+
+function enqueueInboundOperation(
+  stream: ClientStream,
+  operation: () => Promise<void>,
+  applicationOperations: ApplicationOperationBudget,
+  onProtocolError: (error: Error) => void,
+): void {
+  if (stream.pendingInboundOperations >= MAX_PENDING_STREAM_OPERATIONS) {
+    throw new Error("too many pending operations for one stream");
+  }
+  const releaseApplicationOperation = applicationOperations.reserve();
+  stream.pendingInboundOperations += 1;
+  stream.inboundQueue = stream.inboundQueue
+    .then(operation)
+    .finally(() => {
+      stream.pendingInboundOperations -= 1;
+      releaseApplicationOperation();
+    });
+  void stream.inboundQueue.catch((error: unknown) => {
+    if (!stream.cancelled) onProtocolError(toError(error));
+  });
+}
+
+function armResponseHeaderTimer(stream: ClientStream, timeoutMs: number): void {
+  if (
+    stream.cancelled ||
+    stream.response !== undefined ||
+    stream.responseHeaderTimer !== undefined
+  ) {
+    return;
+  }
+  stream.responseHeaderTimer = setTimeout(
+    () => stream.terminate?.("HEADER_TIMEOUT"),
+    timeoutMs,
+  );
+  stream.responseHeaderTimer.unref();
 }
 
 function clearResponseHeaderTimer(stream: ClientStream): void {
@@ -998,17 +1425,24 @@ async function sendReset(
   streamId: number,
   code: string,
 ): Promise<void> {
-  if (socket.readyState !== WebSocket.OPEN) return;
   await sendCarrierFrame(socket, {
     type: FrameType.ResetStream,
     generation,
     streamId,
     payload: encodeMetadata({ code }),
-  }).catch(() => undefined);
+  });
 }
 
 function parseLoopbackOrigin(value: string): URL {
-  const origin = new URL(value);
+  let origin: URL;
+  try {
+    origin = new URL(value);
+  } catch {
+    throw new TypeError("local origin must be a valid URL");
+  }
+  if (origin.username !== "" || origin.password !== "") {
+    throw new TypeError("local origin must not include username or password credentials");
+  }
   if (origin.protocol !== "http:") {
     throw new TypeError("Phase 1 local origin must use http");
   }
@@ -1084,25 +1518,95 @@ function isLoopbackAddress(address: string): boolean {
   return firstOctet === 127;
 }
 
-function hasValidWebSocketAccept(
+export function hasValidWebSocketUpgrade(
   requestHeaders: readonly HeaderPair[],
   response: IncomingMessage,
 ): boolean {
   const keys = requestHeaders
     .filter(([name]) => name.toLowerCase() === "sec-websocket-key")
     .map(([, value]) => value.trim());
-  const accept = response.headers["sec-websocket-accept"];
-  if (keys.length !== 1 || typeof accept !== "string") return false;
+  const accepts = responseHeaderValues(response, "sec-websocket-accept");
+  if (
+    response.statusCode !== 101 ||
+    keys.length !== 1 ||
+    accepts.length !== 1 ||
+    !headerHasToken(responseHeaderValues(response, "connection"), "upgrade") ||
+    !headerIsSingleToken(responseHeaderValues(response, "upgrade"), "websocket")
+  ) {
+    return false;
+  }
   const expected = createHash("sha1")
     .update(`${keys[0]}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`, "ascii")
     .digest("base64");
-  return accept.trim() === expected;
+  if (accepts[0]?.trim() !== expected) return false;
+
+  const offeredProtocols = commaSeparatedHeaderTokens(requestHeaders, "sec-websocket-protocol");
+  const selectedProtocols = commaSeparatedValues(
+    responseHeaderValues(response, "sec-websocket-protocol"),
+  );
+  if (
+    selectedProtocols.length > 1 ||
+    selectedProtocols.some((protocol) =>
+      !isHttpToken(protocol) || !offeredProtocols.includes(protocol)
+    )
+  ) {
+    return false;
+  }
+
+  return responseHeaderValues(response, "sec-websocket-extensions").length === 0;
+}
+
+function responseHeaderValues(response: IncomingMessage, name: string): string[] {
+  const values: string[] = [];
+  for (let index = 0; index < response.rawHeaders.length; index += 2) {
+    if (response.rawHeaders[index]?.toLowerCase() === name) {
+      const value = response.rawHeaders[index + 1];
+      if (value !== undefined) values.push(value);
+    }
+  }
+  return values;
+}
+
+function headerHasToken(values: readonly string[], expected: string): boolean {
+  return commaSeparatedValues(values).some((value) => value.toLowerCase() === expected);
+}
+
+function headerIsSingleToken(values: readonly string[], expected: string): boolean {
+  const tokens = commaSeparatedValues(values);
+  return tokens.length === 1 && tokens[0]?.toLowerCase() === expected;
+}
+
+function commaSeparatedHeaderTokens(
+  headers: readonly HeaderPair[],
+  name: string,
+): string[] {
+  return commaSeparatedValues(
+    headers
+      .filter(([headerName]) => headerName.toLowerCase() === name)
+      .map(([, value]) => value),
+  ).filter(isHttpToken);
+}
+
+function commaSeparatedValues(values: readonly string[]): string[] {
+  return values.flatMap((value) => value.split(",").map((part) => part.trim()))
+    .filter((value) => value !== "");
+}
+
+function isHttpToken(value: string): boolean {
+  return /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(value);
 }
 
 function requireOutboundFlow(
   flow: OutboundFlowWindow | undefined,
 ): OutboundFlowWindow {
   if (flow === undefined) throw new Error("Session configuration is not applied");
+  return flow;
+}
+
+function requireInboundFlow(
+  flow: InboundFlowWindow | undefined,
+): InboundFlowWindow {
+  if (flow === undefined) throw new Error("Session inbound flow is unavailable");
   return flow;
 }
 
@@ -1128,6 +1632,8 @@ function toLocalHeaders(
       localOrigin: origin.origin,
       publicOrigin: configuration.publicOrigin,
     },
+  ).filter(([name]) =>
+    kind !== "WEBSOCKET" || name.toLowerCase() !== "sec-websocket-extensions"
   ));
   if (kind === "WEBSOCKET") {
     output.connection = "Upgrade";
@@ -1144,6 +1650,79 @@ function asBytes(data: RawData): Uint8Array {
 
 function toError(value: unknown): Error {
   return value instanceof Error ? value : new Error(String(value));
+}
+
+function positiveTimeout(value: number, name: string): number {
+  if (!Number.isSafeInteger(value) || value <= 0 || value > 0x7fff_ffff) {
+    throw new RangeError(`${name} must be a positive integer no greater than 2147483647`);
+  }
+  return value;
+}
+
+async function settleBeforeDeadline<T>(
+  promise: Promise<T>,
+  deadline: number,
+  label: string,
+  signal?: AbortSignal,
+): Promise<T> {
+  const remaining = deadline - Date.now();
+  if (remaining <= 0) throw new Error(`${label} deadline exceeded`);
+  if (signal?.aborted === true) throw abortReason(signal, label);
+
+  return await new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const finish = (callback: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+      callback();
+    };
+    const timer = setTimeout(
+      () => finish(() => reject(new Error(`${label} deadline exceeded`))),
+      remaining,
+    );
+    timer.unref();
+    const onAbort = () => finish(() => reject(abortReason(signal, label)));
+    signal?.addEventListener("abort", onAbort, { once: true });
+    void promise.then(
+      (value) => finish(() => resolve(value)),
+      (error: unknown) => finish(() => reject(error)),
+    );
+  });
+}
+
+function abortReason(signal: AbortSignal | undefined, label: string): Error {
+  const reason = signal?.reason;
+  return reason instanceof Error ? reason : new Error(`${label} aborted`);
+}
+
+async function closeSocketBeforeDeadline(
+  socket: WebSocket,
+  deadline: number,
+): Promise<void> {
+  if (socket.readyState === WebSocket.CLOSED) return;
+  const remaining = Math.max(0, deadline - Date.now());
+  await new Promise<void>((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      socket.off("close", onClose);
+      resolve();
+    };
+    const onClose = () => finish();
+    const timer = setTimeout(() => {
+      try {
+        socket.terminate();
+      } finally {
+        finish();
+      }
+    }, remaining);
+    timer.unref();
+    socket.once("close", onClose);
+  });
 }
 
 function isTransientReconnectError(error: Error): boolean {

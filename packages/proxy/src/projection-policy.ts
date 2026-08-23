@@ -1,13 +1,35 @@
 import type { HeaderPair, OriginProjection } from "../../protocol/src/index.ts";
 
-const FORWARDED_HEADERS = new Set([
-  "forwarded",
-  "x-forwarded-for",
-  "x-forwarded-host",
-  "x-forwarded-port",
-  "x-forwarded-proto",
-  "x-forwarded-server",
+const UNTRUSTED_PROXY_IDENTITY_HEADERS = new Set([
+  "client-ip",
+  "x-real-ip",
+  "x-client-ip",
+  "true-client-ip",
+  "cf-connecting-ip",
+  "cf-connecting-ipv6",
+  "cloudfront-viewer-address",
+  "fastly-client-ip",
+  "fly-client-ip",
+  "x-cluster-client-ip",
+  "x-original-client-ip",
+  "x-original-forwarded-for",
+  "x-originating-ip",
+  "x-remote-ip",
+  "x-remote-addr",
+  "x-appengine-user-ip",
+  "x-azure-clientip",
+  "x-envoy-external-address",
+  "x-nf-client-connection-ip",
+  "x-proxyuser-ip",
+  "x-vercel-forwarded-for",
 ]);
+
+function isUntrustedForwardingHeader(name: string): boolean {
+  const lowerName = name.toLowerCase();
+  return lowerName === "forwarded" ||
+    lowerName.startsWith("x-forwarded-") ||
+    UNTRUSTED_PROXY_IDENTITY_HEADERS.has(lowerName);
+}
 
 export type ProjectionContext = Readonly<{
   originProjection: OriginProjection;
@@ -26,7 +48,7 @@ export function projectRequestHeaders(
 
   for (const [name, value] of headers) {
     const lowerName = name.toLowerCase();
-    if (lowerName === "host" || FORWARDED_HEADERS.has(lowerName)) continue;
+    if (lowerName === "host" || isUntrustedForwardingHeader(lowerName)) continue;
     if (lowerName === "origin") {
       output.push([
         name,
@@ -94,7 +116,7 @@ export function projectResponseHeaders(
 export function stripUntrustedForwardingHeaders(
   headers: readonly HeaderPair[],
 ): HeaderPair[] {
-  return headers.filter(([name]) => !FORWARDED_HEADERS.has(name.toLowerCase()));
+  return headers.filter(([name]) => !isUntrustedForwardingHeader(name));
 }
 
 function rewriteSameOriginValue(

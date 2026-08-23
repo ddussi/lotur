@@ -91,7 +91,11 @@ test("2분 경계의 resume은 허용하고 generation만 증가시킨다", () =
 });
 
 test("재연결은 최대 TTL을 초기화하지 않는다", () => {
-  const reconnecting = transitionSession(active(), {
+  const withStream = transitionSession(active(), {
+    type: "STREAM_OPEN",
+    now: 1,
+  });
+  const reconnecting = transitionSession(withStream, {
     type: "CARRIER_LOST",
     now: 7 * hour,
   });
@@ -144,6 +148,7 @@ test("실패한 resume candidate를 제거하면 다음 candidate가 시작할 �
   });
   const failed = transitionSession(first, {
     type: "RESUME_FAILED",
+    now: 11,
     attemptId: "candidate-a",
   });
   const second = transitionSession(failed, {
@@ -172,6 +177,83 @@ test("재연결 유예를 1ms 넘기면 RECONNECT_TIMEOUT이 된다", () => {
       status: "EXPIRED",
       reason: "RECONNECT_TIMEOUT",
       closedAt: 1_000 + 2 * minute + 1,
+    },
+  );
+});
+
+test("ACTIVE 이벤트는 상태 변경 전에 max/idle deadline을 검사한다", () => {
+  assert.deepEqual(
+    transitionSession(active(), { type: "STREAM_OPEN", now: 30 * minute }),
+    { status: "EXPIRED", reason: "IDLE_TIMEOUT", closedAt: 30 * minute },
+  );
+
+  const withStream = transitionSession(active(), { type: "STREAM_OPEN", now: 1 });
+  assert.deepEqual(
+    transitionSession(withStream, { type: "CARRIER_LOST", now: 8 * hour }),
+    { status: "EXPIRED", reason: "MAX_TTL", closedAt: 8 * hour },
+  );
+});
+
+test("RECONNECTING 이벤트는 candidate 처리 전에 max/reconnect deadline을 검사한다", () => {
+  const reconnecting = transitionSession(active(), {
+    type: "CARRIER_LOST",
+    now: 1_000,
+  });
+  const candidate = transitionSession(reconnecting, {
+    type: "START_RESUME",
+    now: 1_001,
+    attemptId: "candidate-a",
+  });
+
+  assert.deepEqual(
+    transitionSession(candidate, {
+      type: "RESUME_FAILED",
+      now: 1_000 + 2 * minute + 1,
+      attemptId: "candidate-a",
+    }),
+    {
+      status: "EXPIRED",
+      reason: "RECONNECT_TIMEOUT",
+      closedAt: 1_000 + 2 * minute + 1,
+    },
+  );
+
+  const nearMaxWithStream = transitionSession(active(), {
+    type: "STREAM_OPEN",
+    now: 1,
+  });
+  const nearMax = transitionSession(nearMaxWithStream, {
+    type: "CARRIER_LOST",
+    now: 8 * hour - 1,
+  });
+  assert.deepEqual(
+    transitionSession(nearMax, {
+      type: "START_RESUME",
+      now: 8 * hour,
+      attemptId: "candidate-b",
+    }),
+    { status: "EXPIRED", reason: "MAX_TTL", closedAt: 8 * hour },
+  );
+});
+
+test("명시적 CLOSE도 이미 지난 deadline을 USER_REQUEST로 덮지 않는다", () => {
+  assert.deepEqual(
+    transitionSession(active(), { type: "CLOSE", now: 30 * minute }),
+    { status: "EXPIRED", reason: "IDLE_TIMEOUT", closedAt: 30 * minute },
+  );
+  const reconnecting = transitionSession(
+    transitionSession(active(), { type: "STREAM_OPEN", now: 1 }),
+    { type: "CARRIER_LOST", now: 2 },
+  );
+  assert.deepEqual(
+    transitionSession(reconnecting, {
+      type: "CLOSE",
+      now: 2 + 2 * minute + 1,
+    }),
+    {
+      status: "EXPIRED",
+      reason: "RECONNECT_TIMEOUT",
+      closedAt: 2 + 2 * minute + 1,
     },
   );
 });

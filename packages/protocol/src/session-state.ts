@@ -47,7 +47,7 @@ export type SessionEvent =
   | Readonly<{ type: "STREAM_CLOSED"; now: number }>
   | Readonly<{ type: "CARRIER_LOST"; now: number }>
   | Readonly<{ type: "START_RESUME"; now: number; attemptId: string }>
-  | Readonly<{ type: "RESUME_FAILED"; attemptId: string }>
+  | Readonly<{ type: "RESUME_FAILED"; now: number; attemptId: string }>
   | Readonly<{ type: "RESUME_COMMITTED"; now: number; attemptId: string }>
   | Readonly<{ type: "TICK"; now: number }>
   | Readonly<{ type: "CLOSE"; now: number }>;
@@ -78,6 +78,14 @@ export function transitionSession(
 ): SessionState {
   if (state.status === "EXPIRED" || state.status === "CLOSED") {
     throw invalid(state, event);
+  }
+
+  if (state.status === "ACTIVE") {
+    const expired = expireActiveIfNeeded(state, event.now, policy);
+    if (expired.status === "EXPIRED") return expired;
+  } else if (state.status === "RECONNECTING") {
+    const expired = expireReconnectIfNeeded(state, event.now, policy);
+    if (expired.status === "EXPIRED") return expired;
   }
 
   if (event.type === "CLOSE") {
@@ -116,7 +124,7 @@ export function transitionSession(
           lastStreamClosedAt: event.now,
         };
       case "TICK":
-        return expireActiveIfNeeded(state, event.now, policy);
+        return state;
       default:
         throw invalid(state, event);
     }
@@ -124,9 +132,6 @@ export function transitionSession(
 
   switch (event.type) {
     case "START_RESUME":
-      if (!isResumeAllowed(event.now, state.disconnectedAt, policy)) {
-        return reconnectExpired(event.now);
-      }
       if (state.candidateAttemptId !== undefined) {
         throw new SessionTransitionError(
           "RESUME_IN_PROGRESS",
@@ -155,9 +160,6 @@ export function transitionSession(
           "resume commit does not match current candidate",
         );
       }
-      if (!isResumeAllowed(event.now, state.disconnectedAt, policy)) {
-        return reconnectExpired(event.now);
-      }
       return {
         status: "ACTIVE",
         activatedAt: state.activatedAt,
@@ -165,18 +167,24 @@ export function transitionSession(
         activeStreamCount: 0,
         lastStreamClosedAt: state.lastStreamClosedAt,
       };
-    case "TICK": {
-      const maxDeadline = state.activatedAt + policy.maxTtlMs;
-      if (event.now >= maxDeadline) {
-        return { status: "EXPIRED", reason: "MAX_TTL", closedAt: event.now };
-      }
-      return isResumeAllowed(event.now, state.disconnectedAt, policy)
-        ? state
-        : reconnectExpired(event.now);
-    }
+    case "TICK":
+      return state;
     default:
       throw invalid(state, event);
   }
+}
+
+function expireReconnectIfNeeded(
+  state: Extract<SessionState, { status: "RECONNECTING" }>,
+  now: number,
+  policy: SessionPolicy,
+): SessionState {
+  if (now >= state.activatedAt + policy.maxTtlMs) {
+    return { status: "EXPIRED", reason: "MAX_TTL", closedAt: now };
+  }
+  return isResumeAllowed(now, state.disconnectedAt, policy)
+    ? state
+    : reconnectExpired(now);
 }
 
 function expireActiveIfNeeded(

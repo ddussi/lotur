@@ -127,3 +127,78 @@ test("uint16 envelope 상한보다 큰 payload는 encode 전에 거부한다", (
     }),
   );
 });
+
+test("v1에서 정의하지 않은 flags와 reserved byte를 fail-closed한다", () => {
+  assert.throws(() =>
+    encodeEnvelope({
+      type: FrameType.Ping,
+      flags: 1,
+      generation: 1,
+      streamId: 0,
+      payload: new Uint8Array(),
+    }),
+  );
+
+  const withFlags = encodeEnvelope({
+    type: FrameType.Ping,
+    flags: 0,
+    generation: 1,
+    streamId: 0,
+    payload: new Uint8Array(),
+  });
+  withFlags[4] = 0x80;
+  assert.throws(
+    () => decodeEnvelope(withFlags),
+    (error: unknown) =>
+      error instanceof EnvelopeDecodeError && error.code === "FLAGS_UNSUPPORTED",
+  );
+
+  const withReserved = encodeEnvelope({
+    type: FrameType.Ping,
+    flags: 0,
+    generation: 1,
+    streamId: 0,
+    payload: new Uint8Array(),
+  });
+  withReserved[5] = 1;
+  assert.throws(
+    () => decodeEnvelope(withReserved),
+    (error: unknown) =>
+      error instanceof EnvelopeDecodeError && error.code === "RESERVED_NONZERO",
+  );
+});
+
+test("payload-less v1 frame은 빈 payload만 허용한다", () => {
+  for (const type of [
+    FrameType.Ping,
+    FrameType.Pong,
+    FrameType.EndStream,
+    FrameType.CloseSession,
+  ]) {
+    const streamId = type === FrameType.EndStream ? 1 : 0;
+    assert.throws(() => encodeEnvelope({
+      type,
+      flags: 0,
+      generation: 1,
+      streamId,
+      payload: Uint8Array.of(1),
+    }));
+
+    const valid = encodeEnvelope({
+      type,
+      flags: 0,
+      generation: 1,
+      streamId,
+      payload: new Uint8Array(),
+    });
+    const invalid = new Uint8Array(valid.byteLength + 1);
+    invalid.set(valid);
+    new DataView(invalid.buffer).setUint16(14, 1);
+    invalid[invalid.byteLength - 1] = 1;
+    assert.throws(
+      () => decodeEnvelope(invalid),
+      (error: unknown) =>
+        error instanceof EnvelopeDecodeError && error.code === "PAYLOAD_UNEXPECTED",
+    );
+  }
+});
