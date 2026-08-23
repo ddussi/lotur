@@ -4,19 +4,40 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import {
   AuthError,
   type Account,
+  type AccountAuthorization,
   type AccountRole,
   type AuthService,
   type Principal,
 } from "../../../packages/auth/src/index.ts";
+import { createClientAddressResolver } from "./client-address.ts";
+import { retainAdmissionUntilSettled } from "./retained-operation.ts";
 
 const MAX_FORM_BYTES = 16 * 1024;
+const DEFAULT_AUTHORIZATION_QUERY_TIMEOUT_MS = 3_000;
+const DEFAULT_MAX_CONCURRENT_WEB_AUTHORIZATIONS = 32;
+const DEFAULT_MAX_CONCURRENT_WEB_AUTHORIZATIONS_PER_REMOTE = 4;
 
 export type WebAuthOptions = Readonly<{
   authService: AuthService;
   controlHost: string;
   secureCookies?: boolean;
-  setKillSwitch?: (enabled: boolean, actor: Principal) => Promise<void>;
+  setKillSwitch?: (enabled: boolean, actor: AccountAuthorization) => Promise<void>;
   getKillSwitch?: () => boolean;
+  reserveCarrierCredential?: (
+    principal: Principal,
+    purpose: "create" | "resume",
+    tunnelId: string,
+  ) => (() => void) | undefined;
+  admitLoginIntent?: (remoteAddress: string, targetHost: string) => boolean;
+  maxConcurrentLoginAttempts?: number;
+  maxConcurrentLoginAttemptsPerRemote?: number;
+  loginAttemptsPerMinute?: number;
+  loginAttemptsPerRemotePerMinute?: number;
+  authorizationQueryTimeoutMs?: number;
+  maxConcurrentWebAuthorizations?: number;
+  maxConcurrentWebAuthorizationsPerRemote?: number;
+  trustedProxyCidrs?: readonly string[];
+  maxForwardedForEntries?: number;
 }>;
 
 export type WebAuthHandler = Readonly<{
@@ -25,32 +46,214 @@ export type WebAuthHandler = Readonly<{
   resolveContentUpgrade(request: IncomingMessage): Promise<Principal | undefined>;
 }>;
 
+export class WebAuthBoundaryError extends Error {
+  readonly statusCode: 429 | 503;
+  readonly code: "AUTHENTICATION_CAPACITY" | "AUTHENTICATION_UNAVAILABLE";
+
+  constructor(
+    statusCode: 429 | 503,
+    code: "AUTHENTICATION_CAPACITY" | "AUTHENTICATION_UNAVAILABLE",
+    message: string,
+  ) {
+    super(message);
+    this.name = "WebAuthBoundaryError";
+    this.statusCode = statusCode;
+    this.code = code;
+  }
+}
+
 export function createWebAuthHandler(options: WebAuthOptions): WebAuthHandler {
   const secureCookies = options.secureCookies ?? true;
   const scheme = secureCookies ? "https" : "http";
   const controlCookie = secureCookies ? "__Host-rt_control" : "rt_control_dev";
   const contentCookie = secureCookies ? "__Host-rt_session" : "rt_session_dev";
+  const authorizationQueryTimeoutMs = options.authorizationQueryTimeoutMs ??
+    DEFAULT_AUTHORIZATION_QUERY_TIMEOUT_MS;
+  if (!Number.isSafeInteger(authorizationQueryTimeoutMs) || authorizationQueryTimeoutMs <= 0) {
+    throw new RangeError("authorizationQueryTimeoutMs must be a positive safe integer");
+  }
+  const maxConcurrentWebAuthorizations = options.maxConcurrentWebAuthorizations ??
+    DEFAULT_MAX_CONCURRENT_WEB_AUTHORIZATIONS;
+  const maxConcurrentWebAuthorizationsPerRemote =
+    options.maxConcurrentWebAuthorizationsPerRemote ??
+      DEFAULT_MAX_CONCURRENT_WEB_AUTHORIZATIONS_PER_REMOTE;
+  const webAuthorizationAdmission = createConcurrentAdmission({
+    global: maxConcurrentWebAuthorizations,
+    perRemote: maxConcurrentWebAuthorizationsPerRemote,
+  });
+  const resolveClientAddress = createClientAddressResolver({
+    trustedProxyCidrs: options.trustedProxyCidrs ?? [],
+    ...(options.maxForwardedForEntries === undefined
+      ? {}
+      : { maxForwardedForEntries: options.maxForwardedForEntries }),
+  });
+  const clientAddress = (request: IncomingMessage): string => {
+    let forwardedHeaderCount = 0;
+    for (let index = 0; index < request.rawHeaders.length; index += 2) {
+      if (request.rawHeaders[index]?.toLowerCase() === "x-forwarded-for") {
+        forwardedHeaderCount += 1;
+      }
+    }
+    return resolveClientAddress(
+      request.socket.remoteAddress,
+      forwardedHeaderCount > 1 ? [] : request.headers["x-forwarded-for"],
+    );
+  };
+  const authorizationDeadlines = new WeakMap<IncomingMessage, number>();
+  const startAdmittedAuthorizationOperation = <T>(
+    request: IncomingMessage,
+    operation: () => Promise<T>,
+  ): Promise<T> => {
+    const release = webAuthorizationAdmission.acquire(clientAddress(request));
+    if (release === undefined) {
+      throw new WebAuthBoundaryError(
+        429,
+        "AUTHENTICATION_CAPACITY",
+        "web authentication capacity exceeded",
+      );
+    }
+    const running = Promise.resolve().then(operation);
+    retainAdmissionUntilSettled(running, release);
+    return running;
+  };
+  const runAuthorizationQuery = <T>(
+    request: IncomingMessage,
+    operation: () => Promise<T>,
+  ): Promise<T> => {
+    let deadlineAt = authorizationDeadlines.get(request);
+    if (deadlineAt === undefined) {
+      deadlineAt = Date.now() + authorizationQueryTimeoutMs;
+      authorizationDeadlines.set(request, deadlineAt);
+    }
+    const remainingMs = deadlineAt - Date.now();
+    if (remainingMs <= 0) {
+      throw new WebAuthBoundaryError(
+        503,
+        "AUTHENTICATION_UNAVAILABLE",
+        "web authentication deadline exceeded",
+      );
+    }
+    const running = startAdmittedAuthorizationOperation(request, operation);
+    return withDeadline(
+      running,
+      remainingMs,
+      new WebAuthBoundaryError(
+        503,
+        "AUTHENTICATION_UNAVAILABLE",
+        "web authentication deadline exceeded",
+      ),
+    );
+  };
+  const runAuthorizationMutation = <T>(
+    request: IncomingMessage,
+    operation: () => Promise<T>,
+  ): Promise<T> => startAdmittedAuthorizationOperation(request, operation);
+  const loginAttempts = createLoginAttemptLimiter({
+    maxConcurrent: options.maxConcurrentLoginAttempts ?? 32,
+    maxConcurrentPerRemote: options.maxConcurrentLoginAttemptsPerRemote ?? 4,
+    maxPerMinute: options.loginAttemptsPerMinute ?? 1_000,
+    maxPerRemotePerMinute: options.loginAttemptsPerRemotePerMinute ?? 30,
+  });
+  const withCredentialAttempt = async <T>(
+    remoteAddress: string,
+    operation: () => Promise<T>,
+  ): Promise<T> => {
+    const release = loginAttempts.acquire(remoteAddress);
+    if (release === undefined) {
+      throw new AuthError("LOGIN_THROTTLED", "로그인 시도가 너무 많습니다. 잠시 후 다시 시도하세요.");
+    }
+    try {
+      return await operation();
+    } finally {
+      release();
+    }
+  };
+  const authenticateWithinAdmission = (input: Readonly<{
+    username: string;
+    password: string;
+    remoteAddress: string;
+  }>) => withCredentialAttempt(
+    input.remoteAddress,
+    () => options.authService.authenticate(input),
+  );
+  const createSessionExchangeWithLoginCompensation = async (
+    login: Awaited<ReturnType<AuthService["authenticate"]>>,
+    intent: string,
+  ) => {
+    if (intent === "") return undefined;
+    try {
+      return await options.authService.createSessionExchange(login.principal, intent);
+    } catch (error) {
+      await options.authService.logout(login.principal);
+      throw error;
+    }
+  };
+  const verifyAdministratorCredentialsWithinAdmission = (input: Readonly<{
+    username: string;
+    password: string;
+    remoteAddress: string;
+  }>) => withCredentialAttempt(
+    input.remoteAddress,
+    () => options.authService.verifyAdministratorCredentials(input),
+  );
+  const resolveCookiePrincipalForRequest = (
+    request: IncomingMessage,
+    name: string,
+    audience = "control",
+  ): Promise<Principal | undefined> => {
+    const token = parseCookie(request.headers.cookie, name);
+    return token === undefined
+      ? Promise.resolve(undefined)
+      : runAuthorizationQuery(
+          request,
+          () => options.authService.resolveSession(token, audience),
+        );
+  };
+  const redirectToExchangeForRequest = (
+    request: IncomingMessage,
+    principal: Principal,
+    intent: string,
+    response: ServerResponse,
+  ): Promise<void> => redirectToExchange(
+    (candidate, loginIntent) => runAuthorizationMutation(
+      request,
+      () => options.authService.createSessionExchange(candidate, loginIntent),
+    ),
+    principal,
+    intent,
+    response,
+    scheme,
+  );
 
-  return {
+  const handler: WebAuthHandler = {
     async handleControl(request, response) {
       applySecurityHeaders(response);
       const url = new URL(request.url ?? "/", `${scheme}://${request.headers.host ?? options.controlHost}`);
-      const principal = await resolveCookiePrincipal(options.authService, request, controlCookie);
+      const principal = await resolveCookiePrincipalForRequest(request, controlCookie);
       try {
         if (request.method === "POST" && url.pathname === "/api/client/login") {
           requireCliRequest(request);
           const form = await readForm(request);
-          const login = await options.authService.authenticate({
+          const loginInput = {
             username: requiredFormValue(form, "username"),
             password: requiredFormValue(form, "password"),
-            remoteAddress: request.socket.remoteAddress ?? "unknown",
+            remoteAddress: clientAddress(request),
+          };
+          const login = await runAuthorizationMutation(request, async () => {
+            const candidate = await authenticateWithinAdmission(loginInput);
+            if (candidate.principal.mustChangePassword) {
+              await options.authService.logout(candidate.principal);
+              throw new AuthError(
+                "PASSWORD_CHANGE_REQUIRED",
+                "먼저 웹 또는 관리자 CLI에서 비밀번호를 변경하세요.",
+              );
+            }
+            if (!candidate.principal.roles.includes("DEVELOPER")) {
+              await options.authService.logout(candidate.principal);
+              throw new AuthError("FORBIDDEN", "개발자 권한이 필요합니다.");
+            }
+            return candidate;
           });
-          if (login.principal.mustChangePassword) {
-            throw new AuthError("PASSWORD_CHANGE_REQUIRED", "먼저 웹 또는 관리자 CLI에서 비밀번호를 변경하세요.");
-          }
-          if (!login.principal.roles.includes("DEVELOPER")) {
-            throw new AuthError("FORBIDDEN", "개발자 권한이 필요합니다.");
-          }
           writeJson(response, 200, { sessionToken: login.sessionToken, expiresInSeconds: 43_200 });
           return;
         }
@@ -59,7 +262,10 @@ export function createWebAuthHandler(options: WebAuthOptions): WebAuthHandler {
           const token = bearerToken(request.headers.authorization);
           const clientPrincipal = token === undefined
             ? undefined
-            : await options.authService.resolveSession(token);
+            : await runAuthorizationQuery(
+                request,
+                () => options.authService.resolveSession(token),
+              );
           if (clientPrincipal === undefined) throw new AuthError("FORBIDDEN", "로그인이 필요합니다.");
           const form = await readForm(request);
           const purpose = requiredFormValue(form, "purpose");
@@ -69,10 +275,29 @@ export function createWebAuthHandler(options: WebAuthOptions): WebAuthHandler {
           const tunnelId = purpose === "create"
             ? randomBytes(16).toString("hex")
             : requiredFormValue(form, "tunnelId");
-          const credential = await options.authService.issueCarrierCredential(clientPrincipal, {
+          const releaseReservation = options.reserveCarrierCredential?.(
+            clientPrincipal,
             purpose,
             tunnelId,
-          });
+          );
+          if (options.reserveCarrierCredential !== undefined && releaseReservation === undefined) {
+            response.setHeader("Retry-After", "60");
+            writeJsonError(response, 429, "TUNNEL_LIMIT_EXCEEDED");
+            return;
+          }
+          let credential: string;
+          try {
+            credential = await runAuthorizationMutation(
+              request,
+              () => options.authService.issueCarrierCredential(clientPrincipal, {
+                purpose,
+                tunnelId,
+              }),
+            );
+          } catch (error) {
+            releaseReservation?.();
+            throw error;
+          }
           writeJson(response, 201, { credential, tunnelId, expiresInSeconds: 60 });
           return;
         }
@@ -94,22 +319,29 @@ export function createWebAuthHandler(options: WebAuthOptions): WebAuthHandler {
           requireSameOrigin(request, scheme);
           const administrator = requireAdministrator(principal);
           const form = await readForm(request);
-          await confirmAdministratorPassword(
-            options.authService,
-            administrator,
-            form,
-            request.socket.remoteAddress ?? "unknown",
-          );
-          await options.setKillSwitch(
-            requiredFormValue(form, "enabled") === "true",
-            administrator,
-          );
+          await runAuthorizationMutation(request, async () => {
+            const confirmedAdministrator = await confirmAdministratorPassword(
+              verifyAdministratorCredentialsWithinAdmission,
+              administrator,
+              form,
+              clientAddress(request),
+            );
+            await options.setKillSwitch?.(
+              requiredBooleanFormValue(form, "enabled"),
+              confirmedAdministrator,
+            );
+          });
           writeHtml(response, 200, operationsPage(options.getKillSwitch()));
           return;
         }
         if (request.method === "GET" && url.pathname === "/login") {
           if (principal !== undefined && !principal.mustChangePassword && url.searchParams.has("intent")) {
-            await redirectToExchange(options.authService, principal, url.searchParams.get("intent") ?? "", response, scheme);
+            await redirectToExchangeForRequest(
+              request,
+              principal,
+              url.searchParams.get("intent") ?? "",
+              response,
+            );
             return;
           }
           writeHtml(response, 200, loginPage(url.searchParams.get("intent"), undefined));
@@ -118,17 +350,28 @@ export function createWebAuthHandler(options: WebAuthOptions): WebAuthHandler {
         if (request.method === "POST" && url.pathname === "/login") {
           requireSameOrigin(request, scheme);
           const form = await readForm(request);
-          const login = await options.authService.authenticate({
-            username: requiredFormValue(form, "username"),
-            password: requiredFormValue(form, "password"),
-            remoteAddress: request.socket.remoteAddress ?? "unknown",
+          const intent = form.get("intent") ?? "";
+          const { login, exchange } = await runAuthorizationMutation(request, async () => {
+            const login = await authenticateWithinAdmission({
+              username: requiredFormValue(form, "username"),
+              password: requiredFormValue(form, "password"),
+              remoteAddress: clientAddress(request),
+            });
+            const exchange = login.principal.mustChangePassword
+              ? undefined
+              : await createSessionExchangeWithLoginCompensation(login, intent);
+            return { login, exchange };
           });
           setSessionCookie(response, controlCookie, login.sessionToken, secureCookies);
-          const intent = form.get("intent") ?? "";
           if (login.principal.mustChangePassword) {
             redirect(response, `/account/change-password${intent === "" ? "" : `?intent=${encodeURIComponent(intent)}`}`);
-          } else if (intent !== "") {
-            await redirectToExchange(options.authService, login.principal, intent, response, scheme);
+          } else if (exchange !== undefined) {
+            response.setHeader("Cache-Control", "no-store");
+            response.setHeader("Referrer-Policy", "no-referrer");
+            redirect(
+              response,
+              `${scheme}://${exchange.targetHost}/_review-tunnel/session?code=${encodeURIComponent(exchange.code)}`,
+            );
           } else {
             redirect(response, login.principal.roles.includes("ADMIN") ? "/admin/users" : "/account");
           }
@@ -151,16 +394,28 @@ export function createWebAuthHandler(options: WebAuthOptions): WebAuthHandler {
           if (newPassword !== requiredFormValue(form, "confirmation")) {
             throw new AuthError("WEAK_PASSWORD", "새 비밀번호 확인이 일치하지 않습니다.");
           }
-          await options.authService.changeOwnPassword(principal, { currentPassword, newPassword });
-          const login = await options.authService.authenticate({
-            username: principal.username,
-            password: newPassword,
-            remoteAddress: request.socket.remoteAddress ?? "unknown",
+          const intent = form.get("intent") ?? "";
+          const { login, exchange } = await runAuthorizationMutation(request, async () => {
+            await options.authService.changeOwnPassword(principal, {
+              currentPassword,
+              newPassword,
+            });
+            const login = await authenticateWithinAdmission({
+              username: principal.username,
+              password: newPassword,
+              remoteAddress: clientAddress(request),
+            });
+            const exchange = await createSessionExchangeWithLoginCompensation(login, intent);
+            return { login, exchange };
           });
           setSessionCookie(response, controlCookie, login.sessionToken, secureCookies);
-          const intent = form.get("intent") ?? "";
-          if (intent !== "") {
-            await redirectToExchange(options.authService, login.principal, intent, response, scheme);
+          if (exchange !== undefined) {
+            response.setHeader("Cache-Control", "no-store");
+            response.setHeader("Referrer-Policy", "no-referrer");
+            redirect(
+              response,
+              `${scheme}://${exchange.targetHost}/_review-tunnel/session?code=${encodeURIComponent(exchange.code)}`,
+            );
           } else {
             redirect(response, login.principal.roles.includes("ADMIN") ? "/admin/users" : "/account");
           }
@@ -168,7 +423,12 @@ export function createWebAuthHandler(options: WebAuthOptions): WebAuthHandler {
         }
         if (request.method === "POST" && url.pathname === "/logout") {
           requireSameOrigin(request, scheme);
-          if (principal !== undefined) await options.authService.logout(principal);
+          if (principal !== undefined) {
+            await runAuthorizationMutation(
+              request,
+              () => options.authService.logout(principal),
+            );
+          }
           clearSessionCookie(response, controlCookie, secureCookies);
           redirect(response, "/login");
           return;
@@ -183,7 +443,10 @@ export function createWebAuthHandler(options: WebAuthOptions): WebAuthHandler {
         }
         if (url.pathname === "/admin/users" && request.method === "GET") {
           const administrator = requireAdministrator(principal);
-          const accounts = await options.authService.listAccounts(administrator);
+          const accounts = await runAuthorizationQuery(
+            request,
+            () => options.authService.listAccounts(administrator),
+          );
           writeHtml(response, 200, usersPage(administrator, accounts));
           return;
         }
@@ -191,52 +454,99 @@ export function createWebAuthHandler(options: WebAuthOptions): WebAuthHandler {
           requireSameOrigin(request, scheme);
           const administrator = requireAdministrator(principal);
           const form = await readForm(request);
-          await confirmAdministratorPassword(
-            options.authService,
-            administrator,
-            form,
-            request.socket.remoteAddress ?? "unknown",
+          const result = await runAuthorizationMutation(request, async () => {
+              const confirmedAdministrator = await confirmAdministratorPassword(
+                verifyAdministratorCredentialsWithinAdmission,
+                administrator,
+                form,
+                clientAddress(request),
+              );
+              return options.authService.createAccount(
+                confirmedAdministrator,
+                {
+                  username: requiredFormValue(form, "username"),
+                  displayName: requiredFormValue(form, "displayName"),
+                  roles: rolesFromForm(form),
+                },
+              );
+            });
+          writeHtml(
+            response,
+            201,
+            temporaryPasswordSuccessPage(
+              result.account.username,
+              result.temporaryPassword,
+            ),
           );
-          const result = await options.authService.createAccount(administrator, {
-            username: requiredFormValue(form, "username"),
-            displayName: requiredFormValue(form, "displayName"),
-            roles: rolesFromForm(form),
-          });
-          const accounts = await options.authService.listAccounts(administrator);
-          writeHtml(response, 201, usersPage(administrator, accounts, {
-            username: result.account.username,
-            temporaryPassword: result.temporaryPassword,
-          }));
           return;
         }
         const action = matchAdminAction(url.pathname);
         if (action !== undefined && request.method === "POST") {
           requireSameOrigin(request, scheme);
           const administrator = requireAdministrator(principal);
-          const accounts = await options.authService.listAccounts(administrator);
-          const target = accounts.find((account) => account.id === action.accountId);
-          if (target === undefined) throw new AuthError("ACCOUNT_NOT_FOUND", "계정을 찾을 수 없습니다.");
           const form = await readForm(request);
-          await confirmAdministratorPassword(
-            options.authService,
-            administrator,
-            form,
-            request.socket.remoteAddress ?? "unknown",
-          );
-          if (action.action === "enable") await options.authService.setAccountEnabled(administrator, target.id, true);
-          else if (action.action === "disable") await options.authService.setAccountEnabled(administrator, target.id, false);
-          else if (action.action === "roles") await options.authService.setAccountRoles(administrator, target.id, rolesFromForm(form));
-          else if (action.action === "revoke") await options.authService.revokeSessions(administrator, target.id);
-          else {
-            const reset = await options.authService.resetPassword(administrator, target.id);
-            const updated = await options.authService.listAccounts(administrator);
-            writeHtml(response, 200, usersPage(administrator, updated, {
-              username: reset.account.username,
-              temporaryPassword: reset.temporaryPassword,
-            }));
-            return;
+          const resetResult = await runAuthorizationMutation(request, async () => {
+            const accounts = await options.authService.listAccounts(administrator);
+            const target = accounts.find((account) => account.id === action.accountId);
+            if (target === undefined) {
+              throw new AuthError("ACCOUNT_NOT_FOUND", "계정을 찾을 수 없습니다.");
+            }
+            if (action.action === "reset" && target.id === administrator.accountId) {
+              throw new AuthError(
+                "INVALID_ACCOUNT_INPUT",
+                "자신의 비밀번호는 비밀번호 변경 화면에서 변경하세요.",
+              );
+            }
+            const confirmedAdministrator = await confirmAdministratorPassword(
+              verifyAdministratorCredentialsWithinAdmission,
+              administrator,
+              form,
+              clientAddress(request),
+            );
+            if (action.action === "enable") {
+              await options.authService.setAccountEnabled(
+                confirmedAdministrator,
+                target.id,
+                true,
+              );
+            } else if (action.action === "disable") {
+              await options.authService.setAccountEnabled(
+                confirmedAdministrator,
+                target.id,
+                false,
+              );
+            } else if (action.action === "roles") {
+              await options.authService.setAccountRoles(
+                confirmedAdministrator,
+                target.id,
+                rolesFromForm(form),
+              );
+            } else if (action.action === "revoke") {
+              await options.authService.revokeSessions(
+                confirmedAdministrator,
+                target.id,
+              );
+            } else {
+              const reset = await options.authService.resetPassword(
+                confirmedAdministrator,
+                target.id,
+              );
+              return reset;
+            }
+            return undefined;
+          });
+          if (resetResult !== undefined) {
+            writeHtml(
+              response,
+              200,
+              temporaryPasswordSuccessPage(
+                resetResult.account.username,
+                resetResult.temporaryPassword,
+              ),
+            );
+          } else {
+            redirect(response, "/admin/users");
           }
-          redirect(response, "/admin/users");
           return;
         }
         writeHtml(response, 404, messagePage("페이지를 찾을 수 없습니다."));
@@ -246,13 +556,16 @@ export function createWebAuthHandler(options: WebAuthOptions): WebAuthHandler {
     },
 
     async authorizeContent(request, response) {
-      applySecurityHeaders(response);
       const host = normalizedAuthority(request.headers.host);
       const url = new URL(request.url ?? "/", `${scheme}://${host}`);
       if (url.pathname === "/_review-tunnel/session") {
+        applySecurityHeaders(response);
         const code = url.searchParams.get("code") ?? "";
         try {
-          const exchanged = await options.authService.consumeSessionExchange(code, host);
+          const exchanged = await runAuthorizationMutation(
+            request,
+            () => options.authService.consumeSessionExchange(code, host),
+          );
           setSessionCookie(response, contentCookie, exchanged.sessionToken, secureCookies);
           response.setHeader("Cache-Control", "no-store");
           response.setHeader("Referrer-Policy", "no-referrer");
@@ -262,8 +575,7 @@ export function createWebAuthHandler(options: WebAuthOptions): WebAuthHandler {
         }
         return undefined;
       }
-      const principal = await resolveCookiePrincipal(
-        options.authService,
+      const principal = await resolveCookiePrincipalForRequest(
         request,
         contentCookie,
         `content:${host}`,
@@ -273,18 +585,34 @@ export function createWebAuthHandler(options: WebAuthOptions): WebAuthHandler {
       }
       const acceptsHtml = request.method === "GET" && (request.headers.accept ?? "").includes("text/html");
       if (!acceptsHtml) {
+        applySecurityHeaders(response);
         writeJsonError(response, 401, "AUTHENTICATION_REQUIRED");
         return undefined;
       }
-      const intent = await options.authService.createLoginIntent(host, url.pathname + url.search);
-      redirect(response, `${scheme}://${options.controlHost}/login?intent=${encodeURIComponent(intent)}`);
+      applySecurityHeaders(response);
+      if (
+        options.admitLoginIntent !== undefined &&
+        !options.admitLoginIntent(clientAddress(request), host)
+      ) {
+        response.setHeader("Retry-After", "60");
+        writeJsonError(response, 429, "LOGIN_INTENT_RATE_LIMITED");
+        return undefined;
+      }
+      try {
+        const intent = await runAuthorizationMutation(
+          request,
+          () => options.authService.createLoginIntent(host, url.pathname + url.search),
+        );
+        redirect(response, `${scheme}://${options.controlHost}/login?intent=${encodeURIComponent(intent)}`);
+      } catch (error) {
+        handleWebError(response, error, url.pathname, null);
+      }
       return undefined;
     },
 
     async resolveContentUpgrade(request) {
       const authority = normalizedAuthority(request.headers.host);
-      const principal = await resolveCookiePrincipal(
-        options.authService,
+      const principal = await resolveCookiePrincipalForRequest(
         request,
         contentCookie,
         `content:${authority}`,
@@ -292,6 +620,49 @@ export function createWebAuthHandler(options: WebAuthOptions): WebAuthHandler {
       return principal?.roles.includes("REVIEWER") === true && !principal.mustChangePassword
         ? principal
         : undefined;
+    },
+  };
+
+  const handleHttpBoundaryFailure = (
+    request: IncomingMessage,
+    response: ServerResponse,
+    error: unknown,
+  ): void => {
+    if (response.writableEnded || response.destroyed) return;
+    if (response.headersSent) {
+      response.destroy();
+      request.destroy();
+      return;
+    }
+    applySecurityHeaders(response);
+    if (error instanceof WebAuthBoundaryError) {
+      if (error.statusCode === 429) {
+        response.setHeader("Retry-After", "1");
+      }
+      writeJsonError(response, error.statusCode, error.code);
+      return;
+    }
+    writeJsonError(response, 503, "AUTHENTICATION_UNAVAILABLE");
+  };
+
+  return {
+    async handleControl(request, response) {
+      try {
+        await handler.handleControl(request, response);
+      } catch (error) {
+        handleHttpBoundaryFailure(request, response, error);
+      }
+    },
+    async authorizeContent(request, response) {
+      try {
+        return await handler.authorizeContent(request, response);
+      } catch (error) {
+        handleHttpBoundaryFailure(request, response, error);
+        return undefined;
+      }
+    },
+    resolveContentUpgrade(request) {
+      return handler.resolveContentUpgrade(request);
     },
   };
 }
@@ -304,43 +675,33 @@ function requireAdministrator(principal: Principal | undefined): Principal {
 }
 
 async function confirmAdministratorPassword(
-  service: AuthService,
+  verifyCredentials: (input: Readonly<{
+    username: string;
+    password: string;
+    remoteAddress: string;
+  }>) => Promise<AccountAuthorization>,
   administrator: Principal,
   form: URLSearchParams,
   remoteAddress: string,
-): Promise<void> {
-  const confirmation = await service.authenticate({
+): Promise<AccountAuthorization> {
+  return verifyCredentials({
     username: administrator.username,
     password: requiredFormValue(form, "adminPassword"),
     remoteAddress,
   });
-  try {
-    if (!confirmation.principal.roles.includes("ADMIN") || confirmation.principal.mustChangePassword) {
-      throw new AuthError("FORBIDDEN", "관리자 권한이 필요합니다.");
-    }
-  } finally {
-    await service.logout(confirmation.principal);
-  }
-}
-
-async function resolveCookiePrincipal(
-  service: AuthService,
-  request: IncomingMessage,
-  name: string,
-  audience = "control",
-): Promise<Principal | undefined> {
-  const token = parseCookie(request.headers.cookie, name);
-  return token === undefined ? undefined : service.resolveSession(token, audience);
 }
 
 async function redirectToExchange(
-  service: AuthService,
+  createExchange: (
+    principal: Principal,
+    intent: string,
+  ) => ReturnType<AuthService["createSessionExchange"]>,
   principal: Principal,
   intent: string,
   response: ServerResponse,
   scheme: string,
 ): Promise<void> {
-  const exchange = await service.createSessionExchange(principal, intent);
+  const exchange = await createExchange(principal, intent);
   response.setHeader("Cache-Control", "no-store");
   response.setHeader("Referrer-Policy", "no-referrer");
   redirect(
@@ -370,11 +731,26 @@ function requiredFormValue(form: URLSearchParams, name: string): string {
   return value;
 }
 
+function requiredBooleanFormValue(form: URLSearchParams, name: string): boolean {
+  const value = requiredFormValue(form, name);
+  if (value === "true") return true;
+  if (value === "false") return false;
+  throw new AuthError("INVALID_ACCOUNT_INPUT", `${name} 값은 true 또는 false여야 합니다.`);
+}
+
 function rolesFromForm(form: URLSearchParams): readonly AccountRole[] {
   const allowed = new Set<AccountRole>(["ADMIN", "DEVELOPER", "REVIEWER"]);
-  const roles = form.getAll("roles").filter((role): role is AccountRole => allowed.has(role as AccountRole));
-  if (roles.length === 0) throw new AuthError("INVALID_ACCOUNT_INPUT", "하나 이상의 권한이 필요합니다.");
-  return roles;
+  const submitted = form.getAll("roles");
+  if (submitted.length === 0) {
+    throw new AuthError("INVALID_ACCOUNT_INPUT", "하나 이상의 권한이 필요합니다.");
+  }
+  if (
+    submitted.some((role) => !allowed.has(role as AccountRole)) ||
+    new Set(submitted).size !== submitted.length
+  ) {
+    throw new AuthError("INVALID_ACCOUNT_INPUT", "권한 값은 지원되는 고유 role이어야 합니다.");
+  }
+  return submitted as readonly AccountRole[];
 }
 
 function requireSameOrigin(request: IncomingMessage, scheme: string): void {
@@ -440,6 +816,109 @@ function applySecurityHeaders(response: ServerResponse): void {
   response.setHeader("Cache-Control", "no-store");
 }
 
+function createLoginAttemptLimiter(input: Readonly<{
+  maxConcurrent: number;
+  maxConcurrentPerRemote: number;
+  maxPerMinute: number;
+  maxPerRemotePerMinute: number;
+}>): Readonly<{ acquire(remoteAddress: string): (() => void) | undefined }> {
+  let windowStartedAt = Date.now();
+  let attemptsInWindow = 0;
+  let concurrent = 0;
+  const attemptsByRemote = new Map<string, number>();
+  const concurrentByRemote = new Map<string, number>();
+  return {
+    acquire(remoteAddress) {
+      const checkedAt = Date.now();
+      if (checkedAt - windowStartedAt >= 60_000) {
+        windowStartedAt = checkedAt;
+        attemptsInWindow = 0;
+        attemptsByRemote.clear();
+      }
+      const remoteAttempts = attemptsByRemote.get(remoteAddress) ?? 0;
+      const remoteConcurrent = concurrentByRemote.get(remoteAddress) ?? 0;
+      if (
+        attemptsInWindow >= input.maxPerMinute ||
+        remoteAttempts >= input.maxPerRemotePerMinute ||
+        concurrent >= input.maxConcurrent ||
+        remoteConcurrent >= input.maxConcurrentPerRemote
+      ) {
+        return undefined;
+      }
+      attemptsInWindow += 1;
+      attemptsByRemote.set(remoteAddress, remoteAttempts + 1);
+      concurrent += 1;
+      concurrentByRemote.set(remoteAddress, remoteConcurrent + 1);
+      let released = false;
+      return () => {
+        if (released) return;
+        released = true;
+        concurrent -= 1;
+        const remaining = (concurrentByRemote.get(remoteAddress) ?? 1) - 1;
+        if (remaining === 0) concurrentByRemote.delete(remoteAddress);
+        else concurrentByRemote.set(remoteAddress, remaining);
+      };
+    },
+  };
+}
+
+function createConcurrentAdmission(input: Readonly<{
+  global: number;
+  perRemote: number;
+}>): Readonly<{ acquire(remoteAddress: string): (() => void) | undefined }> {
+  if (
+    !Number.isSafeInteger(input.global) ||
+    input.global <= 0 ||
+    !Number.isSafeInteger(input.perRemote) ||
+    input.perRemote <= 0 ||
+    input.perRemote > input.global
+  ) {
+    throw new RangeError(
+      "web authorization limits must be positive safe integers and perRemote must not exceed global",
+    );
+  }
+  let concurrent = 0;
+  const concurrentByRemote = new Map<string, number>();
+  return {
+    acquire(remoteAddress) {
+      const remoteConcurrent = concurrentByRemote.get(remoteAddress) ?? 0;
+      if (concurrent >= input.global || remoteConcurrent >= input.perRemote) {
+        return undefined;
+      }
+      concurrent += 1;
+      concurrentByRemote.set(remoteAddress, remoteConcurrent + 1);
+      let released = false;
+      return () => {
+        if (released) return;
+        released = true;
+        concurrent -= 1;
+        const remaining = (concurrentByRemote.get(remoteAddress) ?? 1) - 1;
+        if (remaining === 0) concurrentByRemote.delete(remoteAddress);
+        else concurrentByRemote.set(remoteAddress, remaining);
+      };
+    },
+  };
+}
+
+async function withDeadline<T>(
+  operation: Promise<T>,
+  timeoutMs: number,
+  timeoutError: Error,
+): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(timeoutError), timeoutMs);
+        timer.unref();
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
 function redirect(response: ServerResponse, location: string): void {
   response.statusCode = 303;
   response.setHeader("Location", location);
@@ -474,14 +953,37 @@ function handleWebError(
   path: string,
   intent: string | null,
 ): void {
-  if (!(error instanceof AuthError)) {
-    writeHtml(response, 500, messagePage("요청을 처리하지 못했습니다."));
+  if (response.writableEnded || response.destroyed) return;
+  if (error instanceof WebAuthBoundaryError) {
+    if (error.statusCode === 429) response.setHeader("Retry-After", "1");
+    if (path.startsWith("/api/")) {
+      writeJsonError(response, error.statusCode, error.code);
+    } else {
+      writeHtml(response, error.statusCode, messagePage(
+        error.statusCode === 429
+          ? "인증 요청이 너무 많습니다. 잠시 후 다시 시도하세요."
+          : "인증 서비스를 사용할 수 없습니다.",
+      ));
+    }
     return;
   }
-  const status = error.code === "LOGIN_THROTTLED" ? 429
+  if (!(error instanceof AuthError)) {
+    if (path.startsWith("/api/")) {
+      writeJsonError(response, 503, "AUTHENTICATION_UNAVAILABLE");
+    } else {
+      writeHtml(response, 503, messagePage("인증 서비스를 사용할 수 없습니다."));
+    }
+    return;
+  }
+  const status = error.code === "LOGIN_THROTTLED" ||
+      error.code === "LOGIN_INTENT_CAPACITY" ||
+      error.code === "AUTH_CAPACITY" ? 429
     : error.code === "FORBIDDEN" ? 403
     : error.code === "ACCOUNT_NOT_FOUND" ? 404
     : 400;
+  if (error.code === "LOGIN_INTENT_CAPACITY" || error.code === "AUTH_CAPACITY") {
+    response.setHeader("Retry-After", "60");
+  }
   if (path.startsWith("/api/")) writeJsonError(response, status, error.code);
   else if (path === "/login") writeHtml(response, status, loginPage(intent, error.message));
   else if (path === "/account/change-password") {
@@ -512,18 +1014,32 @@ function passwordChangePage(intent: string | null, error: string | undefined): s
 }
 
 function accountPage(principal: Principal): string {
-  return page("내 계정", `<p>${escapeHtml(principal.displayName)} (${escapeHtml(principal.username)})</p><p>권한: ${principal.roles.map(escapeHtml).join(", ")}</p><form method="post" action="/logout"><button type="submit">로그아웃</button></form>`);
+  return page("내 계정", `<p>${escapeHtml(principal.displayName)} (${escapeHtml(principal.username)})</p><p>권한: ${principal.roles.map(escapeHtml).join(", ")}</p><p><a href="/account/change-password">비밀번호 변경</a></p><form method="post" action="/logout"><button type="submit">로그아웃</button></form>`);
 }
 
 function usersPage(
   principal: Principal,
   accounts: readonly Account[],
-  temporary?: Readonly<{ username: string; temporaryPassword: string }>,
 ): string {
-  const notice = temporary === undefined ? "" : `<div class="notice"><strong>${escapeHtml(temporary.username)} 임시 비밀번호</strong><p>${escapeHtml(temporary.temporaryPassword)}</p><p>다시 표시되지 않습니다.</p></div>`;
   const passwordField = `<label>관리자 비밀번호 <input type="password" name="adminPassword" autocomplete="current-password" required></label>`;
-  const rows = accounts.map((account) => `<tr><td>${escapeHtml(account.username)}</td><td>${escapeHtml(account.displayName)}</td><td><form method="post" action="/admin/users/${encodeURIComponent(account.id)}/roles"><fieldset>${roleCheckboxes(account.roles)}</fieldset>${passwordField}<button>권한 저장</button></form></td><td>${account.enabled ? "활성" : "정지"}${account.mustChangePassword ? " · 변경 필요" : ""}</td><td><div class="actions"><form method="post" action="/admin/users/${encodeURIComponent(account.id)}/${account.enabled ? "disable" : "enable"}">${passwordField}<button>${account.enabled ? "정지" : "활성화"}</button></form><form method="post" action="/admin/users/${encodeURIComponent(account.id)}/reset">${passwordField}<button>비밀번호 초기화</button></form><form method="post" action="/admin/users/${encodeURIComponent(account.id)}/revoke">${passwordField}<button>세션 종료</button></form></div></td></tr>`).join("");
-  return page("계정 관리", `<p>관리자: ${escapeHtml(principal.username)}</p>${notice}<p>계정 변경 작업은 관리자 비밀번호를 다시 확인합니다.</p><h2>계정 생성</h2><form method="post" action="/admin/users"><label>아이디 <input name="username" required></label><label>표시 이름 <input name="displayName" required></label><fieldset>${roleCheckboxes(["REVIEWER"])}</fieldset>${passwordField}<button>계정 생성</button></form><h2>계정 목록</h2><table><thead><tr><th>아이디</th><th>이름</th><th>권한</th><th>상태</th><th>작업</th></tr></thead><tbody>${rows}</tbody></table><form method="post" action="/logout"><button>로그아웃</button></form>`);
+  const rows = accounts.map((account) => {
+    const accountPath = `/admin/users/${encodeURIComponent(account.id)}`;
+    const passwordAction = account.id === principal.accountId
+      ? `<a href="/account/change-password">내 비밀번호 변경</a>`
+      : `<form method="post" action="${accountPath}/reset">${passwordField}<button>비밀번호 초기화</button></form>`;
+    return `<tr><td>${escapeHtml(account.username)}</td><td>${escapeHtml(account.displayName)}</td><td><form method="post" action="${accountPath}/roles"><fieldset>${roleCheckboxes(account.roles)}</fieldset>${passwordField}<button>권한 저장</button></form></td><td>${account.enabled ? "활성" : "정지"}${account.mustChangePassword ? " · 변경 필요" : ""}</td><td><div class="actions"><form method="post" action="${accountPath}/${account.enabled ? "disable" : "enable"}">${passwordField}<button>${account.enabled ? "정지" : "활성화"}</button></form>${passwordAction}<form method="post" action="${accountPath}/revoke">${passwordField}<button>세션 종료</button></form></div></td></tr>`;
+  }).join("");
+  return page("계정 관리", `<p>관리자: ${escapeHtml(principal.username)}</p><p>계정 변경 작업은 관리자 비밀번호를 다시 확인합니다.</p><h2>계정 생성</h2><form method="post" action="/admin/users"><label>아이디 <input name="username" required></label><label>표시 이름 <input name="displayName" required></label><fieldset>${roleCheckboxes(["REVIEWER"])}</fieldset>${passwordField}<button>계정 생성</button></form><h2>계정 목록</h2><table><thead><tr><th>아이디</th><th>이름</th><th>권한</th><th>상태</th><th>작업</th></tr></thead><tbody>${rows}</tbody></table><form method="post" action="/logout"><button>로그아웃</button></form>`);
+}
+
+function temporaryPasswordSuccessPage(
+  username: string,
+  temporaryPassword: string,
+): string {
+  return page(
+    "임시 비밀번호 발급",
+    `<div class="notice"><strong>${escapeHtml(username)} 임시 비밀번호</strong><p>${escapeHtml(temporaryPassword)}</p><p>다시 표시되지 않습니다.</p></div><p><a href="/admin/users">계정 관리로 돌아가기</a></p>`,
+  );
 }
 
 function roleCheckboxes(selected: readonly AccountRole[]): string {

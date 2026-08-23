@@ -7,6 +7,7 @@ import { test } from "node:test";
 import {
   AuthService,
   InMemoryAuthRepository,
+  type AccountAuthorization,
   type PasswordHasher,
 } from "../../../packages/auth/src/index.ts";
 import { connectTunnelClient } from "../../client/src/client.ts";
@@ -22,6 +23,8 @@ class TestHasher implements PasswordHasher {
   }
 }
 
+const DISCARD_AUTHENTICATION_EVENTS = { write() {}, reportFailure() {} };
+
 test("internal accounts gate HTTP, admin UI and Carrier, then revoke an active Tunnel", async () => {
   const repository = new InMemoryAuthRepository();
   const authService = new AuthService({
@@ -29,6 +32,8 @@ test("internal accounts gate HTTP, admin UI and Carrier, then revoke an active T
     passwordHasher: new TestHasher(),
     sessionHmacKey: Buffer.alloc(32, 3),
     dummyPasswordHash: "hashed:dummy-password",
+    authenticationEventSink: DISCARD_AUTHENTICATION_EVENTS,
+    loginIntentLimits: { global: 1, perHost: 1 },
   });
   const bootstrap = await authService.bootstrapAdministrator({ username: "admin", displayName: "Admin" });
   const temporaryAdmin = await authService.authenticate({
@@ -74,10 +79,56 @@ test("internal accounts gate HTTP, admin UI and Carrier, then revoke an active T
     password: "reviewer-password-2026",
     remoteAddress: "127.0.0.1",
   });
+  const loggedOutAccountIds: string[] = [];
+  const realLogout = authService.logout.bind(authService);
+  authService.logout = async (principal) => {
+    loggedOutAccountIds.push(principal.accountId);
+    await realLogout(principal);
+  };
+  const realAuthenticate = authService.authenticate.bind(authService);
+  let heldLoginStarted!: () => void;
+  const heldLoginStartedPromise = new Promise<void>((resolve) => {
+    heldLoginStarted = resolve;
+  });
+  let releaseHeldLogin!: () => void;
+  const heldLoginRelease = new Promise<void>((resolve) => {
+    releaseHeldLogin = resolve;
+  });
+  authService.authenticate = async (input) => {
+    if (input.password === "hold-login-attempt") {
+      heldLoginStarted();
+      await heldLoginRelease;
+    }
+    return realAuthenticate(input);
+  };
+  const realCreateLoginIntent = authService.createLoginIntent.bind(authService);
+  let loginIntentCreateCalls = 0;
+  authService.createLoginIntent = async (...arguments_) => {
+    loginIntentCreateCalls += 1;
+    return realCreateLoginIntent(...arguments_);
+  };
+  const realVerifyAdministratorCredentials =
+    authService.verifyAdministratorCredentials.bind(authService);
+  let lastConfirmedAuthorization: AccountAuthorization | undefined;
+  authService.verifyAdministratorCredentials = async (input) => {
+    const authorization = await realVerifyAdministratorCredentials(input);
+    lastConfirmedAuthorization = authorization;
+    return authorization;
+  };
+  const realCreateAccount = authService.createAccount.bind(authService);
+  let createAccountActor: AccountAuthorization | undefined;
+  authService.createAccount = async (actor, input) => {
+    createAccountActor = actor;
+    return realCreateAccount(actor, input);
+  };
   const realAuthorizationCheck = authService.isAccountAuthorized.bind(authService);
   let authorizationDatabaseAvailable = true;
+  let authorizationOutageChecks = 0;
   authService.isAccountAuthorized = async (...arguments_) => {
-    if (!authorizationDatabaseAvailable) throw new Error("database unavailable");
+    if (!authorizationDatabaseAvailable) {
+      authorizationOutageChecks += 1;
+      return new Promise<boolean>(() => undefined);
+    }
     return realAuthorizationCheck(...arguments_);
   };
   const gatewayEvents: string[] = [];
@@ -102,8 +153,18 @@ test("internal accounts gate HTTP, admin UI and Carrier, then revoke an active T
     controlHost: "control.localhost",
     authService,
     secureCookies: false,
-    authorizationCheckIntervalMs: 20,
-    async persistKillSwitch(enabled) {
+    authorizationCheckIntervalMs: 5,
+    authorizationQueryTimeoutMs: 35,
+    maxTunnelsPerAccount: 2,
+    loginIntentsPerSourcePerMinute: 2,
+    maxConcurrentLoginAttempts: 1,
+    maxConcurrentLoginAttemptsPerRemote: 1,
+    maxOutstandingCarrierCredentialsPerAccount: 2,
+    carrierCredentialsPerAccountPerMinute: 5,
+    async persistKillSwitch(enabled, actor) {
+      assert.strictEqual(actor, lastConfirmedAuthorization);
+      assert.equal(actor.accountId, administrator.principal.accountId);
+      assert.equal(actor.authVersion, administrator.principal.authVersion);
       await delay(5);
       persistedKillSwitchValues.push(enabled);
     },
@@ -112,6 +173,51 @@ test("internal accounts gate HTTP, admin UI and Carrier, then revoke an active T
     },
   });
   const gatewayPort = await gateway.listen();
+  const heldLogin = send(gatewayPort, "control.localhost", "/api/client/login", {
+    method: "POST",
+    headers: {
+      "x-review-tunnel-client": "1",
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      username: "admin",
+      password: "hold-login-attempt",
+    }).toString(),
+  });
+  await heldLoginStartedPromise;
+  const boundedAdministratorConfirmation = await send(
+    gatewayPort,
+    "control.localhost",
+    "/admin/operations/kill-switch",
+    {
+      method: "POST",
+      headers: {
+        origin: "http://control.localhost",
+        cookie: `rt_control_dev=${encodeURIComponent(administrator.sessionToken)}`,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        enabled: "true",
+        adminPassword: "administrator-password-2026",
+      }).toString(),
+    },
+  );
+  assert.equal(boundedAdministratorConfirmation.status, 429);
+  assert.equal(gateway.isKillSwitchEnabled(), false);
+  const boundedLogin = await send(gatewayPort, "control.localhost", "/api/client/login", {
+    method: "POST",
+    headers: {
+      "x-review-tunnel-client": "1",
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      username: "does-not-exist",
+      password: "another-attempt",
+    }).toString(),
+  });
+  assert.equal(boundedLogin.status, 429);
+  releaseHeldLogin();
+  assert.equal((await heldLogin).status, 400);
   const clientLoginResponse = await send(gatewayPort, "control.localhost", "/api/client/login", {
     method: "POST",
     headers: {
@@ -156,9 +262,111 @@ test("internal accounts gate HTTP, admin UI and Carrier, then revoke an active T
     localOrigin: `http://127.0.0.1:${originAddress.port}`,
     carrierCredential: issued.credential,
   });
+  let secondClient: ReturnType<typeof connectTunnelClient> | undefined;
 
   try {
     await client.ready;
+    const secondCredentialResponse = await send(
+      gatewayPort,
+      "control.localhost",
+      "/api/carrier-credentials",
+      {
+        method: "POST",
+        headers: {
+          "x-review-tunnel-client": "1",
+          "content-type": "application/x-www-form-urlencoded",
+          authorization: `Bearer ${clientLogin.sessionToken}`,
+        },
+        body: new URLSearchParams({ purpose: "create" }).toString(),
+      },
+    );
+    assert.equal(secondCredentialResponse.status, 201);
+    const secondIssued = JSON.parse(secondCredentialResponse.body) as {
+      credential?: string;
+      tunnelId?: string;
+    };
+    assert.ok(secondIssued.credential !== undefined && secondIssued.tunnelId !== undefined);
+    secondClient = connectTunnelClient({
+      gatewayUrl: `ws://control.localhost:${gatewayPort}/_review-tunnel/carrier`,
+      tunnelId: secondIssued.tunnelId,
+      localOrigin: `http://127.0.0.1:${originAddress.port}`,
+      carrierCredential: secondIssued.credential,
+    });
+    await secondClient.ready;
+    for (let index = 0; index < 2; index += 1) {
+      const resumeCredential = await send(
+        gatewayPort,
+        "control.localhost",
+        "/api/carrier-credentials",
+        {
+          method: "POST",
+          headers: {
+            "x-review-tunnel-client": "1",
+            "content-type": "application/x-www-form-urlencoded",
+            authorization: `Bearer ${clientLogin.sessionToken}`,
+          },
+          body: new URLSearchParams({
+            purpose: "resume",
+            tunnelId: issued.tunnelId,
+          }).toString(),
+        },
+      );
+      assert.equal(resumeCredential.status, 201);
+    }
+    const boundedResumeCredential = await send(
+      gatewayPort,
+      "control.localhost",
+      "/api/carrier-credentials",
+      {
+        method: "POST",
+        headers: {
+          "x-review-tunnel-client": "1",
+          "content-type": "application/x-www-form-urlencoded",
+          authorization: `Bearer ${clientLogin.sessionToken}`,
+        },
+        body: new URLSearchParams({
+          purpose: "resume",
+          tunnelId: issued.tunnelId,
+        }).toString(),
+      },
+    );
+    assert.equal(boundedResumeCredential.status, 429);
+    assert.equal(boundedResumeCredential.headers["retry-after"], "60");
+    const rejectedReviewerClient = await send(
+      gatewayPort,
+      "control.localhost",
+      "/api/client/login",
+      {
+        method: "POST",
+        headers: {
+          "x-review-tunnel-client": "1",
+          "content-type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          username: "reviewer",
+          password: "reviewer-password-2026",
+        }).toString(),
+      },
+    );
+    assert.equal(rejectedReviewerClient.status, 403);
+    assert.ok(loggedOutAccountIds.includes(reviewer.principal.accountId));
+
+    const overAccountQuota = await send(
+      gatewayPort,
+      "control.localhost",
+      "/api/carrier-credentials",
+      {
+        method: "POST",
+        headers: {
+          "x-review-tunnel-client": "1",
+          "content-type": "application/x-www-form-urlencoded",
+          authorization: `Bearer ${clientLogin.sessionToken}`,
+        },
+        body: new URLSearchParams({ purpose: "create" }).toString(),
+      },
+    );
+    assert.equal(overAccountQuota.status, 429);
+
     const unauthenticated = await get(gatewayPort, securedHost, "/", {});
     assert.equal(unauthenticated.status, 401);
     const unknownTunnel = await get(gatewayPort, "unknown-tunnel.localhost", "/", {});
@@ -169,7 +377,38 @@ test("internal accounts gate HTTP, admin UI and Carrier, then revoke an active T
     });
     assert.equal(adminPage.status, 200);
     assert.match(adminPage.body, /계정 관리/);
+    assert.equal(
+      adminPage.body.includes(
+        `action="/admin/users/${encodeURIComponent(administrator.principal.accountId)}/reset"`,
+      ),
+      false,
+    );
 
+    const rejectedSelfReset = await send(
+      gatewayPort,
+      "control.localhost",
+      `/admin/users/${encodeURIComponent(administrator.principal.accountId)}/reset`,
+      {
+        method: "POST",
+        headers: {
+          origin: "http://control.localhost",
+          cookie: `rt_control_dev=${encodeURIComponent(administrator.sessionToken)}`,
+          "content-type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          adminPassword: "administrator-password-2026",
+        }).toString(),
+      },
+    );
+    assert.equal(rejectedSelfReset.status, 400);
+    assert.match(rejectedSelfReset.body, /자신의 비밀번호/);
+    await authService.verifyAdministratorCredentials({
+      username: "admin",
+      password: "administrator-password-2026",
+      remoteAddress: "127.0.0.1",
+    });
+
+    const logoutCountBeforeAdministratorConfirmation = loggedOutAccountIds.length;
     const createdByWeb = await send(gatewayPort, "control.localhost", "/admin/users", {
       method: "POST",
       headers: {
@@ -186,6 +425,32 @@ test("internal accounts gate HTTP, admin UI and Carrier, then revoke an active T
     });
     assert.equal(createdByWeb.status, 201);
     assert.match(createdByWeb.body, /다시 표시되지 않습니다/);
+    assert.strictEqual(createAccountActor, lastConfirmedAuthorization);
+    assert.equal(loggedOutAccountIds.length, logoutCountBeforeAdministratorConfirmation);
+
+    for (const roles of [["ADMIN", "UNKNOWN"], ["REVIEWER", "REVIEWER"]]) {
+      const invalidRoles = new URLSearchParams({
+        username: `invalid-role-${roles[0]?.toLowerCase()}`,
+        displayName: "Invalid role",
+        adminPassword: "administrator-password-2026",
+      });
+      for (const role of roles) invalidRoles.append("roles", role);
+      const rejectedRoles = await send(
+        gatewayPort,
+        "control.localhost",
+        "/admin/users",
+        {
+          method: "POST",
+          headers: {
+            origin: "http://control.localhost",
+            cookie: `rt_control_dev=${encodeURIComponent(administrator.sessionToken)}`,
+            "content-type": "application/x-www-form-urlencoded",
+          },
+          body: invalidRoles.toString(),
+        },
+      );
+      assert.equal(rejectedRoles.status, 400);
+    }
 
     const browserStart = await get(gatewayPort, securedHost, "/private", {
       accept: "text/html",
@@ -193,6 +458,22 @@ test("internal accounts gate HTTP, admin UI and Carrier, then revoke an active T
     assert.equal(browserStart.status, 303);
     const intent = new URL(browserStart.location ?? "http://invalid").searchParams.get("intent");
     assert.ok(intent !== null);
+    assert.equal(loginIntentCreateCalls, 1);
+    const limitedIntent = await get(gatewayPort, securedHost, "/another", {
+      accept: "text/html",
+    });
+    assert.equal(limitedIntent.status, 429);
+    assert.equal(limitedIntent.headers["retry-after"], "60");
+    assert.equal(loginIntentCreateCalls, 2);
+    const exhaustedIntentStorage = await get(
+      gatewayPort,
+      "other-tunnel.localhost",
+      "/review",
+      { accept: "text/html" },
+    );
+    assert.equal(exhaustedIntentStorage.status, 429);
+    assert.equal(exhaustedIntentStorage.headers["retry-after"], "60");
+    assert.equal(loginIntentCreateCalls, 2);
     const browserLogin = await send(gatewayPort, "control.localhost", "/login", {
       method: "POST",
       headers: {
@@ -224,14 +505,26 @@ test("internal accounts gate HTTP, admin UI and Carrier, then revoke an active T
     assert.equal(authorized.status, 200);
     assert.equal(authorized.body, "private preview");
     assert.deepEqual(authorized.setCookie, ["app_session=updated; Path=/"]);
+    assert.equal(authorized.headers["content-security-policy"], undefined);
+    assert.equal(authorized.headers["x-frame-options"], undefined);
 
     authorizationDatabaseAvailable = false;
-    await delay(80);
+    await Promise.race([
+      Promise.all([client.closed, secondClient.closed]),
+      delay(250).then(() => {
+        throw new Error("authorization outage did not fail closed within the bounded deadline");
+      }),
+    ]);
+    assert.equal(
+      authorizationOutageChecks,
+      1,
+      "authorization queries were multiplied for the same account version and role",
+    );
     authorizationDatabaseAvailable = true;
     const revoked = await get(gatewayPort, securedHost, "/private", {
       cookie: `${contentCookie}; app_session=visible-to-app`,
     });
-    assert.equal(revoked.status, 404);
+    assert.ok(revoked.status === 404 || revoked.status === 503);
     assert.ok(gatewayEvents.includes("authorization.revalidation_failed"));
 
     const operator = await authService.authenticate({
@@ -244,6 +537,26 @@ test("internal accounts gate HTTP, admin UI and Carrier, then revoke an active T
     });
     assert.equal(operationsPage.status, 200);
     assert.match(operationsPage.body, /kill switch/);
+    const invalidKillSwitch = await send(
+      gatewayPort,
+      "control.localhost",
+      "/admin/operations/kill-switch",
+      {
+        method: "POST",
+        headers: {
+          origin: "http://control.localhost",
+          cookie: `rt_control_dev=${encodeURIComponent(operator.sessionToken)}`,
+          "content-type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          enabled: "falsee",
+          adminPassword: "administrator-password-2026",
+        }).toString(),
+      },
+    );
+    assert.equal(invalidKillSwitch.status, 400);
+    assert.equal(gateway.isKillSwitchEnabled(), false);
+    assert.deepEqual(persistedKillSwitchValues, []);
     const enableKillSwitch = await send(
       gatewayPort,
       "control.localhost",
@@ -285,6 +598,7 @@ test("internal accounts gate HTTP, admin UI and Carrier, then revoke an active T
     assert.deepEqual(persistedKillSwitchValues, [true, false]);
   } finally {
     await client.disconnect();
+    await secondClient?.disconnect();
     await gateway.close();
     origin.close();
     await once(origin, "close");
@@ -300,6 +614,7 @@ async function get(
   status: number;
   body: string;
   setCookie: readonly string[];
+  headers: import("node:http").IncomingHttpHeaders;
   location?: string;
 }>> {
   return send(port, host, path, { method: "GET", headers });
@@ -318,6 +633,7 @@ async function send(
   status: number;
   body: string;
   setCookie: readonly string[];
+  headers: import("node:http").IncomingHttpHeaders;
   location?: string;
 }>> {
   return new Promise((resolve, reject) => {
@@ -336,6 +652,7 @@ async function send(
           status: response.statusCode ?? 0,
           body: Buffer.concat(chunks).toString("utf8"),
           setCookie: response.headers["set-cookie"] ?? [],
+          headers: response.headers,
           ...(location === undefined ? {} : { location }),
         });
       });
