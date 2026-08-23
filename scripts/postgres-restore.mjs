@@ -1,58 +1,53 @@
-import { spawn } from "node:child_process";
-import { access } from "node:fs/promises";
 import { resolve } from "node:path";
-import { parsePostgresTarget, postgresEnvironment } from "./postgres-url.mjs";
 
+import {
+  executeRestoreOperation,
+  parseRestoreCliArguments,
+} from "./postgres-operations.mjs";
+import { createSignalAwareCommandRunner } from "./postgres-process.mjs";
+import {
+  parsePostgresTarget,
+  postgresEnvironment,
+  postgresTargetConfirmation,
+} from "./postgres-url.mjs";
+
+const parsedArguments = parseRestoreCliArguments(process.argv.slice(2));
 const databaseUrl = required("RESTORE_DATABASE_URL");
-const inputPath = resolve(requiredOption("--input"));
-await access(inputPath);
-const { target, databaseName } = parsePostgresTarget(
+const inputPath = resolve(parsedArguments.inputPath);
+const parsedTarget = parsePostgresTarget(
   databaseUrl,
   "RESTORE_DATABASE_URL",
 );
+const { target, databaseName } = parsedTarget;
 if (databaseName === "" || ["postgres", "template0", "template1"].includes(databaseName)) {
   throw new Error("refusing to restore into a default PostgreSQL database");
 }
-const targetConfirmation = `${target.hostname}:${target.port || "5432"}/${databaseName}`;
+const targetConfirmation = postgresTargetConfirmation(parsedTarget);
 if (process.env.CONFIRM_RESTORE_TARGET !== targetConfirmation) {
   throw new Error(`set CONFIRM_RESTORE_TARGET exactly to ${targetConfirmation}`);
 }
 
-await run("pg_restore", [
-  "--clean",
-  "--if-exists",
-  "--no-owner",
-  "--no-acl",
-  "--exit-on-error",
-  "--dbname",
-  databaseName,
-  inputPath,
-], postgresEnvironment(target));
+const runner = createSignalAwareCommandRunner();
+try {
+  await executeRestoreOperation({
+    inputPath,
+    databaseName,
+    environment: postgresEnvironment(target),
+    assertNotInterrupted: runner.assertNotInterrupted,
+    runCommand(command, arguments_, environment) {
+      return runner.run(command, arguments_, {
+        env: environment,
+        stdio: ["ignore", "inherit", "inherit"],
+      });
+    },
+  });
+} finally {
+  runner.dispose();
+}
 console.log(`PostgreSQL restore completed for ${targetConfirmation}`);
 
 function required(name) {
   const value = process.env[name];
   if (value === undefined || value === "") throw new Error(`${name} is required`);
   return value;
-}
-
-function requiredOption(name) {
-  const index = process.argv.indexOf(name);
-  const value = index < 0 ? undefined : process.argv[index + 1];
-  if (value === undefined || value.startsWith("--")) throw new Error(`${name} is required`);
-  return value;
-}
-
-function run(command, arguments_, environment) {
-  return new Promise((resolvePromise, reject) => {
-    const child = spawn(command, arguments_, {
-      env: environment,
-      stdio: ["ignore", "inherit", "inherit"],
-    });
-    child.once("error", reject);
-    child.once("exit", (code, signal) => {
-      if (code === 0) resolvePromise();
-      else reject(new Error(`${command} failed (${signal ?? `exit ${code}`})`));
-    });
-  });
 }

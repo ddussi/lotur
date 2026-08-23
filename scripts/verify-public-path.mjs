@@ -1,5 +1,10 @@
 import { randomBytes } from "node:crypto";
 import { WebSocket } from "ws";
+import {
+  readIncrementalSseFirstEvent,
+  waitForWebSocketEvent,
+  withRequestDeadline,
+} from "./canary-policy.mjs";
 
 const marker = "review-tunnel-canary-v1";
 const baseUrl = requiredUrl("CANARY_CONTENT_URL", ["https:", "http:"]);
@@ -12,13 +17,14 @@ if (!allowInsecure && baseUrl.protocol !== "https:") {
   throw new Error("CANARY_CONTENT_URL must use HTTPS unless ALLOW_INSECURE_CANARY=true");
 }
 
-const negative = await fetch(new URL("/", baseUrl), {
+const negative = await fetch(new URL("/", baseUrl), withRequestDeadline({
   redirect: "manual",
   headers: { accept: "text/html" },
-});
+}));
 if (![401, 303].includes(negative.status)) {
   throw new Error(`unauthenticated canary expected 401 or 303, received ${negative.status}`);
 }
+await negative.body?.cancel();
 
 const authorized = await canaryFetch("/");
 assertStatus(authorized, 200, "authorized request");
@@ -53,38 +59,48 @@ const sse = await canaryFetch("/stream");
 assertStatus(sse, 200, "SSE canary");
 const sseReader = sse.body?.getReader();
 if (sseReader === undefined) throw new Error("SSE response has no body");
-const firstEvent = await withTimeout(sseReader.read(), 2_000, "SSE first event");
-if (!new TextDecoder().decode(firstEvent.value).includes(`${marker}-first`)) {
-  throw new Error("SSE first event marker mismatch");
+try {
+  await withTimeout(
+    readIncrementalSseFirstEvent(
+      sseReader,
+      `${marker}-first`,
+      `${marker}-second`,
+    ),
+    2_000,
+    "SSE first event",
+  );
+} finally {
+  await sseReader.cancel().catch(() => undefined);
 }
-await sseReader.cancel();
 
 const websocketUrl = new URL("/websocket", baseUrl);
 websocketUrl.protocol = websocketUrl.protocol === "https:" ? "wss:" : "ws:";
 const socket = new WebSocket(websocketUrl, {
   headers: { authorization: `Bearer ${bearerToken}` },
+  handshakeTimeout: 2_000,
+  maxPayload: 65_551,
 });
-await onceWebSocket(socket, "open", 2_000);
+await waitForWebSocketEvent(socket, "open", 2_000);
 const expected = randomBytes(32);
 socket.send(expected);
-const [received, isBinary] = await onceWebSocket(socket, "message", 2_000);
+const [received, isBinary] = await waitForWebSocketEvent(socket, "message", 2_000);
 if (!isBinary || !Buffer.from(received).equals(expected)) {
   throw new Error("WebSocket binary echo mismatch");
 }
 socket.close(1000, "canary complete");
-await onceWebSocket(socket, "close", 2_000);
+await waitForWebSocketEvent(socket, "close", 2_000);
 
 console.log("Public-path canary passed: auth, request streaming, SSE, and WebSocket");
 
 function canaryFetch(path, init = {}) {
-  return fetch(new URL(path, baseUrl), {
+  return fetch(new URL(path, baseUrl), withRequestDeadline({
     ...init,
     headers: {
       ...init.headers,
       authorization: `Bearer ${bearerToken}`,
       "cache-control": "no-store",
     },
-  });
+  }));
 }
 
 function assertStatus(response, expected, name) {
@@ -120,23 +136,4 @@ async function withTimeout(promise, timeoutMs, name) {
   } finally {
     if (timer !== undefined) clearTimeout(timer);
   }
-}
-
-function onceWebSocket(socket, event, timeoutMs) {
-  return withTimeout(new Promise((resolve, reject) => {
-    const onEvent = (...values) => {
-      cleanup();
-      resolve(values);
-    };
-    const onError = (error) => {
-      cleanup();
-      reject(error);
-    };
-    const cleanup = () => {
-      socket.off(event, onEvent);
-      socket.off("error", onError);
-    };
-    socket.once(event, onEvent);
-    socket.once("error", onError);
-  }), timeoutMs, `WebSocket ${event}`);
 }

@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:17.6-bookworm@sha256:f3bd19c606e442c3d7bdfa8002e03fe260a1023351e0ea4598032022b68dd6e3
+        env:
+          POSTGRES_USER: review_tunnel
+          POSTGRES_PASSWORD: review_tunnel_test
+          POSTGRES_DB: review_tunnel_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U review_tunnel -d review_tunnel_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://review_tunnel:review_tunnel_test@127.0.0.1:5432/review_tunnel_test
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+          package-manager-cache: false
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm audit --omit=dev
+      - run: npm run check:mvp
+      - name: Build every production runtime image
+        run: |
+          docker build --target gateway -t review-tunnel-gateway:ci .
+          docker build --target admin-cli -t review-tunnel-admin-cli:ci .
+          docker build --target client -t review-tunnel-client:ci .
+          docker build --target canary-check -t review-tunnel-canary-check:ci .
+          docker build --target db-backup -t review-tunnel-db-backup:ci .
+          docker build --target db-restore -t review-tunnel-db-restore:ci .
+      - name: Smoke runtime entrypoints and fail-closed configuration
+        run: |
+          expect_failure() {
+            expected="$1"
+            shift
+            set +e
+            output=$("$@" 2>&1)
+            status=$?
+            set -e
+            if [ "$status" -eq 0 ]; then
+              echo "expected command to fail closed: $*" >&2
+              exit 1
+            fi
+            case "$output" in
+              *"$expected"*) ;;
+              *)
+                echo "runtime failed for an unexpected reason: $output" >&2
+                exit 1
+                ;;
+            esac
+          }
+          expect_failure "METRICS_BEARER_TOKEN must contain at least 32" docker run --rm -e METRICS_BEARER_TOKEN=short review-tunnel-gateway:ci
+          expect_failure "DATABASE_URL is required" docker run --rm review-tunnel-admin-cli:ci
+          expect_failure "Usage:" docker run --rm review-tunnel-client:ci
+          expect_failure "CANARY_CONTENT_URL is required" docker run --rm review-tunnel-canary-check:ci
+          expect_failure "DATABASE_URL is required" docker run --rm review-tunnel-db-backup:ci
+          expect_failure "usage: postgres-restore" docker run --rm review-tunnel-db-restore:ci
