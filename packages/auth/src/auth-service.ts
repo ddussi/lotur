@@ -3,10 +3,13 @@ import { createHmac, randomBytes } from "node:crypto";
 import { AuthError } from "./auth-error.ts";
 import type {
   Account,
+  AccountAuthorization,
   AccountRole,
+  AuthenticationEvent,
   AuditAction,
   CarrierPurpose,
   DeveloperAuthorization,
+  AuditEvent,
   Principal,
 } from "./model.ts";
 import { ACCOUNT_ROLES } from "./model.ts";
@@ -15,7 +18,16 @@ import {
   normalizeUsername,
   validatePassword,
 } from "./password-policy.ts";
-import type { AuthRepository, PasswordHasher } from "./ports.ts";
+import type {
+  AccountMutationResult,
+  AccountMutationAuthorization,
+  AuthenticationEventSink,
+  AuthRepository,
+  LoginIntentLimits,
+  LoginThrottleLimits,
+  PasswordHasher,
+  StoredArtifactLimits,
+} from "./ports.ts";
 
 const SESSION_TTL_MS = 12 * 60 * 60_000;
 const LOGIN_LOCK_THRESHOLD = 5;
@@ -24,6 +36,15 @@ const LOGIN_FAILURE_WINDOW_MS = 15 * 60_000;
 const LOGIN_INTENT_TTL_MS = 5 * 60_000;
 const SESSION_EXCHANGE_TTL_MS = 60_000;
 const CARRIER_CREDENTIAL_TTL_MS = 60_000;
+const DEFAULT_LOGIN_INTENT_LIMITS: LoginIntentLimits = { global: 10_000, perHost: 256 };
+export const DEFAULT_LOGIN_THROTTLE_LIMITS: LoginThrottleLimits = { global: 100_000 };
+export const DEFAULT_AUTH_ARTIFACT_LIMITS: AuthArtifactLimits = {
+  sessions: { global: 100_000, perAccount: 64 },
+  sessionExchanges: { global: 10_000, perAccount: 256 },
+  carrierCredentials: { global: 10_000, perAccount: 128 },
+};
+const AUTH_ARTIFACT_CLEANUP_BATCH_SIZE = 500;
+const AUTH_ARTIFACT_CLEANUP_MAX_BATCHES = 10;
 
 export type AuthServiceDependencies = Readonly<{
   repository: AuthRepository;
@@ -34,6 +55,16 @@ export type AuthServiceDependencies = Readonly<{
   now?: () => Date;
   createId?: () => string;
   createSecret?: () => string;
+  authenticationEventSink: AuthenticationEventSink;
+  loginIntentLimits?: LoginIntentLimits;
+  loginThrottleLimits?: LoginThrottleLimits;
+  authArtifactLimits?: AuthArtifactLimits;
+}>;
+
+export type AuthArtifactLimits = Readonly<{
+  sessions: StoredArtifactLimits;
+  sessionExchanges: StoredArtifactLimits;
+  carrierCredentials: StoredArtifactLimits;
 }>;
 
 export class AuthService {
@@ -44,21 +75,45 @@ export class AuthService {
   readonly #now: () => Date;
   readonly #createId: () => string;
   readonly #createSecret: () => string;
+  readonly #authenticationEventSink: AuthenticationEventSink;
+  readonly #loginIntentLimits: LoginIntentLimits;
+  readonly #loginThrottleLimits: LoginThrottleLimits;
+  readonly #authArtifactLimits: AuthArtifactLimits;
 
   constructor(dependencies: AuthServiceDependencies) {
     this.#repository = dependencies.repository;
     this.#passwordHasher = dependencies.passwordHasher;
-    this.#sessionHmacKeys = [
-      dependencies.sessionHmacKey,
-      ...(dependencies.previousSessionHmacKeys ?? []),
-    ];
-    if (this.#sessionHmacKeys.some((key) => key.byteLength < 32)) {
-      throw new TypeError("session HMAC keys must contain at least 32 bytes");
+    const previousSessionHmacKeys = dependencies.previousSessionHmacKeys ?? [];
+    if (previousSessionHmacKeys.length > 3) {
+      throw new TypeError("at most 3 previous session HMAC keys are supported");
     }
+    const sessionHmacKeys = [
+      dependencies.sessionHmacKey,
+      ...previousSessionHmacKeys,
+    ];
+    if (sessionHmacKeys.some((key) => key.byteLength < 32 || key.byteLength > 128)) {
+      throw new TypeError("session HMAC keys must contain between 32 and 128 bytes");
+    }
+    const encodedSessionHmacKeys = sessionHmacKeys.map((key) =>
+      Buffer.from(key).toString("base64"));
+    if (new Set(encodedSessionHmacKeys).size !== encodedSessionHmacKeys.length) {
+      throw new TypeError("session HMAC keys must be unique");
+    }
+    this.#sessionHmacKeys = sessionHmacKeys.map((key) => Uint8Array.from(key));
     this.#dummyPasswordHash = dependencies.dummyPasswordHash;
     this.#now = dependencies.now ?? (() => new Date());
     this.#createId = dependencies.createId ?? (() => randomBytes(16).toString("hex"));
     this.#createSecret = dependencies.createSecret ?? (() => randomBytes(24).toString("base64url"));
+    this.#authenticationEventSink = dependencies.authenticationEventSink;
+    this.#loginIntentLimits = validateLoginIntentLimits(
+      dependencies.loginIntentLimits ?? DEFAULT_LOGIN_INTENT_LIMITS,
+    );
+    this.#loginThrottleLimits = validateLoginThrottleLimits(
+      dependencies.loginThrottleLimits ?? DEFAULT_LOGIN_THROTTLE_LIMITS,
+    );
+    this.#authArtifactLimits = validateAuthArtifactLimits(
+      dependencies.authArtifactLimits ?? DEFAULT_AUTH_ARTIFACT_LIMITS,
+    );
   }
 
   async bootstrapAdministrator(input: Readonly<{ username: string; displayName: string }>) {
@@ -67,10 +122,10 @@ export class AuthService {
       displayName: input.displayName,
       roles: ["ADMIN"],
     });
-    if (!await this.#repository.createFirstAccount(result.account)) {
+    const auditEvent = this.#auditEvent("ACCOUNT_BOOTSTRAPPED", undefined, result.account.id);
+    if (!await this.#repository.createFirstAccount(result.account, auditEvent)) {
       throw new AuthError("BOOTSTRAP_CLOSED", "최초 관리자 생성은 계정이 없을 때만 가능합니다.");
     }
-    await this.#audit("ACCOUNT_BOOTSTRAPPED", undefined, result.account.id);
     return result;
   }
 
@@ -79,17 +134,67 @@ export class AuthService {
     password: string;
     remoteAddress: string;
   }>): Promise<Readonly<{ principal: Principal; sessionToken: string }>> {
-    let username: string;
+    const now = this.#now();
+    const account = await this.#verifyCredentials(input, now);
+    const login = await this.#issueSession(
+      account,
+      now,
+      "control",
+    );
+    this.#writeAuthenticationEvent({
+      action: "LOGIN_SUCCEEDED",
+      occurredAt: now,
+      identityRef: this.#throttleKey("identity", account.username),
+      remoteRef: this.#throttleKey("remote", input.remoteAddress),
+      accountId: account.id,
+    });
+    return login;
+  }
+
+  async verifyAdministratorCredentials(input: Readonly<{
+    username: string;
+    password: string;
+    remoteAddress: string;
+  }>): Promise<AccountAuthorization> {
+    const now = this.#now();
+    const account = await this.#verifyCredentials(input, now);
+    if (account.mustChangePassword) {
+      throw new AuthError("PASSWORD_CHANGE_REQUIRED", "먼저 change-password 명령을 실행하세요.");
+    }
+    if (!account.roles.includes("ADMIN")) {
+      throw new AuthError("FORBIDDEN", "관리자 권한이 필요합니다.");
+    }
+    this.#writeAuthenticationEvent({
+      action: "LOGIN_SUCCEEDED",
+      occurredAt: now,
+      identityRef: this.#throttleKey("identity", account.username),
+      remoteRef: this.#throttleKey("remote", input.remoteAddress),
+      accountId: account.id,
+    });
+    return { accountId: account.id, authVersion: account.authVersion };
+  }
+
+  async #verifyCredentials(input: Readonly<{
+    username: string;
+    password: string;
+    remoteAddress: string;
+  }>, now: Date): Promise<Account> {
+    let username: string | undefined;
+    let throttleIdentity: string;
     try {
       username = normalizeUsername(input.username);
+      throttleIdentity = username;
     } catch {
-      username = input.username.trim().toLowerCase().slice(0, 64);
+      username = undefined;
+      throttleIdentity = `invalid:${input.username.trim().toLowerCase().slice(0, 64)}`;
     }
-    const now = this.#now();
-    const account = await this.#repository.findAccountByUsername(username);
-    const throttleKeys = account === undefined
-      ? [this.#throttleKey("remote", input.remoteAddress)]
-      : [this.#throttleKey("account", username)];
+    const account = username === undefined
+      ? undefined
+      : await this.#repository.findAccountByUsername(username);
+    const throttleKeys = [
+      this.#throttleKey("identity", throttleIdentity),
+      this.#throttleKey("remote", input.remoteAddress),
+    ];
     const storedThrottles = await Promise.all(
       throttleKeys.map((key) => this.#repository.getLoginThrottle(key)),
     );
@@ -99,6 +204,14 @@ export class AuthService {
         : undefined);
     if (throttles.some((throttle) =>
       throttle?.lockedUntil !== undefined && throttle.lockedUntil.getTime() > now.getTime())) {
+      this.#writeAuthenticationEvent({
+        action: "LOGIN_FAILED",
+        occurredAt: now,
+        identityRef: throttleKeys[0]!,
+        remoteRef: throttleKeys[1]!,
+        ...(account === undefined ? {} : { accountId: account.id }),
+        reason: "LOGIN_THROTTLED",
+      });
       throw new AuthError("LOGIN_THROTTLED", "로그인 시도가 너무 많습니다. 잠시 후 다시 시도하세요.");
     }
 
@@ -107,25 +220,32 @@ export class AuthService {
       input.password,
     );
     if (account === undefined || !account.enabled || !passwordMatches) {
-      await Promise.all(throttleKeys.map(async (key, index) => {
-        const failures = (throttles[index]?.failures ?? 0) + 1;
-        await this.#repository.saveLoginThrottle({
-          key,
-          failures,
-          ...(failures >= LOGIN_LOCK_THRESHOLD
-            ? { lockedUntil: new Date(now.getTime() + LOGIN_LOCK_MS) }
-            : {}),
-          updatedAt: now,
-        });
-      }));
-      await this.#audit("LOGIN_FAILED", undefined, account?.id, { username });
+      const recorded = await this.#repository.recordLoginFailure({
+        keys: throttleKeys,
+        now,
+        windowStartsAt: new Date(now.getTime() - LOGIN_FAILURE_WINDOW_MS),
+        lockThreshold: LOGIN_LOCK_THRESHOLD,
+        lockedUntil: new Date(now.getTime() + LOGIN_LOCK_MS),
+        limits: this.#loginThrottleLimits,
+      });
+      this.#writeAuthenticationEvent({
+        action: "LOGIN_FAILED",
+        occurredAt: now,
+        identityRef: throttleKeys[0]!,
+        remoteRef: throttleKeys[1]!,
+        ...(account === undefined ? {} : { accountId: account.id }),
+        reason: recorded.status === "CAPACITY_EXHAUSTED"
+          ? "THROTTLE_CAPACITY"
+          : "INVALID_CREDENTIALS",
+      });
+      if (recorded.status === "CAPACITY_EXHAUSTED") {
+        throw new AuthError("AUTH_CAPACITY", "로그인 제한 저장소 용량이 소진되었습니다.");
+      }
       throw new AuthError("INVALID_CREDENTIALS", "아이디 또는 비밀번호가 올바르지 않습니다.");
     }
 
-    await Promise.all(throttleKeys.map((key) => this.#repository.deleteLoginThrottle(key)));
-    const issued = await this.#issueSession(account, now);
-    await this.#audit("LOGIN_SUCCEEDED", account.id, account.id);
-    return issued;
+    await this.#repository.deleteLoginThrottles(throttleKeys);
+    return account;
   }
 
   async createLoginIntent(targetHost: string, targetPath: string): Promise<string> {
@@ -133,12 +253,16 @@ export class AuthService {
       throw new AuthError("INVALID_ACCOUNT_INPUT", "올바르지 않은 로그인 복귀 대상입니다.");
     }
     const id = this.#createSecret();
-    await this.#repository.saveLoginIntent({
+    const now = this.#now();
+    const saved = await this.#repository.saveLoginIntent({
       id,
       targetHost,
       targetPath,
-      expiresAt: new Date(this.#now().getTime() + LOGIN_INTENT_TTL_MS),
-    });
+      expiresAt: new Date(now.getTime() + LOGIN_INTENT_TTL_MS),
+    }, now, this.#loginIntentLimits);
+    if (!saved) {
+      throw new AuthError("LOGIN_INTENT_CAPACITY", "로그인 요청이 많습니다. 잠시 후 다시 시도하세요.");
+    }
     return id;
   }
 
@@ -153,13 +277,19 @@ export class AuthService {
     const intent = await this.#repository.consumeLoginIntent(intentId, this.#now());
     if (intent === undefined) throw new AuthError("FORBIDDEN", "로그인 요청이 만료됐거나 이미 사용됐습니다.");
     const code = this.#createSecret();
-    await this.#repository.saveSessionExchange({
+    const now = this.#now();
+    const saved = await this.#repository.saveSessionExchange({
       codeDigest: this.#digestSessionToken(`exchange:${code}`),
       accountId: account.id,
+      accountAuthVersion: account.authVersion,
       targetHost: intent.targetHost,
       targetPath: intent.targetPath,
-      expiresAt: new Date(this.#now().getTime() + SESSION_EXCHANGE_TTL_MS),
-    });
+      expiresAt: new Date(now.getTime() + SESSION_EXCHANGE_TTL_MS),
+    }, now, this.#authArtifactLimits.sessionExchanges);
+    if (!saved) {
+      await this.#requireCurrentArtifactAccount(account);
+      throw new AuthError("AUTH_CAPACITY", "인증 교환 요청이 많습니다. 잠시 후 다시 시도하세요.");
+    }
     return { code, targetHost: intent.targetHost, targetPath: intent.targetPath };
   }
 
@@ -178,7 +308,12 @@ export class AuthService {
     }
     if (exchange === undefined) throw new AuthError("FORBIDDEN", "세션 교환 코드가 올바르지 않습니다.");
     const account = await this.#requireAccount(exchange.accountId);
-    if (!account.enabled || account.mustChangePassword || !account.roles.includes("REVIEWER")) {
+    if (
+      !account.enabled ||
+      account.mustChangePassword ||
+      account.authVersion !== exchange.accountAuthVersion ||
+      !account.roles.includes("REVIEWER")
+    ) {
       throw new AuthError("FORBIDDEN", "검토자 권한이 필요합니다.");
     }
     return {
@@ -200,15 +335,20 @@ export class AuthService {
     }
     const id = this.#createId();
     const secret = this.#createSecret();
-    await this.#repository.saveCarrierCredential({
+    const now = this.#now();
+    const saved = await this.#repository.saveCarrierCredential({
       id,
       secretDigest: this.#digestSessionToken(`carrier:${id}:${secret}`),
       accountId: account.id,
       accountAuthVersion: account.authVersion,
       purpose: input.purpose,
       tunnelId: input.tunnelId,
-      expiresAt: new Date(this.#now().getTime() + CARRIER_CREDENTIAL_TTL_MS),
-    });
+      expiresAt: new Date(now.getTime() + CARRIER_CREDENTIAL_TTL_MS),
+    }, now, this.#authArtifactLimits.carrierCredentials);
+    if (!saved) {
+      await this.#requireCurrentArtifactAccount(account);
+      throw new AuthError("AUTH_CAPACITY", "Carrier 인증 요청이 많습니다. 잠시 후 다시 시도하세요.");
+    }
     return `${id}.${secret}`;
   }
 
@@ -254,7 +394,14 @@ export class AuthService {
   }
 
   async cleanupExpiredArtifacts(): Promise<void> {
-    await this.#repository.deleteExpiredAuthArtifacts(this.#now());
+    const now = this.#now();
+    for (let batch = 0; batch < AUTH_ARTIFACT_CLEANUP_MAX_BATCHES; batch += 1) {
+      const deleted = await this.#repository.deleteExpiredAuthArtifacts(
+        now,
+        AUTH_ARTIFACT_CLEANUP_BATCH_SIZE,
+      );
+      if (deleted < AUTH_ARTIFACT_CLEANUP_BATCH_SIZE) break;
+    }
   }
 
   async checkHealth(): Promise<void> {
@@ -299,99 +446,110 @@ export class AuthService {
       throw new AuthError("INVALID_CREDENTIALS", "현재 비밀번호가 올바르지 않습니다.");
     }
     validatePassword(input.newPassword);
-    const updated = await this.#replacePassword(account, input.newPassword, false);
-    await this.#audit("PASSWORD_CHANGED", account.id, account.id);
-    await this.#repository.deleteSessionsForAccount(updated.id);
+    await this.#replacePassword({
+      account,
+      password: input.newPassword,
+      mustChangePassword: false,
+      expectedAuthVersion: account.authVersion,
+      action: "PASSWORD_CHANGED",
+      actorAccountId: account.id,
+      authorization: {
+        accountId: principal.accountId,
+        authVersion: principal.authVersion,
+        allowPasswordChangeRequired: true,
+      },
+    });
   }
 
   async createAccount(
-    actor: Principal,
+    actor: AccountAuthorization,
     input: Readonly<{ username: string; displayName: string; roles: readonly AccountRole[] }>,
   ) {
     await this.#requireAdministrator(actor);
-    const result = await this.#createAccount(input);
-    await this.#audit("ACCOUNT_CREATED", actor.accountId, result.account.id);
-    return result;
+    return this.#createAccount(actor, input);
   }
 
-  async listAccounts(actor: Principal): Promise<readonly Account[]> {
+  async listAccounts(actor: AccountAuthorization): Promise<readonly Account[]> {
     await this.#requireAdministrator(actor);
     return this.#repository.listAccounts();
   }
 
-  async setAccountEnabled(actor: Principal, accountId: string, enabled: boolean): Promise<Account> {
+  async setAccountEnabled(actor: AccountAuthorization, accountId: string, enabled: boolean): Promise<Account> {
     await this.#requireAdministrator(actor);
-    const account = await this.#requireAccount(accountId);
-    if (!enabled && account.enabled && account.roles.includes("ADMIN") &&
-      await this.#repository.countEnabledAdministrators() <= 1) {
-      throw new AuthError("LAST_ADMINISTRATOR", "마지막 활성 관리자는 비활성화할 수 없습니다.");
-    }
-    const updated: Account = {
-      ...account,
+    const result = await this.#repository.setAccountEnabled({
+      accountId,
       enabled,
-      authVersion: account.authVersion + 1,
+      authorization: administratorAuthorization(actor),
       updatedAt: this.#now(),
-    };
-    await this.#repository.saveAccount(updated);
-    await this.#repository.deleteSessionsForAccount(accountId);
-    await this.#audit(enabled ? "ACCOUNT_ENABLED" : "ACCOUNT_DISABLED", actor.accountId, accountId);
-    return updated;
+      auditEvent: this.#auditEvent(
+        enabled ? "ACCOUNT_ENABLED" : "ACCOUNT_DISABLED",
+        actor.accountId,
+        accountId,
+      ),
+    });
+    return this.#requireUpdatedAccount(result);
   }
 
   async setAccountRoles(
-    actor: Principal,
+    actor: AccountAuthorization,
     accountId: string,
     roles: readonly AccountRole[],
   ): Promise<Account> {
     await this.#requireAdministrator(actor);
-    const account = await this.#requireAccount(accountId);
     const normalizedRoles = normalizeRoles(roles);
-    if (account.enabled && account.roles.includes("ADMIN") && !normalizedRoles.includes("ADMIN") &&
-      await this.#repository.countEnabledAdministrators() <= 1) {
-      throw new AuthError("LAST_ADMINISTRATOR", "마지막 활성 관리자의 관리자 권한은 제거할 수 없습니다.");
-    }
-    const updated: Account = {
-      ...account,
+    const result = await this.#repository.setAccountRoles({
+      accountId,
       roles: normalizedRoles,
-      authVersion: account.authVersion + 1,
+      authorization: administratorAuthorization(actor),
       updatedAt: this.#now(),
-    };
-    await this.#repository.saveAccount(updated);
-    await this.#repository.deleteSessionsForAccount(accountId);
-    await this.#audit("ACCOUNT_ROLES_CHANGED", actor.accountId, accountId);
-    return updated;
+      auditEvent: this.#auditEvent("ACCOUNT_ROLES_CHANGED", actor.accountId, accountId),
+    });
+    return this.#requireUpdatedAccount(result);
   }
 
-  async resetPassword(actor: Principal, accountId: string) {
+  async resetPassword(actor: AccountAuthorization, accountId: string) {
     await this.#requireAdministrator(actor);
     const account = await this.#requireAccount(accountId);
     const temporaryPassword = this.#createSecret();
-    const updated = await this.#replacePassword(account, temporaryPassword, true);
-    await this.#repository.deleteSessionsForAccount(accountId);
-    await this.#audit("PASSWORD_RESET", actor.accountId, accountId);
+    const updated = await this.#replacePassword({
+      account,
+      password: temporaryPassword,
+      mustChangePassword: true,
+      expectedAuthVersion: account.authVersion,
+      authorization: administratorAuthorization(actor),
+      action: "PASSWORD_RESET",
+      actorAccountId: actor.accountId,
+    });
     return { account: updated, temporaryPassword };
   }
 
-  async revokeSessions(actor: Principal, accountId: string): Promise<void> {
+  async revokeSessions(actor: AccountAuthorization, accountId: string): Promise<void> {
     await this.#requireAdministrator(actor);
-    await this.#requireAccount(accountId);
-    await this.#repository.deleteSessionsForAccount(accountId);
-    await this.#audit("SESSIONS_REVOKED", actor.accountId, accountId);
+    const result = await this.#repository.revokeAccountSessions({
+      accountId,
+      authorization: administratorAuthorization(actor),
+      updatedAt: this.#now(),
+      auditEvent: this.#auditEvent("SESSIONS_REVOKED", actor.accountId, accountId),
+    });
+    this.#requireUpdatedAccount(result);
   }
 
-  async #createAccount(input: Readonly<{
+  async #createAccount(actor: AccountAuthorization, input: Readonly<{
     username: string;
     displayName: string;
     roles: readonly AccountRole[];
   }>) {
     const result = await this.#buildAccount(input);
-    try {
-      await this.#repository.saveAccount(result.account);
-    } catch (error) {
-      if (error instanceof Error && error.message.includes("username")) {
-        throw new AuthError("ACCOUNT_EXISTS", "이미 사용 중인 아이디입니다.");
-      }
-      throw error;
+    const created = await this.#repository.createAccount({
+      account: result.account,
+      authorization: administratorAuthorization(actor),
+      auditEvent: this.#auditEvent("ACCOUNT_CREATED", actor.accountId, result.account.id),
+    });
+    if (created.status === "ACTOR_NOT_AUTHORIZED") {
+      throw new AuthError("FORBIDDEN", "관리자 권한이 필요합니다.");
+    }
+    if (created.status === "ALREADY_EXISTS") {
+      throw new AuthError("ACCOUNT_EXISTS", "이미 사용 중인 아이디입니다.");
     }
     return result;
   }
@@ -424,22 +582,39 @@ export class AuthService {
     return { account, temporaryPassword };
   }
 
-  async #replacePassword(account: Account, password: string, mustChangePassword: boolean) {
-    const updated: Account = {
-      ...account,
-      passwordHash: await this.#passwordHasher.hash(password),
-      mustChangePassword,
-      authVersion: account.authVersion + 1,
+  async #replacePassword(input: Readonly<{
+    account: Account;
+    password: string;
+    mustChangePassword: boolean;
+    expectedAuthVersion: number;
+    action: "PASSWORD_CHANGED" | "PASSWORD_RESET";
+    actorAccountId: string;
+    authorization: AccountMutationAuthorization;
+  }>): Promise<Account> {
+    const result = await this.#repository.replaceAccountPassword({
+      accountId: input.account.id,
+      passwordHash: await this.#passwordHasher.hash(input.password),
+      mustChangePassword: input.mustChangePassword,
+      expectedAuthVersion: input.expectedAuthVersion,
+      authorization: input.authorization,
       updatedAt: this.#now(),
-    };
-    await this.#repository.saveAccount(updated);
-    return updated;
+      auditEvent: this.#auditEvent(
+        input.action,
+        input.actorAccountId,
+        input.account.id,
+      ),
+    });
+    return this.#requireUpdatedAccount(result);
   }
 
-  async #issueSession(account: Account, now: Date, audience = "control") {
+  async #issueSession(
+    account: Account,
+    now: Date,
+    audience = "control",
+  ) {
     const sessionId = this.#createId();
     const sessionToken = `${sessionId}.${this.#createSecret()}`;
-    await this.#repository.saveSession({
+    const saved = await this.#repository.saveSession({
       id: sessionId,
       tokenDigest: this.#digestSessionToken(sessionToken),
       accountId: account.id,
@@ -448,11 +623,15 @@ export class AuthService {
       createdAt: now,
       lastSeenAt: now,
       expiresAt: new Date(now.getTime() + SESSION_TTL_MS),
-    });
+    }, now, this.#authArtifactLimits.sessions);
+    if (!saved) {
+      await this.#requireCurrentArtifactAccount(account);
+      throw new AuthError("AUTH_CAPACITY", "활성 인증 세션이 너무 많습니다.");
+    }
     return { principal: toPrincipal(account, sessionId), sessionToken };
   }
 
-  async #requireAdministrator(principal: Principal): Promise<Account> {
+  async #requireAdministrator(principal: AccountAuthorization): Promise<Account> {
     const account = await this.#requireCurrentAccount(principal);
     if (!account.roles.includes("ADMIN")) {
       throw new AuthError("FORBIDDEN", "관리자 권한이 필요합니다.");
@@ -460,7 +639,7 @@ export class AuthService {
     return account;
   }
 
-  async #requireCurrentAccount(principal: Principal): Promise<Account> {
+  async #requireCurrentAccount(principal: AccountAuthorization): Promise<Account> {
     const account = await this.#requireEnabledAccount(principal);
     if (account.mustChangePassword) {
       throw new AuthError("PASSWORD_CHANGE_REQUIRED", "먼저 임시 비밀번호를 변경해야 합니다.");
@@ -468,12 +647,29 @@ export class AuthService {
     return account;
   }
 
-  async #requireEnabledAccount(principal: Principal): Promise<Account> {
+  async #requireEnabledAccount(principal: AccountAuthorization): Promise<Account> {
     const account = await this.#repository.findAccountById(principal.accountId);
-    if (account === undefined || !account.enabled) {
+    if (
+      account === undefined ||
+      !account.enabled ||
+      account.authVersion !== principal.authVersion
+    ) {
       throw new AuthError("FORBIDDEN", "활성 계정이 아닙니다.");
     }
     return account;
+  }
+
+  async #requireCurrentArtifactAccount(
+    expected: Readonly<Pick<Account, "id" | "authVersion">>,
+  ): Promise<void> {
+    const account = await this.#repository.findAccountById(expected.id);
+    if (
+      account === undefined ||
+      !account.enabled ||
+      account.authVersion !== expected.authVersion
+    ) {
+      throw new AuthError("FORBIDDEN", "활성 계정이 아닙니다.");
+    }
   }
 
   async #requireAccount(accountId: string): Promise<Account> {
@@ -494,27 +690,103 @@ export class AuthService {
     return createHmac("sha256", key).update(token).digest("base64url");
   }
 
-  #throttleKey(scope: "account" | "remote", value: string): string {
+  #throttleKey(scope: "identity" | "remote", value: string): string {
     return createHmac("sha256", this.#sessionHmacKeys[0]!)
       .update(`${scope}\0${value}`)
       .digest("base64url");
   }
 
-  async #audit(
+  #writeAuthenticationEvent(event: AuthenticationEvent): void {
+    try {
+      this.#authenticationEventSink.write(event);
+    } catch {
+      try {
+        this.#authenticationEventSink.reportFailure();
+      } catch {
+        console.error(JSON.stringify({
+          event: "authentication_event_sink_failure_unreported",
+        }));
+      }
+    }
+  }
+
+  #auditEvent(
     action: AuditAction,
     actorAccountId?: string,
     targetAccountId?: string,
     metadata: Readonly<Record<string, string | number | boolean>> = {},
-  ): Promise<void> {
-    await this.#repository.appendAuditEvent({
+  ): AuditEvent {
+    return {
       id: this.#createId(),
       action,
       ...(actorAccountId === undefined ? {} : { actorAccountId }),
       ...(targetAccountId === undefined ? {} : { targetAccountId }),
       occurredAt: this.#now(),
       metadata,
-    });
+    };
   }
+
+  #requireUpdatedAccount(result: AccountMutationResult): Account {
+    if (result.status === "UPDATED") return result.account;
+    if (result.status === "LAST_ADMINISTRATOR") {
+      throw new AuthError("LAST_ADMINISTRATOR", "마지막 활성 관리자는 비활성화하거나 관리자 권한을 제거할 수 없습니다.");
+    }
+    if (result.status === "CONFLICT") {
+      throw new AuthError("ACCOUNT_CONFLICT", "계정이 다른 요청에서 변경됐습니다. 다시 시도하세요.");
+    }
+    if (result.status === "ACTOR_NOT_AUTHORIZED") {
+      throw new AuthError("FORBIDDEN", "현재 계정으로 이 작업을 수행할 수 없습니다.");
+    }
+    throw new AuthError("ACCOUNT_NOT_FOUND", "계정을 찾을 수 없습니다.");
+  }
+}
+
+function validateLoginIntentLimits(limits: LoginIntentLimits): LoginIntentLimits {
+  if (
+    !Number.isSafeInteger(limits.global) || limits.global < 1 ||
+    !Number.isSafeInteger(limits.perHost) || limits.perHost < 1 ||
+    limits.perHost > limits.global
+  ) {
+    throw new TypeError("login intent limits must be positive safe integers and perHost must not exceed global");
+  }
+  return limits;
+}
+
+function validateLoginThrottleLimits(limits: LoginThrottleLimits): LoginThrottleLimits {
+  if (!Number.isSafeInteger(limits.global) || limits.global < 2) {
+    throw new TypeError("login throttle global limit must be a safe integer of at least 2");
+  }
+  return { global: limits.global };
+}
+
+function validateAuthArtifactLimits(limits: AuthArtifactLimits): AuthArtifactLimits {
+  return {
+    sessions: validateStoredArtifactLimits(limits.sessions, "session"),
+    sessionExchanges: validateStoredArtifactLimits(
+      limits.sessionExchanges,
+      "session exchange",
+    ),
+    carrierCredentials: validateStoredArtifactLimits(
+      limits.carrierCredentials,
+      "Carrier credential",
+    ),
+  };
+}
+
+function validateStoredArtifactLimits(
+  limits: StoredArtifactLimits,
+  name: string,
+): StoredArtifactLimits {
+  if (
+    !Number.isSafeInteger(limits.global) || limits.global < 1 ||
+    !Number.isSafeInteger(limits.perAccount) || limits.perAccount < 1 ||
+    limits.perAccount > limits.global
+  ) {
+    throw new TypeError(
+      `${name} limits must be positive safe integers and perAccount must not exceed global`,
+    );
+  }
+  return { global: limits.global, perAccount: limits.perAccount };
 }
 
 function normalizeRoles(roles: readonly AccountRole[]): readonly AccountRole[] {
@@ -523,6 +795,16 @@ function normalizeRoles(roles: readonly AccountRole[]): readonly AccountRole[] {
     throw new AuthError("INVALID_ACCOUNT_INPUT", "하나 이상의 올바른 권한이 필요합니다.");
   }
   return ACCOUNT_ROLES.filter((role) => unique.includes(role));
+}
+
+function administratorAuthorization(
+  actor: AccountAuthorization,
+): AccountMutationAuthorization {
+  return {
+    accountId: actor.accountId,
+    authVersion: actor.authVersion,
+    requiredRole: "ADMIN",
+  };
 }
 
 function toPrincipal(account: Account, sessionId: string): Principal {

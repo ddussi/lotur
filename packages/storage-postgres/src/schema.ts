@@ -43,10 +43,20 @@ CREATE TABLE IF NOT EXISTS rt_login_throttles (
   locked_until timestamptz,
   updated_at timestamptz NOT NULL
 );
-
 ALTER TABLE rt_login_throttles ADD COLUMN IF NOT EXISTS updated_at timestamptz;
 UPDATE rt_login_throttles SET updated_at = now() WHERE updated_at IS NULL;
 ALTER TABLE rt_login_throttles ALTER COLUMN updated_at SET NOT NULL;
+CREATE INDEX IF NOT EXISTS rt_login_throttles_updated_at_idx
+  ON rt_login_throttles(updated_at);
+
+CREATE TABLE IF NOT EXISTS rt_login_throttle_capacity (
+  singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton),
+  entry_count bigint NOT NULL CHECK (entry_count >= 0)
+);
+INSERT INTO rt_login_throttle_capacity(singleton, entry_count)
+VALUES (true, (SELECT count(*) FROM rt_login_throttles))
+ON CONFLICT (singleton) DO UPDATE
+SET entry_count = EXCLUDED.entry_count;
 
 CREATE TABLE IF NOT EXISTS rt_login_intents (
   id text PRIMARY KEY,
@@ -54,14 +64,23 @@ CREATE TABLE IF NOT EXISTS rt_login_intents (
   target_path text NOT NULL,
   expires_at timestamptz NOT NULL
 );
+CREATE INDEX IF NOT EXISTS rt_login_intents_expires_at_idx ON rt_login_intents(expires_at);
+CREATE INDEX IF NOT EXISTS rt_login_intents_target_host_expires_at_idx
+  ON rt_login_intents(target_host, expires_at);
 
 CREATE TABLE IF NOT EXISTS rt_session_exchanges (
   code_digest text PRIMARY KEY,
   account_id text NOT NULL REFERENCES rt_accounts(id) ON DELETE CASCADE,
+  account_auth_version integer NOT NULL,
   target_host text NOT NULL,
   target_path text NOT NULL,
   expires_at timestamptz NOT NULL
 );
+ALTER TABLE rt_session_exchanges ADD COLUMN IF NOT EXISTS account_auth_version integer;
+DELETE FROM rt_session_exchanges WHERE account_auth_version IS NULL;
+ALTER TABLE rt_session_exchanges ALTER COLUMN account_auth_version SET NOT NULL;
+CREATE INDEX IF NOT EXISTS rt_session_exchanges_account_id_idx ON rt_session_exchanges(account_id);
+CREATE INDEX IF NOT EXISTS rt_session_exchanges_expires_at_idx ON rt_session_exchanges(expires_at);
 
 CREATE TABLE IF NOT EXISTS rt_carrier_credentials (
   id text PRIMARY KEY,
@@ -73,6 +92,7 @@ CREATE TABLE IF NOT EXISTS rt_carrier_credentials (
   expires_at timestamptz NOT NULL
 );
 CREATE INDEX IF NOT EXISTS rt_carrier_credentials_expires_at_idx ON rt_carrier_credentials(expires_at);
+CREATE INDEX IF NOT EXISTS rt_carrier_credentials_account_id_idx ON rt_carrier_credentials(account_id);
 
 CREATE TABLE IF NOT EXISTS rt_audit_events (
   id text PRIMARY KEY,
@@ -83,6 +103,15 @@ CREATE TABLE IF NOT EXISTS rt_audit_events (
   metadata jsonb NOT NULL DEFAULT '{}'::jsonb
 );
 CREATE INDEX IF NOT EXISTS rt_audit_events_occurred_at_idx ON rt_audit_events(occurred_at DESC);
+
+CREATE TABLE IF NOT EXISTS rt_audit_event_capacity (
+  singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton),
+  event_count bigint NOT NULL CHECK (event_count >= 0)
+);
+INSERT INTO rt_audit_event_capacity(singleton, event_count)
+VALUES (true, (SELECT count(*) FROM rt_audit_events))
+ON CONFLICT (singleton) DO UPDATE
+SET event_count = EXCLUDED.event_count;
 
 CREATE TABLE IF NOT EXISTS rt_operational_controls (
   singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton),
@@ -116,5 +145,13 @@ ON CONFLICT (version) DO NOTHING;
 INSERT INTO rt_schema_migrations(version) VALUES (3)
 ON CONFLICT (version) DO NOTHING;
 INSERT INTO rt_schema_migrations(version) VALUES (4)
+ON CONFLICT (version) DO NOTHING;
+INSERT INTO rt_schema_migrations(version) VALUES (5)
+ON CONFLICT (version) DO NOTHING;
+INSERT INTO rt_schema_migrations(version) VALUES (6)
+ON CONFLICT (version) DO NOTHING;
+INSERT INTO rt_schema_migrations(version) VALUES (7)
+ON CONFLICT (version) DO NOTHING;
+INSERT INTO rt_schema_migrations(version) VALUES (8)
 ON CONFLICT (version) DO NOTHING;
 `;

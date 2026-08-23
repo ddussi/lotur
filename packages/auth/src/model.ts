@@ -42,6 +42,7 @@ export type LoginIntent = Readonly<{
 export type SessionExchange = Readonly<{
   codeDigest: string;
   accountId: string;
+  accountAuthVersion: number;
   targetHost: string;
   targetPath: string;
   expiresAt: Date;
@@ -75,9 +76,7 @@ export type AuditAction =
   | "ACCOUNT_ROLES_CHANGED"
   | "PASSWORD_CHANGED"
   | "PASSWORD_RESET"
-  | "SESSIONS_REVOKED"
-  | "LOGIN_SUCCEEDED"
-  | "LOGIN_FAILED";
+  | "SESSIONS_REVOKED";
 
 export type AuditEvent = Readonly<{
   id: string;
@@ -88,6 +87,15 @@ export type AuditEvent = Readonly<{
   metadata: Readonly<Record<string, string | number | boolean>>;
 }>;
 
+export type AuthenticationEvent = Readonly<{
+  action: "LOGIN_SUCCEEDED" | "LOGIN_FAILED";
+  occurredAt: Date;
+  identityRef: string;
+  remoteRef: string;
+  accountId?: string;
+  reason?: "INVALID_CREDENTIALS" | "LOGIN_THROTTLED" | "THROTTLE_CAPACITY";
+}>;
+
 export type Principal = Readonly<{
   accountId: string;
   username: string;
@@ -96,4 +104,9 @@ export type Principal = Readonly<{
   mustChangePassword: boolean;
   authVersion: number;
   sessionId: string;
+}>;
+
+export type AccountAuthorization = Readonly<{
+  accountId: string;
+  authVersion: number;
 }>;

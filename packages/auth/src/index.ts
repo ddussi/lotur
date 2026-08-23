@@ -1,4 +1,5 @@
 export * from "./argon2-password-hasher.ts";
+export * from "./audit-policy.ts";
 export * from "./auth-error.ts";
 export * from "./auth-service.ts";
 export * from "./in-memory-auth-repository.ts";

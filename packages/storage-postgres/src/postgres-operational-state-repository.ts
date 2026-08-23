@@ -2,20 +2,58 @@ import { randomUUID } from "node:crypto";
 import type { Pool, PoolClient, QueryResultRow } from "pg";
 
 import {
+  DEFAULT_AUDIT_EVENT_LIMITS,
+  type AuditEventLimits,
+} from "../../auth/src/index.ts";
+import {
   OperationalStateError,
   type CanaryStatus,
   type DeploymentIdentity,
   type OperationalState,
+  type OperationalActor,
   type OperationalStateRepository,
 } from "../../operations/src/index.ts";
+import {
+  appendBoundedAuditEvent,
+  validatedAuditEventLimits,
+} from "./bounded-audit-writer.ts";
 
 type Queryable = Pick<Pool, "query"> | Pick<PoolClient, "query">;
 
+async function requireOperationalActor(
+  database: Queryable,
+  actor: OperationalActor,
+): Promise<void> {
+  const result = await database.query(
+    `SELECT id FROM rt_accounts
+     WHERE id = $1
+       AND auth_version = $2
+       AND enabled = true
+       AND must_change_password = false
+       AND 'ADMIN' = ANY(roles)
+     FOR UPDATE`,
+    [actor.accountId, actor.accountAuthVersion],
+  );
+  if (result.rowCount !== 1) {
+    throw new OperationalStateError(
+      "ACTOR_NOT_AUTHORIZED",
+      "current administrator authorization is required",
+    );
+  }
+}
+
 export class PostgresOperationalStateRepository implements OperationalStateRepository {
   readonly #database: Pool;
+  readonly #auditEventLimits: AuditEventLimits;
 
-  constructor(database: Pool) {
+  constructor(
+    database: Pool,
+    options: Readonly<{ auditEventLimits?: AuditEventLimits }> = {},
+  ) {
     this.#database = database;
+    this.#auditEventLimits = validatedAuditEventLimits(
+      options.auditEventLimits ?? DEFAULT_AUDIT_EVENT_LIMITS,
+    );
   }
 
   async getOperationalState(identity: DeploymentIdentity): Promise<OperationalState> {
@@ -25,10 +63,11 @@ export class PostgresOperationalStateRepository implements OperationalStateRepos
   async recordCanaryResult(
     identity: DeploymentIdentity,
     result: Exclude<CanaryStatus, "UNKNOWN">,
-    actorAccountId: string,
+    actor: OperationalActor,
     now: Date,
   ): Promise<OperationalState> {
     return this.#transaction(async (client) => {
+      await requireOperationalActor(client, actor);
       await client.query(
         `INSERT INTO rt_deployment_admissions
          (deployment_id, config_digest, canary_status, canary_checked_at,
@@ -52,9 +91,9 @@ export class PostgresOperationalStateRepository implements OperationalStateRepos
            updated_at = EXCLUDED.updated_at`,
         [identity.deploymentId, identity.configDigest, result, now],
       );
-      await appendOperationalAudit(client, {
+      await this.#appendOperationalAudit(client, {
         action: result === "PASSED" ? "CANARY_PASSED" : "CANARY_FAILED",
-        actorAccountId,
+        actorAccountId: actor.accountId,
         identity,
         now,
       });
@@ -64,16 +103,17 @@ export class PostgresOperationalStateRepository implements OperationalStateRepos
 
   async approveAdmission(
     identity: DeploymentIdentity,
-    actorAccountId: string,
+    actor: OperationalActor,
     now: Date,
   ): Promise<OperationalState> {
     return this.#transaction(async (client) => {
+      await requireOperationalActor(client, actor);
       const result = await client.query(
         `UPDATE rt_deployment_admissions
          SET admission_approved_at = $3, admission_approved_by = $4, updated_at = $3
          WHERE deployment_id = $1 AND config_digest = $2 AND canary_status = 'PASSED'
          RETURNING deployment_id`,
-        [identity.deploymentId, identity.configDigest, now, actorAccountId],
+        [identity.deploymentId, identity.configDigest, now, actor.accountId],
       );
       if (result.rowCount !== 1) {
         throw new OperationalStateError(
@@ -81,9 +121,9 @@ export class PostgresOperationalStateRepository implements OperationalStateRepos
           "matching successful canary is required before admission approval",
         );
       }
-      await appendOperationalAudit(client, {
+      await this.#appendOperationalAudit(client, {
         action: "ADMISSION_APPROVED",
-        actorAccountId,
+        actorAccountId: actor.accountId,
         identity,
         now,
       });
@@ -93,10 +133,11 @@ export class PostgresOperationalStateRepository implements OperationalStateRepos
 
   async closeAdmission(
     identity: DeploymentIdentity,
-    actorAccountId: string,
+    actor: OperationalActor,
     now: Date,
   ): Promise<OperationalState> {
     return this.#transaction(async (client) => {
+      await requireOperationalActor(client, actor);
       await client.query(
         `INSERT INTO rt_deployment_admissions
          (deployment_id, config_digest, canary_status, admission_approved_at,
@@ -110,9 +151,9 @@ export class PostgresOperationalStateRepository implements OperationalStateRepos
            updated_at = EXCLUDED.updated_at`,
         [identity.deploymentId, identity.configDigest, now],
       );
-      await appendOperationalAudit(client, {
+      await this.#appendOperationalAudit(client, {
         action: "ADMISSION_CLOSED",
-        actorAccountId,
+        actorAccountId: actor.accountId,
         identity,
         now,
       });
@@ -123,10 +164,11 @@ export class PostgresOperationalStateRepository implements OperationalStateRepos
   async setKillSwitch(
     identity: DeploymentIdentity,
     enabled: boolean,
-    actorAccountId: string,
+    actor: OperationalActor,
     now: Date,
   ): Promise<OperationalState> {
     return this.#transaction(async (client) => {
+      await requireOperationalActor(client, actor);
       await client.query(
         `UPDATE rt_operational_controls
          SET kill_switch_enabled = $1, updated_at = $2
@@ -144,9 +186,9 @@ export class PostgresOperationalStateRepository implements OperationalStateRepos
           [now],
         );
       }
-      await appendOperationalAudit(client, {
+      await this.#appendOperationalAudit(client, {
         action: enabled ? "KILL_SWITCH_ENABLED" : "KILL_SWITCH_DISABLED",
-        actorAccountId,
+        actorAccountId: actor.accountId,
         identity,
         now,
       });
@@ -167,6 +209,24 @@ export class PostgresOperationalStateRepository implements OperationalStateRepos
     } finally {
       client.release();
     }
+  }
+
+  async #appendOperationalAudit(
+    database: Queryable,
+    event: Readonly<{
+      action: string;
+      actorAccountId: string;
+      identity: DeploymentIdentity;
+      now: Date;
+    }>,
+  ): Promise<void> {
+    await appendBoundedAuditEvent(database, {
+      id: randomUUID(),
+      action: event.action,
+      actorAccountId: event.actorAccountId,
+      occurredAt: event.now,
+      metadata: event.identity,
+    }, this.#auditEventLimits, "OPERATIONAL");
   }
 }
 
@@ -213,27 +273,4 @@ async function readOperationalState(
       ? {}
       : { admissionApprovedBy: row.admission_approved_by }),
   };
-}
-
-async function appendOperationalAudit(
-  database: Queryable,
-  event: Readonly<{
-    action: string;
-    actorAccountId: string;
-    identity: DeploymentIdentity;
-    now: Date;
-  }>,
-): Promise<void> {
-  await database.query(
-    `INSERT INTO rt_audit_events
-     (id, action, actor_account_id, occurred_at, metadata)
-     VALUES ($1, $2, $3, $4, $5::jsonb)`,
-    [
-      randomUUID(),
-      event.action,
-      event.actorAccountId,
-      event.now,
-      JSON.stringify(event.identity),
-    ],
-  );
 }

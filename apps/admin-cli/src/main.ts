@@ -4,8 +4,11 @@ import {
   Argon2idPasswordHasher,
   AuthError,
   AuthService,
+  DEFAULT_AUDIT_EVENT_LIMITS,
+  DEFAULT_LOGIN_THROTTLE_LIMITS,
   normalizeUsername,
-  type Principal,
+  validateAuditEventLimits,
+  type AccountAuthorization,
 } from "../../../packages/auth/src/index.ts";
 import {
   OperationalStateCache,
@@ -20,29 +23,81 @@ import {
 } from "../../../packages/storage-postgres/src/index.ts";
 import { readSecrets } from "../../../packages/cli-utils/src/secret-input.ts";
 import { parseAdminCommand, type AdminCommand } from "./arguments.ts";
+import { adminCommandRuntimePolicy } from "./runtime-policy.ts";
 
 const databaseUrl = process.env.DATABASE_URL;
-const hmacKeyText = process.env.AUTH_SESSION_HMAC_KEY;
 if (databaseUrl === undefined) throw new Error("DATABASE_URL is required");
-if (hmacKeyText === undefined) throw new Error("AUTH_SESSION_HMAC_KEY is required");
-const hmacKey = Buffer.from(hmacKeyText, "base64url");
-if (hmacKey.byteLength < 32) throw new Error("AUTH_SESSION_HMAC_KEY must decode to at least 32 bytes");
+const command = parseAdminCommand(process.argv.slice(2));
+const runtimePolicy = adminCommandRuntimePolicy(command);
 
-const pool = new Pool({ connectionString: databaseUrl, max: 4 });
+const pool = new Pool({
+  connectionString: databaseUrl,
+  max: 4,
+  connectionTimeoutMillis: 5_000,
+  query_timeout: 10_000,
+  statement_timeout: 10_000,
+  lock_timeout: 5_000,
+  idle_in_transaction_session_timeout: 10_000,
+});
 try {
-  const repository = new PostgresAuthRepository(pool);
-  const operationalRepository = new PostgresOperationalStateRepository(pool);
-  const command = parseAdminCommand(process.argv.slice(2));
+  const auditEventLimits = validateAuditEventLimits({
+    global: readBoundedPositiveSafeInteger(
+      process.env.MAX_AUDIT_EVENTS,
+      "MAX_AUDIT_EVENTS",
+      DEFAULT_AUDIT_EVENT_LIMITS.global,
+      100_000_000,
+    ),
+    operationalReserve: readBoundedPositiveSafeInteger(
+      process.env.AUDIT_OPERATIONAL_RESERVE,
+      "AUDIT_OPERATIONAL_RESERVE",
+      DEFAULT_AUDIT_EVENT_LIMITS.operationalReserve,
+      10_000_000,
+    ),
+  });
+  const maxLoginThrottles = readBoundedPositiveSafeInteger(
+    process.env.MAX_LOGIN_THROTTLES,
+    "MAX_LOGIN_THROTTLES",
+    DEFAULT_LOGIN_THROTTLE_LIMITS.global,
+    10_000_000,
+  );
+  if (maxLoginThrottles < 2) {
+    throw new Error("MAX_LOGIN_THROTTLES must be at least 2");
+  }
+  const repository = new PostgresAuthRepository(pool, { auditEventLimits });
+  const operationalRepository = new PostgresOperationalStateRepository(pool, {
+    auditEventLimits,
+  });
   if (command.kind === "migrate") {
+    if (!runtimePolicy.runMigration) throw new Error("invalid admin command runtime policy");
     await repository.migrate();
     console.log("Database migration complete.");
   } else {
-    await repository.migrate();
+    if (!runtimePolicy.requiresAuthService) {
+      throw new Error("invalid admin command runtime policy");
+    }
+    const hmacKeyText = process.env.AUTH_SESSION_HMAC_KEY;
+    if (hmacKeyText === undefined) throw new Error("AUTH_SESSION_HMAC_KEY is required");
+    const hmacKey = Buffer.from(hmacKeyText, "base64url");
+    if (hmacKey.byteLength < 32) {
+      throw new Error("AUTH_SESSION_HMAC_KEY must decode to at least 32 bytes");
+    }
     const hasher = new Argon2idPasswordHasher();
     const service = new AuthService({
       repository,
       passwordHasher: hasher,
       sessionHmacKey: hmacKey,
+      loginThrottleLimits: { global: maxLoginThrottles },
+      authenticationEventSink: {
+        write(event) {
+          console.error(JSON.stringify({
+            event: "authentication_event",
+            ...event,
+          }));
+        },
+        reportFailure() {
+          console.error(JSON.stringify({ event: "authentication_event_sink_failed" }));
+        },
+      },
       dummyPasswordHash: await hasher.hash("constant-dummy-password-not-used"),
     });
     if (command.kind === "bootstrap") {
@@ -73,31 +128,35 @@ try {
       const identity = command.kind === "set-kill-switch"
         ? deploymentIdentityFromEnvironment()
         : parseDeploymentIdentity(command.deploymentId, command.configDigest);
+      const operationalActor = {
+        accountId: actor.accountId,
+        accountAuthVersion: actor.authVersion,
+      };
       let state: OperationalState;
       if (command.kind === "record-canary") {
         state = await operationalRepository.recordCanaryResult(
           identity,
           command.result,
-          actor.accountId,
+          operationalActor,
           new Date(),
         );
       } else if (command.kind === "approve-admission") {
         state = await operationalRepository.approveAdmission(
           identity,
-          actor.accountId,
+          operationalActor,
           new Date(),
         );
       } else if (command.kind === "close-admission") {
         state = await operationalRepository.closeAdmission(
           identity,
-          actor.accountId,
+          operationalActor,
           new Date(),
         );
       } else if (command.kind === "set-kill-switch") {
         state = await operationalRepository.setKillSwitch(
           identity,
           command.enabled,
-          actor.accountId,
+          operationalActor,
           new Date(),
         );
       } else {
@@ -201,24 +260,37 @@ async function authenticateAdministrator(
   service: AuthService,
   username: string,
   passwordStdin: boolean,
-): Promise<Principal> {
+): Promise<AccountAuthorization> {
   const [password] = await readSecrets(["Administrator password: "], passwordStdin);
-  const login = await service.authenticate({
+  return service.verifyAdministratorCredentials({
     username,
     password: password ?? "",
     remoteAddress: "local-admin-cli",
   });
-  if (!login.principal.roles.includes("ADMIN")) {
-    throw new AuthError("FORBIDDEN", "관리자 권한이 필요합니다.");
-  }
-  if (login.principal.mustChangePassword) {
-    throw new AuthError("PASSWORD_CHANGE_REQUIRED", "먼저 change-password 명령을 실행하세요.");
-  }
-  return login.principal;
 }
 
 function printTemporaryPassword(username: string, temporaryPassword: string): void {
   console.log(`Account: ${username}`);
   console.log(`One-time temporary password: ${temporaryPassword}`);
   console.log("This value will not be shown again. The user must change it on first login.");
+}
+
+function readBoundedPositiveSafeInteger(
+  value: string | undefined,
+  name: string,
+  fallback: number,
+  maximum: number,
+): number {
+  if (value === undefined) return fallback;
+  if (!/^[1-9][0-9]*$/.test(value)) {
+    throw new Error(`${name} must be a positive integer`);
+  }
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed)) {
+    throw new Error(`${name} must be a safe integer`);
+  }
+  if (parsed > maximum) {
+    throw new Error(`${name} must be at most ${maximum}`);
+  }
+  return parsed;
 }

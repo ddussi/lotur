@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { parseAdminCommand } from "./arguments.ts";
+import { adminCommandRuntimePolicy } from "./runtime-policy.ts";
 
 test("bootstrap command requires username and display name", () => {
   assert.deepEqual(
@@ -83,4 +84,19 @@ test("운영 admission과 kill switch 명령은 배포 identity와 관리자 재
     ]),
     /--result/,
   );
+});
+
+test("migrate만 DDL을 실행하고 HMAC secret을 요구하지 않는다", () => {
+  assert.deepEqual(adminCommandRuntimePolicy({ kind: "migrate" }), {
+    runMigration: true,
+    requiresAuthService: false,
+  });
+  assert.deepEqual(adminCommandRuntimePolicy({
+    kind: "bootstrap",
+    username: "admin",
+    displayName: "Administrator",
+  }), {
+    runMigration: false,
+    requiresAuthService: true,
+  });
 });

@@ -15,37 +15,45 @@ export type OperationalState = Readonly<{
   updatedAt: Date;
 }>;
 
+export type OperationalActor = Readonly<{
+  accountId: string;
+  accountAuthVersion: number;
+}>;
+
 export interface OperationalStateRepository {
   getOperationalState(identity: DeploymentIdentity): Promise<OperationalState>;
   recordCanaryResult(
     identity: DeploymentIdentity,
     result: Exclude<CanaryStatus, "UNKNOWN">,
-    actorAccountId: string,
+    actor: OperationalActor,
     now: Date,
   ): Promise<OperationalState>;
   approveAdmission(
     identity: DeploymentIdentity,
-    actorAccountId: string,
+    actor: OperationalActor,
     now: Date,
   ): Promise<OperationalState>;
   closeAdmission(
     identity: DeploymentIdentity,
-    actorAccountId: string,
+    actor: OperationalActor,
     now: Date,
   ): Promise<OperationalState>;
   setKillSwitch(
     identity: DeploymentIdentity,
     enabled: boolean,
-    actorAccountId: string,
+    actor: OperationalActor,
     now: Date,
   ): Promise<OperationalState>;
 }
 
 export class OperationalStateError extends Error {
-  readonly code: "CANARY_REQUIRED" | "DEPLOYMENT_IDENTITY_MISMATCH";
+  readonly code:
+    | "CANARY_REQUIRED"
+    | "DEPLOYMENT_IDENTITY_MISMATCH"
+    | "ACTOR_NOT_AUTHORIZED";
 
   constructor(
-    code: "CANARY_REQUIRED" | "DEPLOYMENT_IDENTITY_MISMATCH",
+    code: "CANARY_REQUIRED" | "DEPLOYMENT_IDENTITY_MISMATCH" | "ACTOR_NOT_AUTHORIZED",
     message: string,
   ) {
     super(message);
