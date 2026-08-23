@@ -4,6 +4,14 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@review-tunnel/auth": "0.1.0",
+    "@review-tunnel/operations": "0.1.0",
+    "@review-tunnel/protocol": "0.1.0",
+    "@review-tunnel/proxy": "0.1.0",
+    "@review-tunnel/relay": "0.1.0",
+    "@review-tunnel/storage-postgres": "0.1.0",
+    "pg": "^8.23.0",
+    "tldts": "^7.4.10",
     "ws": "^8.21.3"
   }
 }

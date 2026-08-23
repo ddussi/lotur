@@ -4,6 +4,10 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@review-tunnel/cli-utils": "0.1.0",
+    "@review-tunnel/protocol": "0.1.0",
+    "@review-tunnel/proxy": "0.1.0",
+    "@review-tunnel/relay": "0.1.0",
     "ws": "^8.21.3"
   }
 }

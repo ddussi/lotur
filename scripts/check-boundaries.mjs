@@ -1,19 +1,25 @@
 import { readFile, readdir } from "node:fs/promises";
 import { dirname, join, normalize, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  collectModuleSpecifiers,
+  loadWorkspaceDirectories,
+  resolveImportTarget,
+} from "./check-boundaries-lib.mjs";
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const defaultRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const root = resolve(readRootOption() ?? defaultRoot);
 const sourceRoots = [join(root, "apps"), join(root, "packages")];
 const violations = [];
+const workspaceDirectories = await loadWorkspaceDirectories(root);
 
 for (const sourceRoot of sourceRoots) {
   for (const file of await listTypeScriptFiles(sourceRoot)) {
-    if (file.endsWith(".test.ts")) continue;
+    if (file.endsWith(".test.ts") || file.endsWith(".test.tsx")) continue;
     const source = await readFile(file, "utf8");
-    for (const match of source.matchAll(/\bfrom\s+["']([^"']+)["']/g)) {
-      const specifier = match[1];
-      if (specifier === undefined || !specifier.startsWith(".")) continue;
-      const target = normalize(resolve(dirname(file), specifier));
+    for (const specifier of collectModuleSpecifiers(source, file)) {
+      const target = resolveImportTarget(file, specifier, workspaceDirectories);
+      if (target === undefined) continue;
       enforceBoundary(file, target);
     }
   }
@@ -31,7 +37,10 @@ async function listTypeScriptFiles(directory) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     const path = join(directory, entry.name);
     if (entry.isDirectory()) files.push(...await listTypeScriptFiles(path));
-    else if (entry.isFile() && entry.name.endsWith(".ts")) files.push(path);
+    else if (
+      entry.isFile() &&
+      (entry.name.endsWith(".ts") || entry.name.endsWith(".tsx"))
+    ) files.push(path);
   }
   return files;
 }
@@ -85,4 +94,19 @@ function enforceBoundary(source, target) {
   ) {
     violations.push(`${sourcePath} Client must authenticate through control API, not server auth internals`);
   }
+}
+
+function readRootOption() {
+  const arguments_ = process.argv.slice(2);
+  if (arguments_.length === 0) return undefined;
+  if (
+    arguments_.length !== 2 ||
+    arguments_[0] !== "--root" ||
+    arguments_[1] === undefined ||
+    arguments_[1] === "" ||
+    arguments_[1].startsWith("--")
+  ) {
+    throw new Error("usage: check-boundaries.mjs [--root <workspace-root>]");
+  }
+  return arguments_[1];
 }
