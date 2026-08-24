@@ -15,9 +15,9 @@ Review Tunnel은 외부 IdP 대신 관리자가 발급하는 내부 계정을 �
 ## 최초 설치 흐름
 
 1. PostgreSQL을 준비하고 `DATABASE_URL`을 secret으로 주입한다.
-2. 32바이트 이상의 난수 값을 base64url로 인코딩해 `AUTH_SESSION_HMAC_KEY`로 주입한다.
-3. `npm run admin -- migrate`로 스키마를 적용한다.
-4. `npm run admin -- bootstrap --username admin --display-name "운영 관리자"`를 서버에서 한 번 실행한다.
+2. DDL 전용 DB role로 `npm run admin -- migrate`를 실행해 스키마를 적용한다. 이 명령에는 `AUTH_SESSION_HMAC_KEY`가 필요하지 않다.
+3. 32~128바이트 난수 값을 canonical base64url로 인코딩해 일반 Admin CLI와 Gateway의 `AUTH_SESSION_HMAC_KEY`로 주입한다.
+4. DML 전용 일반 Admin CLI role로 `npm run admin -- bootstrap --username admin --display-name "운영 관리자"`를 서버에서 한 번 실행한다. 일반 명령은 migration을 자동 실행하지 않는다.
 5. 한 번만 출력되는 임시 비밀번호를 안전한 경로로 전달한다.
 6. 관리자는 `npm run admin -- change-password --username admin`으로 임시 비밀번호를 변경한다.
 7. 이후 브라우저 관리자 UI 또는 인증된 CLI를 사용한다.
@@ -31,9 +31,12 @@ Review Tunnel은 외부 IdP 대신 관리자가 발급하는 내부 계정을 �
 - 임시 비밀번호는 생성·초기화 응답에서 한 번만 표시하고 DB나 로그에 평문으로 저장하지 않는다.
 - 로그인 실패는 아이디와 원격 주소 조합으로 제한하며 계정 존재 여부가 다른 오류로 드러나지 않게 한다.
 - 세션 원문은 저장하지 않고 HMAC-SHA-256 lookup 값만 저장한다.
-- 계정 정지, 권한 변경, 비밀번호 변경·초기화는 기존 로그인 세션을 폐기한다.
-- 계정 관리 동작과 로그인 성공·실패는 payload나 비밀번호 없이 감사 이벤트로 남긴다.
-- 관리자 웹의 계정 생성·정지·권한·초기화·세션 회수는 현재 관리자 비밀번호를 다시 확인하며 로그인 제한을 동일하게 적용한다.
+- 계정 정지, 권한 변경, 비밀번호 변경·초기화와 명시적 회수는 `auth_version`을 올리고 기존 로그인 Session·content Session exchange·Carrier credential을 같은 DB transaction에서 폐기한다.
+- 로그인 Session·content Session exchange·Carrier credential은 발급 당시 `auth_version`에 묶인다. 발급 저장과 계정 변경이 경합해도 이전 version artifact가 변경 transaction 뒤에 새로 생기지 않도록 계정 row를 잠그고 현재 version을 다시 확인한다.
+- 미만료 인증 artifact에는 전역·계정별 DB-atomic 상한이 있다. 여러 Gateway가 동시에 발급해도 PostgreSQL advisory lock 아래에서 정리·개수 확인·삽입을 한 단위로 처리하며, 용량 초과는 명시적인 `AUTH_CAPACITY` 실패로 노출한다.
+- 계정 관리·비밀번호·권한·회수와 운영 제어는 PostgreSQL durable audit에 남긴다. 고빈도 로그인 성공·실패는 durable audit 용량을 소진하지 않도록 별도 구조화 보안 로그로 내보내며, 원문 아이디·원격 주소·비밀번호 대신 HMAC 참조와 계정 ID만 기록한다.
+- 관리자 웹의 계정 생성·정지·권한·초기화·세션 회수는 현재 관리자 비밀번호를 다시 확인하며 로그인 제한을 동일하게 적용한다. 이 재확인은 불필요한 새 로그인 Session을 발급하지 않고, 대상 변경 transaction 안에서 관리자 계정의 현재 version·역할을 다시 검증한다.
+- 관리자는 자신의 비밀번호를 임시 비밀번호 방식으로 초기화할 수 없다. 일회용 비밀번호를 표시하기 전에 본인 Session이 폐기되는 운영 잠금을 막기 위해 `/account/change-password`에서 현재 비밀번호로 직접 변경한다.
 - DB 오류가 나면 인증을 우회하지 않고 요청을 거부한다.
 
 ## 구현 상태
@@ -47,6 +50,8 @@ Review Tunnel은 외부 IdP 대신 관리자가 발급하는 내부 계정을 �
 - 계정·권한·비밀번호 변경을 활성 Tunnel과 진행 중 reviewer Stream에 주기적으로 전파
 - 권한 재검증 중 PostgreSQL 오류가 나면 관련 Carrier·Stream을 유지하지 않고 fail-closed 종료
 - PostgreSQL migration, 만료 artifact 정리와 Gateway 재시작 뒤 계정·로그인 세션 유지
+- PostgreSQL transaction과 advisory lock으로 보장하는 로그인 Session·content exchange·Carrier credential의 계정 version 선형화와 전역·계정별 admission 상한
+- 최근 15분 login throttle의 원자적 hard cap과, 계정 변경 flood 뒤에도 kill switch 감사를 남길 수 있는 durable audit 운영 reserve
 - Gateway 예약 Cookie·내부 header의 로컬 앱 전달 및 덮어쓰기 차단
 - 인증 모드 create 시 Gateway CSPRNG Tunnel ID 발급과 resume purpose 분리
 - active·previous HMAC key overlap을 이용한 로그인 세션 무중단 key 검증 전환
@@ -81,7 +86,7 @@ npm run admin -- approve-admission --as release-admin \
 
 ## HMAC key 회전
 
-`AUTH_SESSION_HMAC_KEY`는 새 artifact를 발급하는 active key다. 회전 rollout 동안 직전 key를 `AUTH_SESSION_HMAC_KEY_PREVIOUS`에 넣으면 기존 opaque 로그인 세션·일회용 artifact를 후보 key로 조회할 수 있다. overlap은 로그인 세션 최대 12시간과 시계 오차를 넘긴 뒤 제거한다. Gateway 재시작은 메모리 Tunnel Registry를 잃으므로 maintenance 공지와 함께 수행한다.
+`AUTH_SESSION_HMAC_KEY`는 새 artifact를 발급하는 active key다. 회전 rollout 동안 최대 3개의 서로 다른 직전 key를 `AUTH_SESSION_HMAC_KEY_PREVIOUS`에 넣으면 기존 opaque 로그인 Session·일회용 artifact를 bounded 후보 key로 조회할 수 있다. active key를 previous 목록에 중복해서 넣을 수 없다. overlap은 로그인 Session 최대 12시간과 시계 오차를 넘긴 뒤 제거한다. Gateway 재시작은 메모리 Tunnel Registry를 잃으므로 maintenance 공지와 함께 수행한다.
 
 ## 운영 책임 경계
 

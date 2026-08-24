@@ -19,7 +19,7 @@ canary.preview.example.com -> 예약된 synthetic public-path canary
 control.example.net      -> 로그인, 관리자 UI, Client API와 Carrier WSS
 ```
 
-`control.preview.example.com`처럼 control host를 콘텐츠 wildcard와 같은 eTLD+1 아래에 두면 Gateway가 시작을 거부한다. Ingress는 외부 `Forwarded`·`X-Forwarded-*`를 신뢰하지 말고 제거한 뒤 승인된 값만 재작성해야 한다.
+`control.preview.example.com`처럼 control host를 콘텐츠 wildcard와 같은 eTLD+1 아래에 두면 Gateway가 시작을 거부한다. Ingress는 외부 `Forwarded`·`X-Forwarded-*`를 신뢰하지 말고 제거한 뒤 승인된 값만 재작성해야 한다. Gateway는 기본적으로 peer socket 주소만 사용하며, `X-Forwarded-For`를 사용하려면 실제 Ingress·Load Balancer 주소 범위를 `TRUSTED_PROXY_CIDRS`에 명시해야 한다.
 
 ## 환경 변수
 
@@ -31,21 +31,53 @@ control.example.net      -> 로그인, 관리자 UI, Client API와 Carrier WSS
 | `PUBLIC_CONTENT_ORIGIN` | 외부 검토자에게 표시할 canonical origin. 예: `https://preview.example.com` |
 | `CONTROL_HOST` | 콘텐츠와 사이트 경계가 다른 control hostname |
 | `DATABASE_URL` | PostgreSQL 연결 문자열. secret manager에서 주입 |
-| `AUTH_SESSION_HMAC_KEY` | 32바이트 이상 base64url active key |
-| `AUTH_SESSION_HMAC_KEY_PREVIOUS` | 회전 overlap 동안만 쓰는 이전 key의 쉼표 구분 목록 |
-| `AUTO_MIGRATE` | 기본 `true`. 별도 migration job을 쓰면 `false` |
+| `AUTH_SESSION_HMAC_KEY` | canonical base64url로 인코딩한 32~128바이트 active key |
+| `AUTH_SESSION_HMAC_KEY_PREVIOUS` | 회전 overlap 동안만 쓰는 서로 다른 이전 key의 쉼표 구분 목록. 최대 3개이며 active key와 중복 금지 |
+| `AUTO_MIGRATE` | 기본 `false`. Gateway 시작 시 migration이 필요한 예외 환경에서만 명시적으로 `true` |
 | `DEPLOYMENT_ID` | 배포 파이프라인이 발급한 1~128자 release ID |
 | `DEPLOYMENT_CONFIG_DIGEST` | image·Ingress·운영 설정 묶음의 `sha256:<64 lowercase hex>` digest |
 | `CANARY_HOST` | `CONTENT_DOMAIN` 아래의 예약된 정확한 hostname. Tunnel ID namespace로 사용하지 않음 |
-| `CANARY_BEARER_TOKEN` | 32자 이상 synthetic canary 전용 secret. 일반 계정·Cookie와 공유하지 않음 |
+| `CANARY_BEARER_TOKEN` | 32~512자 synthetic canary 전용 secret. 일반 계정·Cookie와 공유하지 않음 |
 | `OPERATIONAL_STATE_POLL_INTERVAL_MS` | PostgreSQL admission·kill switch 동기화 주기, 기본 2초 |
-| `METRICS_BEARER_TOKEN` | 32자 이상 별도 token. 없으면 `/metrics`는 404 |
+| `DATABASE_CONNECT_TIMEOUT_MS` | PostgreSQL connection 수립 deadline, 기본 5초 |
+| `DATABASE_QUERY_TIMEOUT_MS` | client query·server statement·lock deadline, 기본 3초 |
+| `METRICS_BEARER_TOKEN` | 32~512자 별도 token. 없으면 `/metrics`는 404 |
+| `MAX_PENDING_TUNNELS` | credential 예약·activation 중 Tunnel과 HELLO 대기 Carrier의 전역 상한, 기본 64 |
+| `MAX_ACTIVE_TUNNELS` | ACTIVE·RECONNECTING Tunnel의 전역 상한, 기본 1024 |
+| `MAX_TUNNELS_PER_ACCOUNT` | 계정별 예약·활성 Tunnel 상한, 기본 8 |
+| `LOGIN_INTENTS_PER_SOURCE_PER_MINUTE` | 인증 전 공유 URL 접근 source별 분당 상한, 기본 20 |
+| `LOGIN_INTENTS_GLOBAL_PER_MINUTE` | 인증 전 공유 URL 접근 전역 분당 상한, 기본 1000 |
+| `MAX_CONCURRENT_LOGIN_ATTEMPTS` | Argon2 자격 증명 검증의 전역 동시 실행 상한, 기본 32 |
+| `MAX_CONCURRENT_LOGIN_ATTEMPTS_PER_REMOTE` | 원격 주소별 자격 증명 검증 동시 실행 상한, 기본 4 |
+| `LOGIN_ATTEMPTS_PER_MINUTE` | 자격 증명 검증 전역 분당 상한, 기본 1000 |
+| `LOGIN_ATTEMPTS_PER_REMOTE_PER_MINUTE` | 원격 주소별 자격 증명 검증 분당 상한, 기본 30 |
+| `MAX_CONCURRENT_WEB_AUTHORIZATIONS` | Cookie·교환 코드·관리자 재인증 등 웹 인증 작업의 전역 동시 실행 상한, 기본 32 |
+| `MAX_CONCURRENT_WEB_AUTHORIZATIONS_PER_REMOTE` | 신뢰 경계에서 결정한 원격 주소별 웹 인증 작업 동시 실행 상한, 기본 4이며 전역 상한 이하여야 함 |
+| `TRUSTED_PROXY_CIDRS` | `X-Forwarded-For`를 제공할 수 있는 peer의 명시적 CIDR 목록, 최대 32개. 기본은 미설정이며 헤더를 신뢰하지 않음 |
+| `MAX_FORWARDED_FOR_ENTRIES` | 신뢰한 `X-Forwarded-For` chain의 최대 항목 수, 기본 16·최대 64. `TRUSTED_PROXY_CIDRS`와 함께만 설정 |
+| `MAX_OUTSTANDING_CARRIER_CREDENTIALS` | 미소비 Carrier credential·reservation 전역 상한, 기본 128 |
+| `MAX_OUTSTANDING_CARRIER_CREDENTIALS_PER_ACCOUNT` | 계정별 미소비 Carrier credential·reservation 상한, 기본 8 |
+| `CARRIER_CREDENTIALS_PER_MINUTE` | Carrier credential 발급 전역 분당 상한, 기본 1000 |
+| `CARRIER_CREDENTIALS_PER_ACCOUNT_PER_MINUTE` | 계정별 Carrier credential 발급 분당 상한, 기본 60 |
+| `MAX_AUTH_SESSIONS` | 미만료 로그인 Session 전역 상한, 기본 100000 |
+| `MAX_AUTH_SESSIONS_PER_ACCOUNT` | 계정별 미만료 로그인 Session 상한, 기본 64 |
+| `MAX_SESSION_EXCHANGES` | 미소비 content Session exchange 전역 상한, 기본 10000 |
+| `MAX_SESSION_EXCHANGES_PER_ACCOUNT` | 계정별 미소비 content Session exchange 상한, 기본 256 |
+| `MAX_LOGIN_THROTTLES` | 최근 15분 login throttle key의 hard cap, 기본 100000·최소 2·최대 10000000 |
+| `MAX_AUDIT_EVENTS` | 영구 관리자·운영 audit event의 hard cap, 기본 1000000·최대 100000000 |
+| `AUDIT_OPERATIONAL_RESERVE` | 계정 변경 flood가 kill switch 등 운영 감사를 막지 않도록 남기는 audit 슬롯, 기본 1000·최대 10000000이며 전체 상한보다 작아야 함 |
+| `MAX_PENDING_CARRIER_FRAMES` | 처리 대기 중인 Carrier inbound frame 수 상한, 기본 128 |
+| `MAX_PENDING_CARRIER_BYTES` | 처리 대기 중인 Carrier inbound byte 상한, 기본 262204 |
+| `MAX_CANARY_WEBSOCKETS` | synthetic canary WebSocket 동시 연결 상한, 기본 4 |
+| `CANARY_WEBSOCKET_IDLE_TIMEOUT_MS` | synthetic canary WebSocket 유휴 종료 시간, 기본 30초 |
 | `MAX_REQUEST_BODY_BYTES` | 기본 16 MiB |
 | `MAX_FINITE_RESPONSE_BYTES` | 기본 64 MiB. SSE·WebSocket 누적 크기에는 적용하지 않음 |
 | `MAX_CONCURRENT_STREAMS` | Tunnel당 기본 128 |
 | `MAX_NEW_STREAMS_PER_MINUTE` | Tunnel당 기본 600 |
 | `RESPONSE_HEADER_TIMEOUT_MS` | 기본 10초 |
 | `STREAM_INACTIVITY_TIMEOUT_MS` | 기본 120초 |
+
+`MAX_AUDIT_EVENTS`, `AUDIT_OPERATIONAL_RESERVE`, `MAX_LOGIN_THROTTLES`는 Gateway와 Admin CLI에 동일하게 주입한다. 계정·비밀번호·권한·회수와 운영 제어는 PostgreSQL audit에 저장되며, 로그인 성공·실패는 원문 아이디·원격 주소·비밀번호 없이 HMAC 참조를 포함한 `authentication_event` JSON 로그로 보낸다. 관리자 audit가 `MAX_AUDIT_EVENTS - AUDIT_OPERATIONAL_RESERVE`에 도달하면 계정 변경은 transaction 전체가 실패하고, 운영 reserve가 남아 있는 동안 kill switch 같은 운영 제어는 계속 감사와 함께 기록된다. 전체 audit 상한에 도달한 뒤에는 상태 변경도 fail-closed하므로, 운영자는 그 전에 감사 보존 정책에 따라 백업·외부 보관과 새 배포 DB로의 계획된 전환을 수행한다.
 | `MAX_STREAM_DURATION_MS` | 기본 4시간이며 Session 최대 수명보다 클 수 없음 |
 | `HEARTBEAT_INTERVAL_MS` | 기본 15초 |
 | `CARRIER_LEASE_MS` | 기본 45초이며 heartbeat보다 커야 함 |
@@ -53,6 +85,8 @@ control.example.net      -> 로그인, 관리자 UI, Client API와 Carrier WSS
 | `REVOCATION_CHECK_INTERVAL_MS` | 기본 5초. 계정 `auth_version` 회수 확인 주기 |
 
 Session 최대 수명 8시간, Stream이 없을 때 유휴 30분, resume 유예 2분은 v1 고정 정책이다. 운영 인증 모드에서 HTTP Cookie를 허용하는 `ALLOW_INSECURE_HTTP_AUTH`는 loopback 통합 테스트 외에는 사용하지 않는다.
+
+원격 주소는 socket peer부터 `X-Forwarded-For`를 오른쪽에서 왼쪽으로 검증해 최초의 미신뢰 주소로 결정한다. 미신뢰 peer가 보낸 헤더, 중복 헤더, 잘못된 IP, 2 KiB 초과 값 또는 항목 상한을 넘긴 chain은 사용하지 않고 socket peer로 fail-closed 그룹화한다. 따라서 실제 proxy hop 전체를 빠짐없이 CIDR 목록에 넣고, Ingress에서 외부 입력 헤더를 제거한 뒤 단일 헤더로 재작성해야 한다.
 
 인증 모드에서는 `GATEWAY_ADMISSION_READY`와 `KILL_SWITCH_ENABLED` 환경변수를 사용하면 시작을 거부한다. 두 값은 재시작 후에도 유지되고 여러 실행 주체가 같은 결과를 보도록 PostgreSQL에서만 변경한다. 운영 상태 조회가 실패하면 기존 kill switch 값은 유지하되 신규 Session admission은 즉시 닫힌다. 같은 DB의 계정 권한 재검증까지 실패하면 cached allow로 버티지 않고 관련 Carrier·Stream을 fail-closed 종료한다.
 
@@ -68,11 +102,12 @@ Node 24에서 다음을 실행한다.
 
 ```bash
 npm ci
-npm run check
-npm run test:frameworks
+npx playwright install --with-deps chromium
+TEST_DATABASE_URL=<isolated-test-database-url> npm run check:mvp
+npm audit --omit=dev
 ```
 
-`test:frameworks`는 설치된 Chrome에서 Vite 8.2.2와 Next.js 16.3.2·React 19.2.8 fixture를 실제 Tunnel에 연결한다. CI 이미지에는 Chrome을 먼저 설치한다.
+`check:mvp`는 typecheck·build·architecture·script·단위·실제 PostgreSQL·프레임워크 검증을 한 번에 실행한다. `test:frameworks`는 설치된 Chromium에서 Vite 8.2.2와 Next.js 16.3.2·React 19.2.8 fixture를 실제 Tunnel에 연결한다. 저장소의 CI workflow도 같은 완료 게이트를 실행하고 PostgreSQL 테스트를 skip하지 않으며, 여섯 production target을 실제 build한 뒤 각 entrypoint가 예상한 설정 오류로 fail-closed하는지 smoke 검증한다.
 
 역할별 image는 같은 소스 revision에서 명시적으로 빌드한다. target을 생략한 기본 image도 Gateway지만 배포 파이프라인에서는 target 이름을 고정한다.
 
@@ -85,7 +120,7 @@ docker build --target db-backup -t registry.example/review-tunnel-db-backup:<rel
 docker build --target db-restore -t registry.example/review-tunnel-db-restore:<release> .
 ```
 
-모든 runtime target은 non-root `node` 사용자로 실행된다. Gateway는 read-only root filesystem, `no-new-privileges`, 명시적인 CPU·memory 제한과 종료 유예를 배포 정의에서 추가한다. Admin CLI와 canary는 상주 service가 아니라 `--rm` one-off job으로 실행하고 Gateway image의 command를 바꿔 재사용하지 않는다.
+Gateway·Admin CLI·Client·canary target은 non-root `node` 사용자로, PostgreSQL backup/restore target은 client image의 non-root `postgres` 사용자로 실행된다. Gateway는 read-only root filesystem, `no-new-privileges`, 명시적인 CPU·memory 제한과 종료 유예를 배포 정의에서 추가한다. Admin CLI와 canary는 상주 service가 아니라 `--rm` one-off job으로 실행하고 Gateway image의 command를 바꿔 재사용하지 않는다.
 
 역할별 실행 형태는 다음과 같다. `<runtime-env>`는 권한 `0600`의 임시 예시일 뿐이며 운영에서는 orchestrator secret injection을 우선한다.
 
@@ -95,7 +130,7 @@ docker run --read-only --init --restart unless-stopped \
   --security-opt no-new-privileges --env-file <runtime-env> \
   -p 127.0.0.1:8787:8787 registry.example/review-tunnel-gateway:<release>
 
-# migration·계정·admission·kill switch one-off
+# migration 전용 DDL role one-off. AUTH_SESSION_HMAC_KEY는 필요하지 않다.
 docker run --rm -it --env-file <runtime-env> \
   registry.example/review-tunnel-admin:<release> migrate
 
@@ -105,6 +140,8 @@ docker run --rm \
   -e CANARY_BEARER_TOKEN \
   registry.example/review-tunnel-canary:<release>
 ```
+
+계정·admission·kill switch 명령은 migration을 자동 실행하지 않는다. 이 job에는 schema DDL 권한을 주지 않고 필요한 `AUTH_SESSION_HMAC_KEY`와 DML 권한만 별도로 주입한다.
 
 Linux 개발자가 Client image로 같은 호스트의 로컬 개발 서버를 공유하려면 `--network host`를 사용한다. 사내 컨테이너 정책이 host network를 금지하면 로컬 origin에만 접근 가능한 별도 명시적 network를 만든다.
 
@@ -116,6 +153,8 @@ docker run --rm -it --network host \
   registry.example/review-tunnel-client:<release> \
   http://127.0.0.1:3000 --username developer1
 ```
+
+인증 모드 Client는 비밀번호를 보내는 Control origin과 1회용 Carrier credential을 보내는 Gateway URL의 host·port가 정확히 같고 `https`↔`wss`로 대응할 때만 시작한다. 평문 `http`↔`ws` 조합은 명시적인 loopback literal 또는 `localhost`에서만 허용한다. 서로 다른 endpoint로 secret이 분리 전송되도록 구성할 수 없다.
 
 PostgreSQL 실연동은 격리된 테스트 DB에서 실행한다.
 
@@ -129,7 +168,7 @@ docker compose -f compose.test.yml down
 
 ## 최초 배포
 
-1. PostgreSQL과 secret을 만들고 Admin CLI image의 `migrate`를 별도 one-off 작업으로 실행한다. Gateway DB 계정에서 DDL 권한을 빼려면 이후 `AUTO_MIGRATE=false`를 쓴다.
+1. PostgreSQL과 secret을 만들고 DDL 전용 DB role로 Admin CLI image의 `migrate`를 별도 one-off 작업으로 실행한다. Gateway와 일반 Admin CLI DB role에는 DDL 권한을 주지 않으며 `AUTO_MIGRATE`는 기본 `false`를 유지한다.
 2. 최초 관리자와 새 비밀번호를 서버 shell에서 만든다.
 
 ```bash
@@ -147,7 +186,7 @@ CANARY_BEARER_TOKEN="$CANARY_BEARER_TOKEN" \
 npm run verify:public-path
 ```
 
-이 검사는 미인증 요청 차단, 인증된 marker, 전체 upload 종료 전 request 첫 응답, SSE 첫 event와 WebSocket binary echo를 확인한다. bearer는 secret manager가 안전한 one-off job에만 주입하며 shell history, CI log, ticket이나 일반 Gateway access log에 남기지 않는다.
+이 검사는 미인증 요청 차단, 인증된 marker, 전체 upload 종료 전 request 첫 응답, SSE의 첫 read가 두 번째 marker까지 합쳐 버리지 않는 점과 WebSocket binary echo를 확인한다. bearer는 secret manager가 안전한 one-off job에만 주입하며 shell history, CI log, ticket이나 일반 Gateway access log에 남기지 않는다.
 
 6. 검사 결과를 같은 `DEPLOYMENT_ID`·`DEPLOYMENT_CONFIG_DIGEST`에 기록한다. 실패 경로도 반드시 `failed`로 기록하고 후보를 승격하지 않는다.
 
@@ -181,21 +220,21 @@ npm run admin -- admission-status --as release-admin \
 
 ## HMAC key 회전
 
-1. 새 key를 `AUTH_SESSION_HMAC_KEY`에 넣고 기존 active key를 `AUTH_SESSION_HMAC_KEY_PREVIOUS`에 넣어 maintenance rollout한다. Gateway 재시작은 기존 Tunnel URL을 종료한다.
+1. 새 key를 `AUTH_SESSION_HMAC_KEY`에 넣고 기존 active key를 `AUTH_SESSION_HMAC_KEY_PREVIOUS`에 넣어 maintenance rollout한다. previous key는 active key와 달라야 하고 최대 3개다. Gateway 재시작은 기존 Tunnel URL을 종료한다.
 2. overlap 중 새 로그인·교환·Carrier credential은 새 key로 발급되고 기존 로그인 세션은 이전 key 후보로 검증된다.
 3. 로그인 세션 최대 12시간과 시계 오차가 지난 뒤 previous key를 제거한다. 문제가 있으면 active·previous 순서를 되돌려 다시 rollout한다.
 4. key 원문이나 key ID를 애플리케이션 로그에 쓰지 않는다.
 
 ## PostgreSQL 백업과 복구 훈련
 
-백업은 custom format 임시 파일을 만든 뒤 크기를 확인하고 권한 `0600`으로 바꾼 후 원자 rename한다.
+백업은 현재 사용자가 소유한 `0700` 디렉터리만 허용하고, 충돌 방지 난수 이름의 custom format 임시 파일을 `0600`·exclusive create로 먼저 선점한 뒤 열린 file descriptor에 기록한다. inode·link 수·크기를 재검증하고 file `fsync` 후 같은 디렉터리의 고유 최종 이름으로 원자 rename한 다음 directory까지 `fsync`한다. 정상 오류와 종료 signal에서는 partial 파일을 정리한다.
 
 ```bash
 DATABASE_URL="$PRODUCTION_DATABASE_URL" \
 npm run backup:postgres -- --output-dir /var/lib/review-tunnel/backups
 ```
 
-서버에 PostgreSQL client를 별도 설치하지 않을 때는 server와 같은 17.6 client를 고정한 one-off image를 사용한다. mount 디렉터리는 image의 non-root `postgres` 사용자가 쓸 수 있어야 한다.
+서버에 PostgreSQL client를 별도 설치하지 않을 때는 server와 같은 17.6 client를 고정한 one-off image를 사용한다. mount 디렉터리는 image의 non-root `postgres` 사용자가 쓸 수 있어야 한다. 배포 시 `docker run --rm --entrypoint id registry.example/review-tunnel-db-backup:<release>`로 그 release의 실제 UID·GID를 확인해 host volume 소유권을 준비하고, Gateway·Client의 `node` UID라고 가정하지 않는다.
 
 ```bash
 docker run --rm \
@@ -204,7 +243,7 @@ docker run --rm \
   registry.example/review-tunnel-db-backup:<release> --output-dir /backup
 ```
 
-백업을 별도 암호화 저장소로 복제하고 checksum·보존 정책을 적용한다. 복구는 대상 스키마를 지우므로 운영 DB가 아닌 격리 DB에서 먼저 수행한다. 기본 PostgreSQL DB에는 복구할 수 없고 정확한 host·port·DB 확인 문자열이 필요하다.
+백업을 별도 암호화 저장소로 복제하고 checksum·보존 정책을 적용한다. 복구 도구는 symlink를 따르지 않고 입력을 private 임시 디렉터리의 불변 snapshot으로 복사한 뒤, 같은 snapshot의 archive 목록을 먼저 검증하고 `--clean --single-transaction`으로 복구한다. 중간 오류는 rollback되지만 archive에 없는 기존 객체까지 정리하지는 않는다. Gateway를 중지한 비어 있는 격리 DB에서 먼저 수행하고 검증된 DB 교체 절차로 승격한다. 기본 PostgreSQL DB에는 복구할 수 없고 정확한 host·port·DB 확인 문자열이 필요하다. 복구 child process는 URL로부터 만든 접속 설정만 사용하며 상속된 `PG*` override나 그 밖의 secret 환경을 전달하지 않는다. 두 도구는 문서화되지 않은·중복된 CLI 인자를 거부하고 `SIGINT`·`SIGTERM`을 현재 PostgreSQL child에 전달한다. 대용량 snapshot 복사도 chunk 사이에서 signal을 관찰해 partial을 정리하며, 목록 검증과 파괴적 실행 사이에 signal을 받으면 두 번째 child를 시작하지 않는다.
 
 ```bash
 RESTORE_DATABASE_URL='postgres://user:password@restore-db.internal:5432/review_tunnel_drill' \

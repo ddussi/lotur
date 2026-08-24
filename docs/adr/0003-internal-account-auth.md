@@ -13,7 +13,7 @@
 - 이후 계정 관리는 관리자 웹 UI와 관리자 비밀번호를 다시 확인하는 CLI에서 수행한다.
 - 역할은 `ADMIN`, `DEVELOPER`, `REVIEWER`이며 한 계정이 여러 역할을 가질 수 있다.
 - 비밀번호는 Argon2id로 해시하고 일회용 임시 비밀번호는 최초 로그인 때 변경한다.
-- 계정, 역할, 로그인 제한, opaque 세션 HMAC, 일회용 host 교환, Carrier credential과 감사 이벤트는 PostgreSQL에 저장한다.
+- 계정, 역할, 로그인 제한, opaque 세션 HMAC, 일회용 host 교환, Carrier credential과 관리자·운영 감사 이벤트는 PostgreSQL에 저장한다. 고빈도 로그인 성공·실패는 HMAC 참조만 담은 별도 구조화 보안 로그로 보낸다.
 - control 세션과 콘텐츠 세션은 audience를 분리한다. 콘텐츠 세션은 개별 Tunnel authority에 바인딩된 1회용 코드로 교환한다.
 - `DEVELOPER` 로그인 세션은 60초·1회용·purpose·Tunnel 제한 Carrier credential로 교환한다. 로그인 세션이나 비밀번호를 WSS에 보내지 않는다.
 - 계정 `auth_version` 변경은 기존 세션을 무효화하고 Gateway의 주기 검증이 활성 Tunnel과 reviewer Stream을 종료한다.

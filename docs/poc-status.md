@@ -14,6 +14,7 @@
 - 일반 HTTP body streaming, SSE, WebSocket raw byte relay와 Stream·Carrier flow control
 - 닫힌 Stream에 늦게 도착한 flow-control 갱신의 안전한 무시와 Gateway 종료 시 Upgrade socket 회수
 - `local-view`·`proxy-aware` Origin projection, untrusted forwarding header 제거, Host·Origin·Referer 재구성
+- 인증 Client의 Control HTTPS와 Carrier WSS를 동일 host·port에 결합하고 loopback 밖 평문 secret 전송을 거부하는 endpoint trust 경계
 - 로컬 절대 `Location`·`Refresh`의 public origin 변환과 `Set-Cookie` Domain·예약 Cookie 격리
 - WebSocket `Sec-WebSocket-Accept` 검증, generic CONNECT와 WebSocket 이외 Upgrade 명시적 거부
 - request body·finite response 크기, 응답 header·inactivity·최대 지속 시간, 동시 Stream·분당 새 Stream 제한
@@ -26,19 +27,20 @@
 - admission·kill switch·Tunnel과 독립된 bearer 인증 예약 host에서 미인증 차단·request streaming·SSE·WebSocket을 검사하는 public-path canary
 - 실패한 resume candidate의 정리와 generation 재사용 방지, 권한 DB 재검증 장애의 fail-closed 종료
 - Gateway·Admin CLI·Client·canary-check 역할별 non-root Docker target
+- CI의 실제 PostgreSQL·framework 완료 게이트와 여섯 production Docker target build·entrypoint smoke
 
 ## 자동 검증 결과
 
 2026-08-24 기준 자동 검증 항목은 다음과 같다. 정확한 테스트 수는 현재 `npm run check:mvp` 출력으로 확인한다.
 
-- `npm test`: 전체 단위·통합 테스트 통과, PostgreSQL 실연동 1개는 `TEST_DATABASE_URL`이 없을 때만 건너뜀
+- `npm test`: 전체 단위·통합 테스트 통과. PostgreSQL 실연동 항목은 `TEST_DATABASE_URL`이 없을 때만 명시적으로 건너뛰며 CI 완료 게이트에서는 실제 DB로 모두 실행
 - `npm run test:frameworks`: 2개 통과
   - Vite 8.2.2: 초기 화면, 정적 모듈, 상호작용과 HMR
   - Next.js 16.3.2·React 19.2.8: RSC, Route Handler, Server Action, client navigation, 상태 보존 Fast Refresh
 - `npm run typecheck`, 아키텍처 경계 검사와 `npm run build` 통과
 - npm audit: 알려진 취약점 0개
 
-PostgreSQL 검증은 [`compose.test.yml`](../compose.test.yml)의 PostgreSQL 17.6과 `npm run test:postgres`로 재현한다. 2026-08-24에 실제 컨테이너에서 계정·opaque session, canary→승인 순서, 재시작 후 admission·kill switch 유지와 실패 시 승인 해제를 통과했다. 실행 순서는 [`linux-deployment.md`](linux-deployment.md)에 고정했다.
+PostgreSQL 검증은 [`compose.test.yml`](../compose.test.yml)의 PostgreSQL 17.6과 `npm run test:postgres`로 재현한다. 2026-08-24에 실제 컨테이너에서 계정·opaque Session, 계정 변경과 artifact 발급 경합, 인증 artifact 동시 admission 상한, legacy migration, canary→승인 순서, 재시작 후 admission·kill switch 유지와 실패 시 승인 해제를 통과했다. 실행 순서는 [`linux-deployment.md`](linux-deployment.md)에 고정했다.
 
 ## 실제 환경에서 남은 인수 작업
 

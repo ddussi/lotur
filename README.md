@@ -1,55 +1,121 @@
 # Review Tunnel
 
-로컬 개발 서버의 HTTP, streaming/SSE와 WebSocket을 인증된 사내 검토자에게 임시 공유하는 도구다.
+English | [한국어](README.ko.md)
 
-## 개발 환경
+Share a local web development server with authenticated internal reviewers—without deploying the project or opening an inbound port on the developer's machine.
 
-- Node.js 24 이상
-- TypeScript 5.9 이상
+> [!IMPORTANT]
+> Version `0.1.0` has completed the security MVP in code. DNS, TLS, Ingress, secrets, backup/restore, and operational acceptance must still be completed in each production environment.
 
-## 명령
+## Quick start
+
+Requirements: Node.js 24+, npm, and a local HTTP development server.
+
+1. Install Review Tunnel.
 
 ```bash
-npm test
-npm run test:frameworks
-npm run typecheck
-npm run build
-npm run check
-npm run check:mvp
-npm run admin -- migrate
+git clone git@github.com:ddussi/lotur.git
+cd lotur
+npm ci
 ```
 
-`npm run check`는 87개 단위·통합 테스트 중 PostgreSQL 환경이 필요한 1개를 조건부로 실행한다. `npm run test:frameworks`는 설치된 Chrome에서 고정 버전 Vite 8.2.2와 Next.js 16.3.2의 HMR·Fast Refresh 경로를 별도로 검증한다.
-
-## 로컬 격리 실행
-
-환경 변수 없이 실행하면 인증과 TLS가 없는 개발 모드이므로 Gateway는 loopback에만 바인딩된다. Carrier 자체는 정식 `review-tunnel.v1` 활성화·heartbeat·resume 계약을 사용한다.
+2. Run your web project. This guide assumes `http://127.0.0.1:3000`.
 
 ```bash
+# Run in your web project.
+npm run dev
+```
+
+3. Start the Gateway and Client in separate terminals.
+
+```bash
+# Terminal 2
 npm run dev:gateway
+
+# Terminal 3
 npm run dev:client -- http://127.0.0.1:3000
 ```
 
-Client가 출력한 `http://<tunnel-id>.localhost:8787/` 주소로 접속한다. 환경 설정 예시는 [`.env.example`](.env.example)에 있다.
+Open the `http://<tunnel-id>.localhost:8787/` URL printed by the Client. Press `Ctrl+C` in the Client terminal to close the share.
 
-제품 범위와 보안 기준은 [`docs/review-tunnel-plan.md`](docs/review-tunnel-plan.md)를 따른다.
+> [!WARNING]
+> Quick start has no authentication or TLS and binds to loopback. Use the authenticated deployment for real sharing.
 
-구현·검증 범위와 외부 환경에서 남은 인수 작업은 [`docs/poc-status.md`](docs/poc-status.md)에 기록한다.
+## Features
 
-## 내부 계정 모드
+- HTTP, streaming request/response bodies, SSE, and WebSocket relay
+- Temporary subdomain URL for each share
+- Built-in `ADMIN`, `DEVELOPER`, and `REVIEWER` accounts with no public sign-up
+- Short-lived, single-use Carrier credentials
+- Same-URL recovery during a two-minute reconnect window
+- PostgreSQL-backed audit, deployment admission, and global kill switch
+- Vite 8 and Next.js 16 compatibility checks
 
-`DATABASE_URL`, `CONTROL_HOST`, `PUBLIC_CONTENT_ORIGIN`, 배포 identity, 전용 canary와 `AUTH_SESSION_HMAC_KEY`를 설정하면 Gateway가 내부 계정 인증 모드로 시작한다. 최초 관리자는 Linux 서버의 one-off Admin CLI에서 만들고 이후에는 control host의 `/admin/users` 웹 UI에서 계정을 관리한다. 공개 회원가입은 없다. admission과 kill switch는 환경변수가 아니라 PostgreSQL에 유지된다.
+## Architecture
 
-운영 절차는 [`docs/internal-account-operations.md`](docs/internal-account-operations.md)와 [`docs/linux-deployment.md`](docs/linux-deployment.md)를 따른다. TLS·Ingress public-path canary, secret manager와 PostgreSQL 복구 훈련을 실제 환경에서 통과하기 전에는 인터넷에 공개하지 않는다.
-
-## 운영 검증 도구
-
-```bash
-npm run verify:public-path
-npm run backup:postgres -- --output-dir /secure/backup/path
-npm run restore:postgres -- --input /secure/backup/path/review-tunnel.dump
+```mermaid
+flowchart LR
+    Reviewer[Reviewer browser] -->|HTTPS| Ingress[TLS / Ingress]
+    Admin[Admin browser] -->|HTTPS| Ingress
+    Ingress --> Gateway[Gateway]
+    Gateway --> PostgreSQL[(PostgreSQL)]
+    Gateway <-->|outbound WSS Carrier| Client[Developer Client]
+    Client -->|HTTP| Origin[Local development server]
 ```
 
-Dockerfile은 기본 Gateway image와 `admin-cli`, `client`, `canary-check`, `db-backup`, `db-restore` one-off target을 제공한다. 정확한 build·실행·승인 순서는 배포 문서를 따른다.
+Review URLs use a content boundary such as `*.preview.example.com`. Login, administration, and the Carrier use a separate site boundary such as `control.example.net` so application cookies remain isolated from authentication cookies.
 
-각 명령에 필요한 환경 변수와 안전한 실행 순서는 [`docs/linux-deployment.md`](docs/linux-deployment.md)에 있다.
+## Authenticated use
+
+| Role | What the user does |
+| --- | --- |
+| `ADMIN` | Creates accounts and controls admission or the kill switch |
+| `DEVELOPER` | Runs the Client and shares a local project |
+| `REVIEWER` | Signs in and opens the generated URL |
+
+The first administrator is created from the server-side Admin CLI:
+
+```bash
+npm run admin -- migrate
+npm run admin -- bootstrap --username admin --display-name "Operations Admin"
+npm run admin -- change-password --username admin
+```
+
+A developer connects to the deployed Gateway with:
+
+```bash
+GATEWAY_URL=wss://control.example.net/_review-tunnel/carrier \
+CONTROL_URL=https://control.example.net \
+npm run dev:client -- http://127.0.0.1:3000 --username developer1
+```
+
+The Client prompts for the password and prints the review URL after activation. A reviewer opens that URL and signs in with an account that has the `REVIEWER` role.
+
+See [Internal account operations](docs/internal-account-operations.md) for account creation, roles, password reset, and revocation.
+
+## Production deployment
+
+Production requires PostgreSQL 15+, TLS-terminating Ingress, wildcard content DNS, a separate control domain, a reserved canary host, and secret management. The `Dockerfile` provides `gateway`, `admin-cli`, `client`, `canary-check`, `db-backup`, and `db-restore` targets.
+
+New shares remain closed until the public-path canary succeeds and an administrator separately approves the exact deployment ID and configuration digest. The kill switch, canary result, and approval are stored in PostgreSQL.
+
+Follow the [Linux deployment runbook](docs/linux-deployment.md) for environment variables, Docker commands, canary approval, backup/restore, and rollback. [.env.example](.env.example) is a reference only; the application does not automatically load `.env` files.
+
+## Development
+
+```bash
+npm run check
+npm run check:mvp
+```
+
+The PostgreSQL integration-test procedure is documented in the [deployment runbook](docs/linux-deployment.md#배포-전-자동-검증). Never use a production database as `TEST_DATABASE_URL`.
+
+## Documentation
+
+- [Korean README](README.ko.md)
+- [Architecture plan](docs/review-tunnel-plan.md)
+- [Security MVP status](docs/poc-status.md)
+- [Account operations](docs/internal-account-operations.md)
+- [Deployment runbook](docs/linux-deployment.md)
+
+Detailed operational documents are currently maintained in Korean.
