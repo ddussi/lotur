@@ -46,7 +46,7 @@ test("외부 bind opt-in과 environment domain을 명시적으로 검증한다",
   );
 });
 
-test("내부 계정 모드는 DB, control host와 32-byte HMAC key를 함께 요구한다", () => {
+test("관리자 발급 계정 모드는 DB, control host와 32-byte HMAC key를 함께 요구한다", () => {
   const key = Buffer.alloc(32, 9).toString("base64url");
   const config = readGatewayConfig({
     GATEWAY_HOST: "0.0.0.0",
@@ -61,14 +61,23 @@ test("내부 계정 모드는 DB, control host와 32-byte HMAC key를 함께 요
   assert.equal(config.publicContentOrigin, "https://preview.example.com");
   assert.equal(config.authSessionHmacKey?.byteLength, 32);
   assert.throws(() => readGatewayConfig({ DATABASE_URL: "postgres://example.invalid/db" }));
-  assert.throws(() => readGatewayConfig({
+  const singleDomain = readGatewayConfig({
     CONTENT_DOMAIN: "preview.example.com",
     PUBLIC_CONTENT_ORIGIN: "https://preview.example.com",
     CONTROL_HOST: "control.example.com",
     DATABASE_URL: "postgres://example.invalid/db",
     AUTH_SESSION_HMAC_KEY: key,
     ...deploymentEnvironment,
-  }), /different browser site boundaries/);
+  });
+  assert.equal(singleDomain.controlHost, "control.example.com");
+  assert.throws(() => readGatewayConfig({
+    CONTENT_DOMAIN: "preview.example.com",
+    PUBLIC_CONTENT_ORIGIN: "https://preview.example.com",
+    CONTROL_HOST: "control.preview.example.com",
+    DATABASE_URL: "postgres://example.invalid/db",
+    AUTH_SESSION_HMAC_KEY: key,
+    ...deploymentEnvironment,
+  }), /must not use the content wildcard namespace/);
 });
 
 test("인증 모드는 listener와 분리된 canonical public content origin을 요구한다", () => {

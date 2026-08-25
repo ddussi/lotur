@@ -271,7 +271,7 @@ const operationalStateTimer = operationalRepository === undefined ||
 operationalStateTimer?.unref();
 
 console.log(
-  `Review Tunnel Gateway listening on ${config.host}:${port} for *.${config.contentDomain} (${authService === undefined ? "isolated POC without auth" : "internal account auth"})`,
+  `Review Tunnel Gateway listening on ${config.host}:${port} for *.${config.contentDomain} (${authService === undefined ? "isolated mode without auth" : "administrator-issued account auth"})`,
 );
 
 let closing = false;

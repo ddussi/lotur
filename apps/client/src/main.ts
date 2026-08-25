@@ -1,57 +1,70 @@
 import { readSecrets } from "../../../packages/cli-utils/src/secret-input.ts";
 import {
+  CLIENT_USAGE,
   parseClientArguments,
   safeLocalOriginForDisplay,
   type ClientOptions,
 } from "./cli-options.ts";
 import { connectResilientTunnelClient } from "./client.ts";
 
-const options = parseClientArguments(process.argv.slice(2));
-const authentication = options.username === undefined
-  ? undefined
-  : await loginForCarrier(options);
-const client = connectResilientTunnelClient({
-  gatewayUrl: options.gatewayUrl,
-  tunnelId: authentication?.tunnelId ?? options.tunnelId,
-  localOrigin: options.localOrigin,
-  ...(authentication === undefined
-    ? {}
-    : {
-        carrierCredential: authentication.carrierCredential,
-        issueCarrierCredential: authentication.issueResumeCredential,
-      }),
-  onStatus(status) {
-    if (status.state === "reconnecting") {
-      console.error(
-        `Carrier disconnected (${status.error?.message ?? "transport error"}); ` +
-        `reconnecting (attempt ${status.attempt ?? 1})`,
-      );
-    } else if (status.state === "active" && status.attempt !== undefined) {
-      console.error("Carrier reconnected; the existing share URL is active again");
-    } else if (status.state === "failed") {
-      console.error(`Carrier recovery failed: ${status.error?.message ?? "unknown error"}`);
-    }
-  },
-});
-
-const activation = await client.ready;
-console.log(`Tunnel ready: ${activation.shareUrl}`);
-console.log(
-  `Forwarding the complete origin ${safeLocalOriginForDisplay(options.localOrigin)}; ` +
-  "press Ctrl+C to stop.",
-);
-
-let closing = false;
-async function shutdown(): Promise<void> {
-  if (closing) return;
-  closing = true;
-  await client.close();
+const clientArguments = process.argv.slice(2);
+if (
+  clientArguments.length === 1 &&
+  (clientArguments[0] === "--help" || clientArguments[0] === "-h")
+) {
+  console.log(CLIENT_USAGE);
+} else {
+  await runClient(clientArguments);
 }
-process.once("SIGINT", () => void shutdown());
-process.once("SIGTERM", () => void shutdown());
-void client.closed.then((outcome) => {
-  if (outcome.reason === "failed") process.exitCode = 1;
-});
+
+async function runClient(arguments_: readonly string[]): Promise<void> {
+  const options = parseClientArguments(arguments_);
+  const authentication = options.username === undefined
+    ? undefined
+    : await loginForCarrier(options);
+  const client = connectResilientTunnelClient({
+    gatewayUrl: options.gatewayUrl,
+    tunnelId: authentication?.tunnelId ?? options.tunnelId,
+    localOrigin: options.localOrigin,
+    ...(authentication === undefined
+      ? {}
+      : {
+          carrierCredential: authentication.carrierCredential,
+          issueCarrierCredential: authentication.issueResumeCredential,
+        }),
+    onStatus(status) {
+      if (status.state === "reconnecting") {
+        console.error(
+          `Carrier disconnected (${status.error?.message ?? "transport error"}); ` +
+          `reconnecting (attempt ${status.attempt ?? 1})`,
+        );
+      } else if (status.state === "active" && status.attempt !== undefined) {
+        console.error("Carrier reconnected; the existing share URL is active again");
+      } else if (status.state === "failed") {
+        console.error(`Carrier recovery failed: ${status.error?.message ?? "unknown error"}`);
+      }
+    },
+  });
+
+  const activation = await client.ready;
+  console.log(`Tunnel ready: ${activation.shareUrl}`);
+  console.log(
+    `Forwarding the complete origin ${safeLocalOriginForDisplay(options.localOrigin)}; ` +
+    "press Ctrl+C to stop.",
+  );
+
+  let closing = false;
+  async function shutdown(): Promise<void> {
+    if (closing) return;
+    closing = true;
+    await client.close();
+  }
+  process.once("SIGINT", () => void shutdown());
+  process.once("SIGTERM", () => void shutdown());
+  void client.closed.then((outcome) => {
+    if (outcome.reason === "failed") process.exitCode = 1;
+  });
+}
 
 async function loginForCarrier(options: ClientOptions): Promise<Readonly<{
   carrierCredential: string;

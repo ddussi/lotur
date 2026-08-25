@@ -25,7 +25,7 @@ class TestHasher implements PasswordHasher {
 
 const DISCARD_AUTHENTICATION_EVENTS = { write() {}, reportFailure() {} };
 
-test("internal accounts gate HTTP, admin UI and Carrier, then revoke an active Tunnel", async () => {
+test("administrator-issued accounts gate HTTP, admin UI and Carrier, then revoke an active Tunnel", async () => {
   const repository = new InMemoryAuthRepository();
   const authService = new AuthService({
     repository,

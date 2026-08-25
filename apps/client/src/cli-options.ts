@@ -10,6 +10,11 @@ export type ClientOptions = Readonly<{
   passwordStdin: boolean;
 }>;
 
+export const CLIENT_USAGE =
+  "Usage: npm run share -- http://127.0.0.1:3000 " +
+  "[--gateway wss://control.tunnel.example.com/_review-tunnel/carrier] " +
+  "[--username developer1]";
+
 const VALUE_OPTIONS = new Set([
   "--gateway",
   "--tunnel-id",
@@ -24,9 +29,7 @@ export function parseClientArguments(
 ): ClientOptions {
   const localOrigin = arguments_[0];
   if (localOrigin === undefined || localOrigin.startsWith("--")) {
-    throw new Error(
-      "Usage: npm run dev:client -- http://127.0.0.1:3000 [--gateway wss://control.example.net/_review-tunnel/carrier] [--username developer1]",
-    );
+    throw new Error(CLIENT_USAGE);
   }
 
   const values = new Map<string, string>();

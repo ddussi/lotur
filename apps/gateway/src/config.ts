@@ -7,7 +7,6 @@ import {
   parseDeploymentIdentity,
   type DeploymentIdentity,
 } from "../../../packages/operations/src/index.ts";
-import { getDomain } from "tldts";
 import { createClientAddressResolver } from "./client-address.ts";
 import { parsePublicContentOrigin } from "./public-content-origin.ts";
 
@@ -415,8 +414,11 @@ export function readGatewayConfig(
     : parseDeploymentIdentity(deploymentId, deploymentConfigDigest);
   if (controlHost !== undefined) {
     const normalizedControlHost = parseDomain(controlHost);
-    if (siteBoundary(normalizedControlHost) === siteBoundary(contentDomain)) {
-      throw new Error("CONTROL_HOST and CONTENT_DOMAIN must use different browser site boundaries");
+    if (
+      normalizedControlHost === contentDomain ||
+      normalizedControlHost.endsWith(`.${contentDomain}`)
+    ) {
+      throw new Error("CONTROL_HOST must not use the content wildcard namespace");
     }
   }
   if (insecureHttpAuth && !isLoopbackBindHost(host)) {
@@ -678,8 +680,4 @@ function parseDomain(value: string): string {
 
 function isLoopbackBindHost(host: string): boolean {
   return host === "127.0.0.1" || host === "::1" || host === "localhost";
-}
-
-function siteBoundary(hostname: string): string {
-  return getDomain(hostname, { allowPrivateDomains: true }) ?? hostname;
 }

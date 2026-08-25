@@ -60,7 +60,7 @@ import {
   sendCarrierFrame,
   sendFlowControlledData,
 } from "../../../packages/relay/src/index.ts";
-import { createWebAuthHandler, WebAuthBoundaryError } from "./web-auth.ts";
+import { createWebAuthHandler, parseCookie, WebAuthBoundaryError } from "./web-auth.ts";
 import { GatewayStreamIds } from "./gateway-stream-ids.ts";
 import { GatewayInboundFlow } from "./inbound-flow.ts";
 import { GatewayMetrics } from "./metrics.ts";
@@ -77,6 +77,9 @@ import { resumeOwnerAuthorizationMatches } from "./resume-authorization.ts";
 import { retainAdmissionUntilSettled } from "./retained-operation.ts";
 
 const CARRIER_PATH = "/_review-tunnel/carrier";
+const LAN_ROUTE_PATH_PREFIX = "/_review-tunnel/lan/";
+const LAN_ROUTE_COOKIE = "rt_lan_route";
+const LAN_ROUTE_SIGNATURE_NAMESPACE = "review-tunnel.v1.lan-route\0";
 const CARRIER_ENVELOPE_HEADER_BYTES = 16;
 const CARRIER_MAX_MESSAGE_BYTES = CARRIER_ENVELOPE_HEADER_BYTES + MAX_ENVELOPE_PAYLOAD_BYTES;
 const CONFIG_ACK_RETRY_MS = DEFAULT_ACTIVATION_TIMEOUT_MS / 2;
@@ -102,6 +105,7 @@ const RESERVED_GATEWAY_COOKIES = new Set([
   "__Host-rt_session",
   "rt_control_dev",
   "rt_session_dev",
+  LAN_ROUTE_COOKIE,
 ]);
 
 type GatewayTransportEpoch = Readonly<{
@@ -277,10 +281,13 @@ export type GatewayLogEvent = Readonly<{
   reason?: string;
 }>;
 
+export type ContentRouting = "subdomain" | "lan-cookie";
+
 export type GatewayServerOptions = Readonly<{
   host?: string;
   port?: number;
   contentDomain?: string;
+  contentRouting?: ContentRouting;
   publicContentOrigin?: string;
   controlHost?: string;
   authService?: AuthService;
@@ -332,6 +339,10 @@ export function createGatewayServer(
   const host = options.host ?? "127.0.0.1";
   const port = options.port ?? 0;
   const contentDomain = options.contentDomain ?? "localhost";
+  const contentRouting = options.contentRouting ?? "subdomain";
+  if (contentRouting === "lan-cookie" && options.authService !== undefined) {
+    throw new Error("LAN cookie routing cannot be combined with authenticated mode");
+  }
   const configuredPublicContentOrigin = options.publicContentOrigin === undefined
     ? undefined
     : parsePublicContentOrigin(options.publicContentOrigin, contentDomain);
@@ -393,19 +404,19 @@ export function createGatewayServer(
   const maxOutstandingCarrierCredentialsPerAccount =
     options.maxOutstandingCarrierCredentialsPerAccount ??
       DEFAULT_MAX_OUTSTANDING_CARRIER_CREDENTIALS_PER_ACCOUNT;
-  const carrierCredentialRate = createAccountRateLimiter({
+  const carrierCredentialRate = createFixedWindowRateLimiter({
     now,
     globalLimit: options.carrierCredentialsPerMinute ??
       DEFAULT_CARRIER_CREDENTIALS_PER_MINUTE,
-    perAccountLimit: options.carrierCredentialsPerAccountPerMinute ??
+    perKeyLimit: options.carrierCredentialsPerAccountPerMinute ??
       DEFAULT_CARRIER_CREDENTIALS_PER_ACCOUNT_PER_MINUTE,
   });
   let pendingCarrierConnections = 0;
   let carrierAuthorizationAttempts = 0;
   const pendingCarrierReleases = new WeakMap<WebSocket, () => void>();
-  const loginIntentLimiter = createLoginIntentLimiter({
+  const loginIntentLimiter = createFixedWindowRateLimiter({
     now,
-    perSourceLimit: options.loginIntentsPerSourcePerMinute ??
+    perKeyLimit: options.loginIntentsPerSourcePerMinute ??
       DEFAULT_LOGIN_INTENTS_PER_SOURCE_PER_MINUTE,
     globalLimit: options.loginIntentsGlobalPerMinute ??
       DEFAULT_LOGIN_INTENTS_GLOBAL_PER_MINUTE,
@@ -457,8 +468,8 @@ export function createGatewayServer(
       });
       return () => credentialReservations.delete(reservationId);
     },
-    admitLoginIntent(remoteAddress, targetHost) {
-      return loginIntentLimiter.admit(remoteAddress, targetHost);
+    admitLoginIntent(remoteAddress, _targetHost) {
+      return loginIntentLimiter.admit(remoteAddress);
     },
     ...(options.maxConcurrentLoginAttempts === undefined
       ? {}
@@ -592,6 +603,14 @@ export function createGatewayServer(
           writeGatewayError(response, 503, "SERVICE_DISABLED");
           return;
         }
+        if (
+          contentRouting === "lan-cookie" &&
+          request.method === "GET" &&
+          requestPath.startsWith(LAN_ROUTE_PATH_PREFIX)
+        ) {
+          handleLanRouteBootstrap(sessions, requestPath, response, resumeHmacKey);
+          return;
+        }
         if (webAuth !== undefined) {
           const connectionAbort = new AbortController();
           const markConnectionClosed = () => {
@@ -627,6 +646,8 @@ export function createGatewayServer(
         await handleReviewerRequest(
           sessions,
           contentDomain,
+          contentRouting,
+          resumeHmacKey,
           request,
           response,
           reviewer,
@@ -740,6 +761,8 @@ export function createGatewayServer(
         await handleReviewerUpgrade(
           sessions,
           contentDomain,
+          contentRouting,
+          resumeHmacKey,
           request,
           socket,
           head,
@@ -907,6 +930,8 @@ export function createGatewayServer(
                 server,
                 hello.tunnelId,
                 contentDomain,
+                contentRouting,
+                resumeHmacKey,
                 options.secureCookies ?? options.authService !== undefined,
                 configuredPublicContentOrigin,
               );
@@ -1968,6 +1993,8 @@ export function createGatewayServer(
 async function handleReviewerRequest(
   sessions: ReadonlyMap<string, GatewaySession>,
   contentDomain: string,
+  contentRouting: ContentRouting,
+  routeHmacKey: Uint8Array,
   request: IncomingMessage,
   response: ServerResponse,
   reviewer?: Principal,
@@ -1978,7 +2005,13 @@ async function handleReviewerRequest(
     response.destroyed ||
     response.writableEnded
   ) return;
-  const tunnelId = getTunnelId(request.headers.host, contentDomain);
+  const tunnelId = getTunnelId(
+    request.headers.host,
+    request.headers.cookie,
+    contentDomain,
+    contentRouting,
+    routeHmacKey,
+  );
   const session = tunnelId === undefined ? undefined : sessions.get(tunnelId);
   if (
     session === undefined ||
@@ -2518,6 +2551,8 @@ function responseCanHaveBody(method: string | undefined, statusCode: number): bo
 async function handleReviewerUpgrade(
   sessions: ReadonlyMap<string, GatewaySession>,
   contentDomain: string,
+  contentRouting: ContentRouting,
+  routeHmacKey: Uint8Array,
   request: IncomingMessage,
   browserSocket: Duplex,
   head: Buffer,
@@ -2530,7 +2565,13 @@ async function handleReviewerUpgrade(
     browserSocket.readableEnded ||
     browserSocket.writableEnded
   ) return;
-  const tunnelId = getTunnelId(request.headers.host, contentDomain);
+  const tunnelId = getTunnelId(
+    request.headers.host,
+    request.headers.cookie,
+    contentDomain,
+    contentRouting,
+    routeHmacKey,
+  );
   const session = tunnelId === undefined ? undefined : sessions.get(tunnelId);
   if (
     session === undefined ||
@@ -3032,31 +3073,38 @@ function shareUrlFor(
   server: Server,
   tunnelId: string,
   contentDomain: string,
+  contentRouting: ContentRouting,
+  routeHmacKey: Uint8Array,
   secure: boolean,
   configuredPublicOrigin?: PublicContentOrigin,
 ): string {
-  if (configuredPublicOrigin !== undefined) {
-    return buildTunnelShareUrl(tunnelId, configuredPublicOrigin);
+  const publicOrigin = configuredPublicOrigin ?? listenerPublicOrigin(
+    server,
+    contentDomain,
+    secure,
+  );
+  if (contentRouting === "subdomain") {
+    return buildTunnelShareUrl(tunnelId, publicOrigin);
   }
-  const address = server.address();
-  if (address === null || typeof address === "string") {
-    throw new Error("Gateway must be listening before a Session is provisioned");
-  }
-  const protocol = secure ? "https" : "http";
-  const defaultPort = secure ? 443 : 80;
-  const port = address.port === defaultPort ? "" : `:${address.port}`;
-  return buildTunnelShareUrl(tunnelId, {
-    protocol: `${protocol}:`,
-    hostname: contentDomain,
-    port: port.replace(/^:/, ""),
-    origin: `${protocol}://${contentDomain}${port}`,
-  });
+  return `${publicOrigin.origin}${LAN_ROUTE_PATH_PREFIX}${tunnelId}/${signLanRoute(
+    tunnelId,
+    routeHmacKey,
+  )}`;
 }
 
 function getTunnelId(
   host: string | undefined,
+  cookie: string | undefined,
   contentDomain: string,
+  contentRouting: ContentRouting,
+  routeHmacKey: Uint8Array,
 ): string | undefined {
+  if (contentRouting === "lan-cookie") {
+    const credential = parseCookie(cookie, LAN_ROUTE_COOKIE);
+    return credential === undefined
+      ? undefined
+      : verifyLanRouteCredential(credential, routeHmacKey);
+  }
   if (host === undefined) return undefined;
   const hostname = host.toLowerCase().split(":", 1)[0];
   const suffix = `.${contentDomain.toLowerCase()}`;
@@ -3065,6 +3113,90 @@ function getTunnelId(
   return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(tunnelId)
     ? tunnelId
     : undefined;
+}
+
+function listenerPublicOrigin(
+  server: Server,
+  contentDomain: string,
+  secure: boolean,
+): PublicContentOrigin {
+  const address = server.address();
+  if (address === null || typeof address === "string") {
+    throw new Error("Gateway must be listening before a Session is provisioned");
+  }
+  const protocol = secure ? "https" : "http";
+  const defaultPort = secure ? 443 : 80;
+  const port = address.port === defaultPort ? "" : `:${address.port}`;
+  return {
+    protocol: `${protocol}:`,
+    hostname: contentDomain,
+    port: port.replace(/^:/, ""),
+    origin: `${protocol}://${contentDomain}${port}`,
+  };
+}
+
+function handleLanRouteBootstrap(
+  sessions: ReadonlyMap<string, GatewaySession>,
+  requestPath: string,
+  response: ServerResponse,
+  routeHmacKey: Uint8Array,
+): void {
+  const routeParts = requestPath.slice(LAN_ROUTE_PATH_PREFIX.length).split("/");
+  const tunnelId = routeParts[0];
+  const signature = routeParts[1];
+  if (
+    routeParts.length !== 2 ||
+    tunnelId === undefined ||
+    signature === undefined ||
+    verifyLanRouteCredential(`${tunnelId}.${signature}`, routeHmacKey) !== tunnelId
+  ) {
+    writeGatewayError(response, 404, "NOT_FOUND");
+    return;
+  }
+  const session = sessions.get(tunnelId);
+  if (
+    session === undefined ||
+    session.lifecycle.status !== "ACTIVE" ||
+    session.socket.readyState !== WebSocket.OPEN
+  ) {
+    writeGatewayError(response, 404, "NOT_FOUND");
+    return;
+  }
+  const credential = `${tunnelId}.${signature}`;
+  response.writeHead(303, {
+    "Cache-Control": "no-store",
+    "Content-Length": "0",
+    "Location": "/",
+    "Referrer-Policy": "no-referrer",
+    "Set-Cookie": `${LAN_ROUTE_COOKIE}=${encodeURIComponent(credential)}; Path=/; HttpOnly; SameSite=Lax`,
+  });
+  response.end();
+}
+
+function signLanRoute(tunnelId: string, routeHmacKey: Uint8Array): string {
+  return createHmac("sha256", routeHmacKey)
+    .update(LAN_ROUTE_SIGNATURE_NAMESPACE)
+    .update(tunnelId)
+    .digest("base64url");
+}
+
+function verifyLanRouteCredential(
+  credential: string,
+  routeHmacKey: Uint8Array,
+): string | undefined {
+  const separator = credential.indexOf(".");
+  if (separator <= 0 || credential.indexOf(".", separator + 1) !== -1) return undefined;
+  const tunnelId = credential.slice(0, separator);
+  const signature = credential.slice(separator + 1);
+  if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(tunnelId)) return undefined;
+  const expected = Buffer.from(signLanRoute(tunnelId, routeHmacKey), "base64url");
+  const actual = Buffer.from(signature, "base64url");
+  if (
+    actual.length !== expected.length ||
+    actual.toString("base64url") !== signature ||
+    !timingSafeEqual(actual, expected)
+  ) return undefined;
+  return tunnelId;
 }
 
 function hostnameOf(host: string | undefined): string {
@@ -3170,56 +3302,28 @@ function sameConfigApplied(
     left.provisionReceipt === right.provisionReceipt;
 }
 
-function createLoginIntentLimiter(input: Readonly<{
+function createFixedWindowRateLimiter(input: Readonly<{
   now: () => number;
-  perSourceLimit: number;
   globalLimit: number;
-}>): Readonly<{ admit(remoteAddress: string, targetHost: string): boolean }> {
+  perKeyLimit: number;
+}>): Readonly<{ admit(key: string): boolean }> {
   let windowStartedAt = input.now();
   let globalCount = 0;
-  const sourceCounts = new Map<string, number>();
+  const keyCounts = new Map<string, number>();
   return {
-    admit(remoteAddress, _targetHost) {
+    admit(key) {
       const checkedAt = input.now();
       if (checkedAt - windowStartedAt >= 60_000) {
         windowStartedAt = checkedAt;
         globalCount = 0;
-        sourceCounts.clear();
+        keyCounts.clear();
       }
-      const key = remoteAddress;
-      const sourceCount = sourceCounts.get(key) ?? 0;
-      if (globalCount >= input.globalLimit || sourceCount >= input.perSourceLimit) {
+      const keyCount = keyCounts.get(key) ?? 0;
+      if (globalCount >= input.globalLimit || keyCount >= input.perKeyLimit) {
         return false;
       }
       globalCount += 1;
-      sourceCounts.set(key, sourceCount + 1);
-      return true;
-    },
-  };
-}
-
-function createAccountRateLimiter(input: Readonly<{
-  now: () => number;
-  globalLimit: number;
-  perAccountLimit: number;
-}>): Readonly<{ admit(accountId: string): boolean }> {
-  let windowStartedAt = input.now();
-  let globalCount = 0;
-  const accountCounts = new Map<string, number>();
-  return {
-    admit(accountId) {
-      const checkedAt = input.now();
-      if (checkedAt - windowStartedAt >= 60_000) {
-        windowStartedAt = checkedAt;
-        globalCount = 0;
-        accountCounts.clear();
-      }
-      const accountCount = accountCounts.get(accountId) ?? 0;
-      if (globalCount >= input.globalLimit || accountCount >= input.perAccountLimit) {
-        return false;
-      }
-      globalCount += 1;
-      accountCounts.set(accountId, accountCount + 1);
+      keyCounts.set(key, keyCount + 1);
       return true;
     },
   };

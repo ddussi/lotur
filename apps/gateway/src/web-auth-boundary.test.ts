@@ -825,6 +825,35 @@ test("login-intent limiting uses the same trusted client boundary", async () => 
   }
 });
 
+test("one-domain deployment rejects control mutations from a sibling preview origin", async () => {
+  const gateway = createGatewayServer({
+    host: "127.0.0.1",
+    port: 0,
+    contentDomain: "preview.example.com",
+    controlHost: "control.example.com",
+    authService: createAuthService(),
+    secureCookies: false,
+  });
+  const port = await gateway.listen();
+
+  try {
+    const response = await send(
+      port,
+      "control.example.com",
+      "/login",
+      {
+        origin: "http://attacker.preview.example.com",
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      new URLSearchParams({ username: "user", password: "password" }).toString(),
+      "POST",
+    );
+    assert.equal(response.status, 403);
+  } finally {
+    await gateway.close();
+  }
+});
+
 async function send(
   port: number,
   host: string,

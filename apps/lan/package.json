@@ -1,0 +1,10 @@
+{
+  "name": "@review-tunnel/lan",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@review-tunnel/client": "0.1.0",
+    "@review-tunnel/gateway": "0.1.0"
+  }
+}

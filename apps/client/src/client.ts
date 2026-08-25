@@ -77,6 +77,7 @@ const RESERVED_GATEWAY_COOKIES = new Set([
   "__Host-rt_session",
   "rt_control_dev",
   "rt_session_dev",
+  "rt_lan_route",
 ]);
 
 export class TunnelConnectionError extends Error {
