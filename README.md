@@ -2,19 +2,19 @@
 
 English | [한국어](README.ko.md)
 
-Share a local web development server with authenticated internal reviewers—without deploying the project or opening an inbound port on the developer's machine.
+Open a local web project on another device. Share on a trusted local network without a domain, or use one domain for an authenticated Gateway deployment.
 
 > [!IMPORTANT]
 > Version `0.1.0` has completed the security MVP in code. DNS, TLS, Ingress, secrets, backup/restore, and operational acceptance must still be completed in each production environment.
 
-## Quick start
+## One-minute quick start: local network, no domain
 
 Requirements: Node.js 24+, npm, and a local HTTP development server.
 
 1. Install Review Tunnel.
 
 ```bash
-git clone git@github.com:ddussi/lotur.git
+git clone https://github.com/ddussi/lotur.git
 cd lotur
 npm ci
 ```
@@ -26,32 +26,44 @@ npm ci
 npm run dev
 ```
 
-3. Start the Gateway and Client in separate terminals.
+3. In another terminal inside Review Tunnel, run one command.
 
 ```bash
-# Terminal 2
-npm run dev:gateway
-
-# Terminal 3
-npm run dev:client -- http://127.0.0.1:3000
+npm run share:lan -- http://127.0.0.1:3000
 ```
 
-Open the `http://<tunnel-id>.localhost:8787/` URL printed by the Client. Press `Ctrl+C` in the Client terminal to close the share.
+Open the printed `http://192.168...` URL on a phone or computer connected to the same local network. Press `Ctrl+C` to close the share.
 
 > [!WARNING]
-> Quick start has no authentication or TLS and binds to loopback. Use the authenticated deployment for real sharing.
+> This mode has no login or TLS. Use it only on a trusted local network. Review Tunnel does not verify the Wi-Fi name or subnet, so any device that can reach the selected IP and port can open the share. If automatic interface selection is wrong, pass `--host 192.168.0.23`.
+
+## Two supported modes
+
+| Situation | What you provide | Reachability |
+| --- | --- | --- |
+| No domain | Node.js 24+ and a trusted local network | Networks that can reach the selected private IP |
+| One available domain | Linux server, PostgreSQL, DNS and TLS | Internet or private network |
+
+The hosted mode uses two DNS names under one base domain:
+
+```text
+control.tunnel.example.com             login, administration, Client connection
+*.preview.tunnel.example.com           shared applications
+```
+
+The operator chooses the base domain. If it shares a parent domain with another service, review that service's `Domain` cookies because the browser may include them in requests to preview hosts.
 
 ## Features
 
 - HTTP, streaming request/response bodies, SSE, and WebSocket relay
-- Temporary subdomain URL for each share
-- Built-in `ADMIN`, `DEVELOPER`, and `REVIEWER` accounts with no public sign-up
+- Temporary LAN-IP or hosted subdomain URL for each share
+- Administrator-issued `ADMIN`, `DEVELOPER`, and `REVIEWER` accounts with no public sign-up
 - Short-lived, single-use Carrier credentials
 - Same-URL recovery during a two-minute reconnect window
 - PostgreSQL-backed audit, deployment admission, and global kill switch
 - Vite 8 and Next.js 16 compatibility checks
 
-## Architecture
+## Authenticated Gateway architecture
 
 ```mermaid
 flowchart LR
@@ -63,7 +75,9 @@ flowchart LR
     Client -->|HTTP| Origin[Local development server]
 ```
 
-Review URLs use a content boundary such as `*.preview.example.com`. Login, administration, and the Carrier use a separate site boundary such as `control.example.net` so application cookies remain isolated from authentication cookies.
+Hosted review URLs use `*.preview.tunnel.example.com`; login, administration, and the Carrier use `control.tunnel.example.com`. Authentication cookies are host-only, mutations require the exact control `Origin`, and Gateway-reserved cookies are never forwarded to the local app.
+
+In local-network mode, another device connects directly to the temporary Gateway on the developer's computer. PostgreSQL, DNS, TLS, and accounts are not required.
 
 ## Authenticated use
 
@@ -84,22 +98,24 @@ npm run admin -- change-password --username admin
 A developer connects to the deployed Gateway with:
 
 ```bash
-GATEWAY_URL=wss://control.example.net/_review-tunnel/carrier \
-CONTROL_URL=https://control.example.net \
-npm run dev:client -- http://127.0.0.1:3000 --username developer1
+GATEWAY_URL=wss://control.tunnel.example.com/_review-tunnel/carrier \
+CONTROL_URL=https://control.tunnel.example.com \
+npm run share -- http://127.0.0.1:3000 --username developer1
 ```
 
 The Client prompts for the password and prints the review URL after activation. A reviewer opens that URL and signs in with an account that has the `REVIEWER` role.
 
-See [Internal account operations](docs/internal-account-operations.md) for account creation, roles, password reset, and revocation.
+See [Administrator-issued account operations](docs/internal-account-operations.md) for account creation, roles, password reset, and revocation.
 
 ## Production deployment
 
-Production requires PostgreSQL 15+, TLS-terminating Ingress, wildcard content DNS, a separate control domain, a reserved canary host, and secret management. The `Dockerfile` provides `gateway`, `admin-cli`, `client`, `canary-check`, `db-backup`, and `db-restore` targets.
+Production requires PostgreSQL 15+, TLS-terminating Ingress, control and wildcard DNS names under one base domain, a reserved canary host, and secret management. The `Dockerfile` provides `gateway`, `admin-cli`, `client`, `canary-check`, `db-backup`, and `db-restore` targets.
 
 New shares remain closed until the public-path canary succeeds and an administrator separately approves the exact deployment ID and configuration digest. The kill switch, canary result, and approval are stored in PostgreSQL.
 
 Follow the [Linux deployment runbook](docs/linux-deployment.md) for environment variables, Docker commands, canary approval, backup/restore, and rollback. [.env.example](.env.example) is a reference only; the application does not automatically load `.env` files.
+
+See the Korean [first-time user guide](docs/getting-started.md) for prerequisites and complete flows for both modes.
 
 ## Development
 
@@ -113,6 +129,7 @@ The PostgreSQL integration-test procedure is documented in the [deployment runbo
 ## Documentation
 
 - [Korean README](README.ko.md)
+- [First-time user guide (Korean)](docs/getting-started.md)
 - [Architecture plan](docs/review-tunnel-plan.md)
 - [Security MVP status](docs/poc-status.md)
 - [Account operations](docs/internal-account-operations.md)

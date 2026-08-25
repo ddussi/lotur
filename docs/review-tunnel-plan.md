@@ -1,10 +1,10 @@
 # Review Tunnel 기획안
 
-> 개발자의 로컬 웹 애플리케이션을 별도 배포 없이 사내 검토자에게 임시 공유하는 시스템
+> 개발자의 로컬 웹 애플리케이션을 별도 배포 없이 다른 기기의 브라우저에 임시 공유하는 시스템
 
 | 항목 | 내용 |
 | --- | --- |
-| 문서 상태 | Draft v0.6 — 보안 MVP 구현 결과와 외부 인수 경계 반영 |
+| 문서 상태 | Draft v0.7 — 인증형 Gateway와 로컬 네트워크 모드 반영 |
 | 제품명 | Review Tunnel(가칭) |
 | 대상 독자 | 제품 담당자, 개발자, 인프라·보안 검토자 |
 | 문서 목적 | MVP의 범위, 핵심 흐름, 시스템 경계, 보안 기준과 검증 조건을 합의한다. |
@@ -15,13 +15,13 @@
 
 개발 중인 웹 화면을 디자이너나 동료에게 보여주려면 보통 별도 개발 서버에 배포해야 한다. 이 과정은 작은 변경을 검토할 때도 배포 대기, 환경 구성, URL 관리 비용을 만든다.
 
-개발자 PC의 로컬 서버를 외부에서 직접 열어 두는 방식은 회사 네트워크와 방화벽 환경에서 동작하기 어렵고, 인증 없이 사용하면 내부 프로젝트가 노출될 수 있다.
+개발자 PC의 로컬 서버를 다른 네트워크에서 직접 열어 두는 방식은 NAT와 방화벽 환경에서 동작하기 어렵고, 인증 없이 공개하면 프로젝트가 노출될 수 있다.
 
 ### 1.2 제품 목적
 
-Review Tunnel은 개발자 PC에서 실행 중인 로컬 개발 서버를 별도 배포 없이 사내 검토자에게 임시 공유한다.
+Review Tunnel은 개발자 PC에서 실행 중인 로컬 개발 서버를 별도 배포 없이 다른 기기의 브라우저에 임시 공유한다.
 
-Tunnel Client가 중앙 게이트웨이에 아웃바운드 연결을 만들고 유지하면, Gateway는 관리자가 발급한 내부 계정으로 인증·인가된 검토자의 HTTPS 요청, streaming 응답과 브라우저 WebSocket 연결을 해당 로컬 서버로 중계한다. 개발자 PC에는 외부 인바운드 포트를 열지 않으며, 개발자가 제어하는 콘텐츠는 회사 핵심 서비스 및 인증·제어 plane과 사이트 경계가 분리된 공유 전용 도메인에서 제공한다.
+인증형 Gateway 모드에서 Tunnel Client가 배포된 Gateway에 아웃바운드 연결을 만들고 유지하면, Gateway는 관리자 발급 계정으로 인증·인가된 검토자의 HTTPS 요청, streaming 응답과 브라우저 WebSocket 연결을 해당 로컬 서버로 중계한다. 개발자 PC에는 외부 listener를 열지 않는다. 하나의 기준 도메인 아래에 콘텐츠 wildcard와 그 바깥의 control host를 둔다. 로컬 네트워크 모드는 개발자 PC의 임시 Gateway를 사설 IPv4에 열며, 해당 IP와 포트에 접근할 수 있는 신뢰된 네트워크에서 사용한다.
 
 공유 대상은 하나의 로컬 origin이다. Review Tunnel은 브라우저가 사용하는 HTTP, HTTP streaming(SSE 포함), WebSocket 동작의 의미를 가능한 한 그대로 보존한다. HTTP 메서드의 이름이나 데이터 변경 여부를 제품이 판단하거나 앱을 읽기 전용으로 만들지 않는다. Gateway의 개입은 인증, 예약 경로·자격 증명 격리, 고정 원본 라우팅, 프로토콜 안전성, 자원 제한과 관찰 가능성에 한정한다.
 
@@ -29,7 +29,7 @@ Tunnel Client가 중앙 게이트웨이에 아웃바운드 연결을 만들고 �
 
 ### 1.3 MVP 성공의 한 문장 정의
 
-개발자가 공유 명령 하나로 임시 URL을 만들고, 관리자 발급 내부 계정으로 인증한 검토자가 해당 URL에서 로컬 개발 서버의 화면·API·실시간 갱신을 사용할 수 있으며, 개발자가 공유를 종료하면 URL과 장기 연결도 함께 종료된다.
+개발자가 공유 명령 하나로 임시 URL을 만들고, 로컬 네트워크 모드에서는 URL을 받은 기기가 직접 접속하며 인증형 Gateway 모드에서는 관리자 발급 계정으로 인증한 검토자가 화면·API·실시간 갱신을 사용할 수 있다. 개발자가 공유를 종료하면 URL과 장기 연결도 함께 종료된다.
 
 ## 2. 목표와 비목표
 
@@ -37,10 +37,10 @@ Tunnel Client가 중앙 게이트웨이에 아웃바운드 연결을 만들고 �
 
 - 별도 배포 없이 단일 로컬 웹 애플리케이션을 공유한다.
 - 개발자는 CLI 한 번으로 공유를 시작하고 종료한다.
-- 검토자는 별도 프로그램 설치 없이 브라우저와 관리자 발급 내부 계정만 사용한다.
+- 검토자는 별도 프로그램 설치 없이 브라우저만 사용한다. 인증형 Gateway 모드에서는 관리자 발급 계정으로 로그인한다.
 - 일반 HTTP, streaming/SSE, 브라우저 WebSocket과 공식 지원 개발 서버의 HMR을 전달한다.
-- 외부 요청은 인증·인가, TLS, 명시적인 프록시 정책을 거친다.
-- 회사 핵심 서비스, 인증·제어 plane, 공유 콘텐츠의 쿠키·SameSite 경계를 분리한다.
+- 인증형 Gateway의 외부 요청은 인증·인가, TLS, 명시적인 프록시 정책을 거친다.
+- 인증형 Gateway의 control host와 공유 콘텐츠의 Cookie·Origin 경계를 분리한다.
 - 연결·요청·실패 상태를 개발자와 운영자가 확인할 수 있다.
 - 핵심 중계 흐름은 작게 유지하고 인증, 저장소, 전송 구현은 교체 가능한 경계로 분리한다.
 
@@ -49,7 +49,7 @@ Tunnel Client가 중앙 게이트웨이에 아웃바운드 연결을 만들고 �
 - 범용 TCP, UDP, SSH, 데이터베이스 터널
 - WireGuard·VPN, IP·CIDR 라우팅, NAT hole punching과 P2P 연결
 - 인터넷에 익명으로 공개하는 URL
-- 공유 URL·Tunnel ID·signed URL 또는 URL에 포함된 bearer token의 소지만으로 내부 계정 인증을 우회하는 링크
+- 인증형 Gateway에서 공유 URL·Tunnel ID·signed URL 또는 URL bearer token의 소지만으로 관리자 발급 계정 인증을 우회하는 링크. 로컬 네트워크 모드의 서명된 bootstrap URL은 예외다.
 - 영구 호스팅 또는 배포 플랫폼 대체
 - 여러 로컬 포트의 동시 공유
 - 고정 도메인과 영구 URL
@@ -87,16 +87,16 @@ Tunnel은 앱의 업무 의미를 판단하거나 바꾸지 않는다. 범용 TC
 | 용어 | 정의 |
 | --- | --- |
 | 개발자 | 로컬 앱을 실행하고 공유 세션을 만드는 사용자 |
-| 검토자(Reviewer) | 공유 URL을 통해 앱을 확인하는 사내 사용자. 디자이너는 대표적인 검토자다. |
+| 검토자(Reviewer) | 공유 URL을 통해 앱을 확인하는 사용자 |
 | 로컬 앱 | 개발자 PC의 루프백 주소에서 HTTP·streaming·WebSocket을 제공하는 개발 서버 origin |
 | Tunnel Client | 로컬 앱과 중앙 게이트웨이를 연결하는 개발자용 CLI |
-| Tunnel Gateway | 인증, 라우팅, 세션 관리와 HTTP·streaming·WebSocket 중계를 담당하는 중앙 서버 |
+| Tunnel Gateway | 인증형 모드에서는 배포된 서버, 로컬 네트워크 모드에서는 개발자 컴퓨터에서 임시 실행되며 라우팅·세션 관리와 HTTP·streaming·WebSocket 중계를 담당하는 프로세스 |
 | Control Plane | 개발자·검토자 인증, 접근 정책, 세션 설정, URL·수명주기와 활성화 판단을 담당하는 Gateway의 논리 영역 |
 | Relay Data Plane | 인증된 Session의 HTTP·streaming·WebSocket byte 흐름, 취소와 flow control만 담당하는 Gateway의 논리 영역 |
 | Tunnel Session | Client 실행부터 종료 또는 만료까지 유지되는 임시 공유 세션 |
 | Tunnel ID | 세션을 라우팅하기 위한 추측하기 어려운 식별자. 접근 권한을 대신하지 않는다. |
-| 공유 URL | 검토자가 접속하는 `https://<tunnel-id>.company-review.dev` 형식의 주소. 예시이며 실제 콘텐츠 도메인은 회사 핵심 서비스와 인증·제어 plane 양쪽에서 분리한다. |
-| 중계 연결(Carrier) | Client가 Gateway에 만드는 TLS 기반의 지속 연결. 여러 논리 Stream을 운반한다. |
+| 공유 URL | 검토자가 접속하는 주소. 인증형 Gateway는 `https://<tunnel-id>.preview.tunnel.example.com`, 로컬 네트워크 모드는 서명된 bootstrap path가 있는 사설 IPv4 URL을 사용한다. |
+| 중계 연결(Carrier) | Client가 Gateway에 만드는 지속 연결. 인증형 Gateway는 WSS, 로컬 네트워크 모드는 같은 컴퓨터의 WS를 사용하며 여러 논리 Stream을 운반한다. |
 | `UNBOUND_CARRIER` | Carrier credential은 소비됐지만 `HELLO`가 아직 검증되지 않아 어떤 Session·generation에도 묶이지 않은 연결 상태. 앱 Stream을 운반할 수 없다. |
 | Generation | 한 번의 Carrier binding 세대. 활성화 전에는 `candidate`, activation commit 뒤에는 `current`이며 이전·폐기 세대의 메시지는 fence한다. |
 | 논리 Stream | 하나의 HTTP 요청·응답, streaming 응답 또는 WebSocket 연결을 중계 연결 안에서 구분하는 단위 |
@@ -107,22 +107,23 @@ Tunnel은 앱의 업무 의미를 판단하거나 바꾸지 않는다. 범용 TC
 | Gateway admission Readiness | pin된 배포 설정과 실제 Ingress의 인증·streaming 경로가 검증되어 새 Session 활성화를 받아들일 수 있는지 나타내는 배포 환경별 전역 값 |
 | Carrier credential | 개발자 로그인이 확인된 뒤 Gateway가 WSS 연결 1회를 위해 발급하는 짧은 수명·목적·audience 제한 opaque 자격증명. 공유 URL 접근 권한이나 Resume secret을 대신하지 않는다. |
 | Resume secret | 동일한 Tunnel Session을 일시 단절 뒤 복구할 때 Client가 제시하는 고엔트로피 비밀값 |
-| 사이트 경계 | 브라우저의 Cookie·SameSite 판단 기준이 되는 등록 가능 도메인(eTLD+1). 단순히 서브도메인만 다르면 분리된 경계가 아니다. |
+| 사이트 경계 | 브라우저의 Cookie·SameSite 판단 기준이 되는 등록 가능 도메인(eTLD+1). 다른 서비스와 상위 도메인을 공유할 때는 기존 `Domain` Cookie의 전달 범위를 검토해야 한다. |
+| host 경계 | 정확한 hostname 기준 경계. 운영 모드의 control Cookie는 host-only이고 상태 변경은 정확한 control Origin만 허용한다. |
 
 ## 4. MVP 전제와 기본 정책
 
-다음은 제품 소유자가 승인한 MVP 기본 정책이다. 계정 운영 수치, 정확한 지원 버전과 인프라 제품처럼 구현·조직 확인이 필요한 항목은 15장에서 별도로 추적한다.
+다음은 제품 소유자가 승인한 MVP 기본 정책이다. 계정 운영 수치, 정확한 지원 버전과 인프라 제품처럼 배포 환경에서 확인할 항목은 15장에서 별도로 추적한다.
 
 | 항목 | MVP 기본안 |
 | --- | --- |
-| 검토자 범위 | 관리자가 생성하고 `REVIEWER` 권한을 부여한 활성 내부 계정 중 공유 URL을 아는 사용자. 공개 회원가입은 제공하지 않음 |
-| 링크 소지 의미 | 공유 URL과 Tunnel ID는 위치 식별자일 뿐 접근 자격증명이 아니며 모든 검토자는 내부 계정 인증과 서버 측 권한 정책을 통과 |
-| 개발자 인증 | 관리자가 `DEVELOPER` 권한을 부여한 활성 내부 계정만 Tunnel Session을 만들 수 있음 |
+| 검토자 범위 | 로컬 네트워크 모드는 bootstrap URL과 listener에 접근 가능한 사용자. 인증형 Gateway는 관리자가 `REVIEWER` 권한을 부여한 활성 계정 중 공유 URL을 아는 사용자 |
+| 링크 소지 의미 | 로컬 네트워크 bootstrap URL은 route를 선택하는 임시 자격이다. 인증형 Gateway의 URL과 Tunnel ID는 위치 식별자일 뿐이며 계정 인증과 서버 측 권한 정책을 별도로 통과 |
+| 개발자 인증 | 로컬 네트워크 모드는 별도 계정을 사용하지 않는다. 인증형 Gateway는 관리자가 `DEVELOPER` 권한을 부여한 활성 계정만 Tunnel Session 생성 가능 |
 | 계정 운영 | 최초 관리자는 Linux 서버 CLI로 1회 생성하고, 이후 계정은 관리자 웹 UI 또는 인증된 관리자 CLI에서 생성·정지·초기화 |
 | 비밀번호 | Argon2id 해시만 PostgreSQL에 저장. 임시 비밀번호는 1회 표시하고 최초 로그인 때 변경 강제 |
 | 로그인 세션 | 원문을 저장하지 않는 opaque 세션, 12시간 절대 만료, 계정 정지·권한/비밀번호 변경 때 전체 회수 |
 | Carrier 인증 | 개발자 로그인 자격증명을 짧은 수명의 Carrier credential로 교환하고 WSS upgrade에서 사용 |
-| 공개 주소 | 회사 핵심 서비스 및 인증·제어 plane과 사이트 경계가 분리된 콘텐츠 전용 도메인의 랜덤 와일드카드 서브도메인. 실제 host 값은 환경 변수로 주입하고 시작 시 경계를 검증 |
+| 공유 주소 | 로컬 네트워크 모드는 사설 IPv4의 서명된 bootstrap URL. 인증형 Gateway는 하나의 기준 도메인 아래 랜덤 wildcard 서브도메인이며 Control host는 콘텐츠 wildcard 바깥이어야 함 |
 | Ingress 라우팅 | 와일드카드 콘텐츠 host 전체를 고정 Gateway로 보내며 Tunnel별 Ingress 설정은 만들지 않음 |
 | 로컬 대상 | 기본적으로 `127.0.0.1`, `::1` 또는 검증된 `localhost`의 단일 포트만 허용 |
 | 앱 프로토콜 | CONNECT를 제외한 일반 HTTP 메서드, HTTP streaming/SSE와 브라우저 WebSocket을 의미 보존하여 전달 |
@@ -132,17 +133,25 @@ Tunnel은 앱의 업무 의미를 판단하거나 바꾸지 않는다. 범용 TC
 | 명시적 종료 | `Ctrl+C` 또는 종료 명령을 받으면 즉시 세션 폐기 |
 | 콘텐츠 저장 | 요청·응답 본문을 Gateway에 영구 저장하지 않음 |
 | 세션 설정 | 작은 불변 snapshot을 revision·digest로 식별하고 Client 적용 확인 뒤 활성화 |
-| 초기 공식 지원 | macOS arm64용 Client, 관리되는 Chrome, 회사 표준 Vite·Next.js 프로젝트. 정확한 버전은 호환성 매트릭스에서 고정 |
-| 배포 형태 | AWS 또는 사내 서버에서 같은 이미지로 실행할 수 있는 단일 컨테이너 Gateway. Control Plane과 Relay Data Plane은 내부 모듈로 분리하고 Registry는 메모리 기반으로 운영 |
+| 초기 공식 지원 | Node.js 24에서 실행되는 Client, Chromium 계열 브라우저, 고정 버전 Vite·Next.js fixture. 정확한 버전은 호환성 매트릭스에서 관리 |
+| 배포 형태 | 로컬 네트워크 모드는 개발자 컴퓨터의 임시 프로세스. 인증형 Gateway는 Linux 또는 컨테이너 환경의 단일 Gateway. Control Plane과 Relay Data Plane은 내부 모듈로 분리하고 Registry는 메모리 기반으로 운영 |
 | Gateway 재시작 | 기존 Session과 공유 URL 종료를 MVP 제약으로 허용. 자동 복구하거나 새 URL을 자동 발급하지 않음 |
 
 ## 5. 핵심 사용자 흐름
 
-### 5.1 개발자가 공유를 시작한다
+### 5.1 로컬 네트워크에서 공유를 시작한다
+
+1. 개발자가 로컬 앱을 실행한다.
+2. `npm run share:lan -- http://127.0.0.1:3000`을 실행한다.
+3. 명령은 물리 네트워크의 RFC 1918 사설 IPv4를 선택하고 임시 Gateway를 연다.
+4. Client가 같은 컴퓨터의 Gateway와 로컬 앱을 연결하고 활성화 검증을 통과한다.
+5. CLI가 서명된 bootstrap URL을 출력한다. 이 모드는 계정과 TLS를 사용하지 않는다.
+
+### 5.2 인증형 Gateway에서 공유를 시작한다
 
 1. 개발자가 로컬 앱을 실행한다.
 2. 개발자가 공유할 로컬 주소를 지정해 Client를 실행한다.
-3. 유효한 자격 증명이 없으면 Client가 내부 계정 로그인을 유도하고, 성공 후 자동으로 공유 절차를 재개한다.
+3. 유효한 자격 증명이 없으면 Client가 관리자 발급 계정 로그인을 유도하고, 성공 후 자동으로 공유 절차를 재개한다.
 4. Client는 대상이 허용된 루프백 주소인지 확인하고 로컬 앱의 응답 가능 여부를 점검한다.
 5. Client는 개발자 로그인 자격증명을 짧은 수명의 Carrier credential로 교환하고 Gateway에 인증된 중계 연결을 만든다.
 6. Gateway는 `CREATING` Session, Tunnel ID, 공유 URL과 revision·digest가 있는 불변 Session configuration을 발급한다. 이 시점의 URL은 아직 라우팅할 수 없다.
@@ -153,29 +162,29 @@ Tunnel은 앱의 업무 의미를 판단하거나 바꾸지 않는다. 범용 TC
 예시:
 
     npm run dev
-    review-tunnel http://127.0.0.1:3000
+    npm run share -- http://127.0.0.1:3000 --username developer1
 
     Connected
     Local:  http://127.0.0.1:3000
-    Share:  https://a7c4e2g6j3k5m7n2p4r6t3v5xy.company-review.dev
+    Share:  https://4f9a07b6c51e2d83a0b918d5e8c1f234.preview.tunnel.example.com
     Scope:  entire local origin
-    Access: company account required
+    Access: administrator-issued account required
     Protocols: HTTP, SSE, WebSocket
     Tunnel protocol: review-tunnel.v1
     Origin projection: local-view
     Readiness: carrier=ready, config=applied, origin=ready, relay=ready
 
-### 5.2 검토자가 화면을 확인한다
+### 5.3 검토자가 화면을 확인한다
 
 1. 검토자가 공유 URL을 연다.
-2. 인증 세션이 없으면 Gateway가 제공하는 내부 계정 로그인 화면으로 이동한다.
-3. Gateway가 활성 계정과 `REVIEWER` 권한을 검증한다.
+2. 로컬 네트워크 모드는 bootstrap 값을 검증해 route Cookie를 설정한다. 인증형 Gateway는 인증 세션이 없으면 로그인 화면으로 이동한다.
+3. 인증형 Gateway는 활성 계정과 `REVIEWER` 권한을 검증한다.
 4. Gateway가 Tunnel ID에 대응하는 활성 Client를 찾는다.
 5. HTTP 요청, streaming 응답과 WebSocket 연결이 Client를 거쳐 로컬 앱과 연결된다.
 6. 로컬 앱의 응답과 실시간 메시지가 같은 경로를 거쳐 검토자 브라우저에 반환된다.
 7. 공식 지원 개발 서버에서는 코드 변경이 HMR 또는 Fast Refresh를 통해 자동 반영되고 수동 새로고침도 정상 동작한다.
 
-### 5.3 공유를 종료한다
+### 5.4 공유를 종료한다
 
 - 개발자가 명시적으로 Client를 종료하면 Gateway는 현재 연결의 종료 요청을 검증하고 Session을 먼저 라우팅 불가능하게 만든 뒤 열린 Stream을 정리한다. CLI는 Gateway의 종료 확인을 받은 뒤 URL이 폐기됐다고 표시하며, 확인 응답이 유실돼도 URL이 다시 활성화되지는 않는다.
 - 네트워크가 일시적으로 끊기면 CLI는 재연결 중임을, 검토자에게는 일시적인 오프라인 상태를 표시한다.
@@ -187,10 +196,11 @@ Tunnel은 앱의 업무 의미를 판단하거나 바꾸지 않는다. 범용 TC
 
 | ID | 요구사항 |
 | --- | --- |
-| FR-01 | 인증된 Client만 Gateway에 연결하고 세션을 만들 수 있어야 한다. |
+| FR-00 | 로컬 네트워크 모드와 인증형 Gateway 모드는 별도 실행 진입점과 설정 경계를 가지며 한 모드의 인증 정책이 다른 모드에 암묵적으로 적용되지 않아야 한다. |
+| FR-01 | 인증형 Gateway에서는 인증된 Client만 세션을 만들 수 있어야 한다. 로컬 네트워크 모드는 개발자 컴퓨터에서 함께 시작한 Client만 임시 Gateway에 연결한다. |
 | FR-02 | Client는 기본적으로 루프백 HTTP 주소의 단일 포트만 공유하고, 세션이 활성화된 뒤에는 해당 원본을 바꿀 수 없어야 한다. |
-| FR-03 | Gateway는 CSPRNG로 생성한 최소 128-bit 값을 DNS-safe lowercase unpadded base32로 정규화하고, canonical 값의 충돌을 검사한 뒤 Tunnel ID와 HTTPS 공유 URL을 발급해야 한다. |
-| FR-04 | 공유 URL의 모든 HTTP 요청과 WebSocket handshake는 로컬 앱에 전달되기 전에 검토자 인증·인가를 통과해야 한다. |
+| FR-03 | Gateway는 CSPRNG로 생성한 128-bit lowercase hex Tunnel ID를 사용한다. 인증형 Gateway는 HTTPS wildcard URL을, 로컬 네트워크 모드는 서명된 1회 bootstrap path가 있는 HTTP URL을 발급한다. |
+| FR-04 | 인증형 Gateway의 HTTP 요청과 WebSocket handshake는 로컬 앱에 전달되기 전에 검토자 인증·인가를 통과해야 한다. 로컬 네트워크 모드는 유효한 route Cookie를 요구한다. |
 | FR-05 | Gateway는 파서가 수용한 앱 HTTP 메서드, 최종 상태 코드(101 포함), 앱 헤더, 쿠키와 요청·응답 body를 의미 변경 없이 전달해야 한다. CONNECT는 범용 TCP 기능이므로 MVP에서 지원하지 않는다. |
 | FR-06 | Client와 Gateway는 요청·응답 body를 전체 buffering하지 않고 chunk 단위로 전달하고, SSE를 포함한 장시간 HTTP 응답을 즉시 flush해야 한다. |
 | FR-07 | Gateway는 인증된 브라우저 WebSocket handshake를 로컬 앱과 연결하고 text·binary 메시지, subprotocol과 close 의미를 양방향으로 전달해야 한다. |
@@ -202,15 +212,15 @@ Tunnel은 앱의 업무 의미를 판단하거나 바꾸지 않는다. 범용 TC
 | FR-13 | 운영자는 payload나 인증 정보를 저장하지 않고 세션·Stream 상태, 응답 코드, close 원인, 지연과 오류를 관찰할 수 있어야 한다. |
 | FR-14 | Gateway는 세션별 불변 Session configuration을 revision·digest로 발급하고, create이면 Resume secret 수신 receipt까지 포함해 Client가 동일한 activation material을 적용·보관했다고 확인하기 전에는 Session을 `ACTIVE`로 만들지 않아야 한다. |
 | FR-15 | `ACTIVE` 진입은 Client 인증, candidate generation의 Carrier, 설정 적용, 로컬 origin 점검, Relay probe와 활성화 가능한 Registry binding으로 구성된 Session activation Readiness, 그리고 Gateway admission Readiness를 모두 만족해야 한다. 한 항목의 실패를 다른 항목의 성공으로 숨기지 않는다. |
-| FR-16 | 공유 콘텐츠의 와일드카드 host는 고정 Ingress 경로로 Gateway에 전달하고, Tunnel 생성·종료 때 Ingress router·인증서·플러그인 설정을 생성하거나 제거하지 않아야 한다. |
-| FR-17 | Carrier credential은 짧은 수명과 전용 purpose·audience를 가져야 하며 URI·query에 넣지 않는다. Gateway는 Resume secret과 재사용 가능한 bearer secret의 원문을 저장하지 않고 용도별 HMAC lookup 값만 유지해야 한다. |
+| FR-16 | 인증형 Gateway의 공유 콘텐츠 wildcard host는 고정 Ingress 경로로 전달하고, Tunnel 생성·종료 때 Ingress router·인증서·플러그인 설정을 생성하거나 제거하지 않아야 한다. |
+| FR-17 | 인증형 Gateway의 Carrier credential은 짧은 수명과 전용 purpose·audience를 가져야 하며 URI·query에 넣지 않는다. Gateway는 Resume secret과 재사용 가능한 bearer secret의 원문을 저장하지 않고 용도별 HMAC lookup 값만 유지해야 한다. |
 
 ### 6.2 호환 범위
 
 MVP가 보장해야 하는 범위:
 
 - macOS arm64에서 실행되는 Tunnel Client
-- 회사가 관리하는 Chrome 브라우저
+- 자동 호환성 검사를 통과한 Chromium 계열 브라우저
 - HTML, CSS, JavaScript, JSON, 이미지, 폰트와 기타 바이너리 자산
 - CONNECT를 제외하고 표준 HTTP 파서가 수용하는 앱 요청 메서드
 - chunk 단위 요청 body와 finite·streaming 응답 body
@@ -218,7 +228,7 @@ MVP가 보장해야 하는 범위:
 - 압축 응답과 여러 동시 요청
 - SSE와 그 밖의 장시간 HTTP streaming
 - 브라우저 WebSocket text·binary 메시지, subprotocol과 close
-- 회사 표준 Vite·Next.js 버전의 HMR·Fast Refresh. 정확한 Node·bundler·브라우저·프레임워크 버전은 빌드 목록에서 고정
+- 호환성 매트릭스에 고정한 Vite·Next.js 버전의 HMR·Fast Refresh. 정확한 Node·bundler·브라우저·프레임워크 버전은 빌드 목록에서 관리
 - 코드 변경 자동 반영과 수동 새로고침
 
 MVP가 보장하지 않는 범위:
@@ -227,15 +237,13 @@ MVP가 보장하지 않는 범위:
 - 로컬 앱이 생성한 모든 절대 URL의 자동 교정
 - 모든 개발 프레임워크와 플러그인의 무수정 호환
 - raw TCP, HTTP/2 wire semantics, native gRPC와 WebTransport
-- WebSocket 101을 제외한 informational 1xx 응답, HTTP request·response trailer와 `Expect: 100-continue`의 end-to-end 보존
-
-Gateway가 `Expect: 100-continue`를 직접 처리할지 명시적으로 거부할지는 Phase 1 POC에서 확정하고 호환성 표에 기록한다.
+- WebSocket 101을 제외한 informational 1xx 응답, HTTP request·response trailer와 `Expect: 100-continue`의 end-to-end 보존. MVP는 이 동작을 호환 범위로 선언하지 않는다.
 
 ### 6.3 비기능 요구사항
 
 | 영역 | 요구사항 |
 | --- | --- |
-| 보안 | 외부 구간은 HTTPS/WSS만 사용하고, 검토자와 Client 인증을 분리한다. |
+| 보안 | 인증형 Gateway의 외부 구간은 HTTPS/WSS만 사용하고 검토자와 Client 인증을 분리한다. 로컬 네트워크 모드는 무인증 HTTP/WS임을 명시하고 신뢰된 네트워크에서만 사용한다. |
 | 개인정보 | 요청·응답 본문, Cookie, Authorization 값을 로그나 영구 저장소에 남기지 않는다. |
 | 의미 투명성 | 앱 메서드·header·body·stream·WebSocket 메시지의 관찰 가능한 의미를 보존하고 앱 정책을 대신 판단하지 않는다. |
 | 신뢰성 | Stream은 중복되거나 서로 섞이지 않아야 하며, 재연결 때 자동 replay하지 않고 실패를 숨기지 않는다. |
@@ -250,6 +258,8 @@ Gateway가 `Expect: 100-continue`를 직접 처리할지 명시적으로 거부�
 ## 7. 시스템 구조와 책임 경계
 
 ### 7.1 컨텍스트
+
+인증형 Gateway:
 
     검토자 브라우저
           │ HTTPS / WSS
@@ -282,12 +292,22 @@ Gateway가 `Expect: 100-continue`를 직접 처리할지 명시적으로 거부�
 
           PostgreSQL 계정 저장소 ──────▶ Control Plane
 
+로컬 네트워크 모드:
+
+    검토자 브라우저
+          │ 사설 IPv4 HTTP / WebSocket
+          ▼
+    개발자 컴퓨터의 임시 Gateway
+          │ 같은 컴퓨터의 WS Carrier
+          ▼
+      Tunnel Client ── HTTP / WebSocket ──▶ 127.0.0.1:3000
+
 ### 7.2 구성 요소별 책임
 
 #### Tunnel Client
 
 - CLI 입력과 로컬 대상 검증
-- 개발자 자격 증명을 짧은 수명의 Carrier credential로 교환하고 Gateway WSS 연결
+- 인증형 Gateway에서는 개발자 자격 증명을 짧은 수명의 Carrier credential로 교환하고 WSS 연결. 로컬 네트워크 모드에서는 같은 명령이 시작한 임시 Gateway에 WS 연결
 - Session configuration의 revision·digest 검증, 적용과 결과 확인
 - 로컬 앱 상태 점검
 - HTTP 요청 body와 finite·streaming 응답을 chunk 단위로 중계
@@ -301,14 +321,15 @@ Client는 `localhost`를 사용할 때 health probe에서 모든 해석 결과�
 
 #### Tunnel Gateway
 
-- 고정 Ingress에서 외부 HTTPS 요청·WebSocket upgrade와 Client WSS를 수신하는 단일 배포 단위
+- 인증형에서는 고정 Ingress의 HTTPS·WebSocket upgrade와 Client WSS를, 로컬 네트워크 모드에서는 사설 IPv4의 HTTP·WebSocket과 같은 컴퓨터의 Client WS를 수신
 - Control Plane과 Relay Data Plane의 포트·의존성 조립
 - 공통 설정, 오류 응답, 로그, 메트릭과 graceful shutdown 제공
 
 #### Control Plane
 
-- 개발자·Client 인증과 짧은 수명의 Carrier credential 발급·검증
-- 검토자 내부 계정 인증 및 `REVIEWER` 접근 정책 적용
+- 인증형 Gateway의 개발자·Client 인증과 짧은 수명의 Carrier credential 발급·검증
+- 인증형 Gateway의 검토자용 관리자 발급 계정 인증 및 `REVIEWER` 접근 정책 적용
+- 로컬 네트워크 모드의 서명된 bootstrap과 route Cookie 검증
 - 불변 Session configuration 생성과 desired revision·digest 관리
 - Client의 적용 확인, 로컬 origin 결과와 Relay probe로 Session activation Readiness를 판정하고 전역 Gateway admission Readiness와 결합
 - Tunnel Session·generation·lease·Resume·종료 수명주기 관리
@@ -318,7 +339,7 @@ Control Plane은 애플리케이션 body나 WebSocket byte를 해석하지 않�
 
 #### Relay Data Plane
 
-- Control Plane이 `ACTIVE`로 승인한 Session의 외부 HTTP·streaming·WebSocket 트래픽만 수신
+- Control Plane이 `ACTIVE`로 승인한 Session의 HTTP·streaming·WebSocket 트래픽만 수신
 - Tunnel ID와 현재 generation에 바인딩된 Carrier로 논리 Stream 전달
 - 여러 Stream의 multiplexing, 공정한 scheduling, flow control, 취소와 유형별 자원 제한 적용
 - 응답 시작 여부에 맞는 오류 변환과 Stream lifecycle 메타데이터 생성
@@ -346,7 +367,9 @@ SSE는 별도 도메인 파이프라인이 아니라 종료가 늦는 HTTP respo
 
 #### Account·Authentication 모듈
 
-- `ADMIN`, `DEVELOPER`, `REVIEWER` 권한을 가진 내부 계정과 로그인 세션을 관리
+이 모듈은 인증형 Gateway에서만 사용한다.
+
+- `ADMIN`, `DEVELOPER`, `REVIEWER` 권한을 가진 관리자 발급 계정과 로그인 세션을 관리
 - 공개 회원가입 없이 관리자만 계정을 생성하고, 일회용 임시 비밀번호의 최초 변경을 강제
 - 비밀번호 해시, 계정·권한, 로그인 제한, 세션과 감사 이벤트는 PostgreSQL 저장소 포트를 통해 영구 보관
 - 계정 정지, 비밀번호 초기화와 권한 변경 때 대상 계정의 세션과 열린 Tunnel·Stream을 회수
@@ -354,13 +377,15 @@ SSE는 별도 도메인 파이프라인이 아니라 종료가 늦는 HTTP respo
 
 #### DNS·TLS 경계
 
-- `*.company-review.dev` 형태의 공유 전용 와일드카드 DNS 및 인증서 제공
-- `control.company-review-control.dev` 형태의 중앙 로그인·관리자 UI·Client WSS endpoint 제공
-- 위 이름은 예시이며 실제 content·auth·control host는 환경 설정 adapter에서 읽는다. Gateway는 시작할 때 세 사이트 경계, wildcard 범위, 예약 host·path 충돌과 HTTPS scheme 불변식을 검증하고 실패하면 트래픽을 받지 않는다.
+이 경계는 인증형 Gateway에서만 사용한다.
+
+- `*.preview.tunnel.example.com` 형태의 공유용 와일드카드 DNS 및 인증서 제공
+- `control.tunnel.example.com` 형태의 로그인·관리자 UI·Client WSS endpoint 제공
+- 두 이름은 하나의 기준 도메인 아래에 둔다. 어떤 기준 도메인을 사용할지는 운영자가 정한다. 실제 content·control host는 환경 설정 adapter에서 읽는다. Gateway는 시작할 때 control host가 콘텐츠 wildcard namespace 바깥인지, 예약 host·path 충돌과 HTTPS scheme 불변식을 검증하고 실패하면 트래픽을 받지 않는다.
 - 도메인 이름과 공개 endpoint 같은 비밀이 아닌 값은 환경 변수로 주입하되 DB 자격증명과 HMAC key는 환경별 secret manager 또는 동등한 비밀 주입 경계에서 가져온다.
 - 콘텐츠 와일드카드 host 전체를 하나의 고정 Gateway upstream으로 전달하고 Tunnel별 router·인증서·middleware 설정을 만들지 않음
 - 각 Tunnel host에서 `/_review-tunnel/*` 예약 인증 경로를 Gateway가 직접 처리
-- 회사 핵심 서비스, 인증·제어 plane, 공유 콘텐츠를 서로 다른 사이트 경계에 배치
+- 다른 서비스와 상위 도메인을 공유할 때는 기존 `Domain` Cookie의 전달 범위를 검토한다. 인증형 Gateway 안에서는 control host를 콘텐츠 wildcard 바깥에 두고 host-only Cookie와 정확한 Origin 검증으로 제어 경계를 유지한다.
 - MVP는 승인된 기존 Ingress·Load Balancer 앞단에서 TLS를 종료하고 Gateway는 해당 경로에서 온 연결만 수신
 - 앞단 프록시가 WebSocket Upgrade, streaming no-buffer·즉시 flush, 충분한 장기 연결 timeout과 client cancellation 전달을 지원
 - 앞단 Ingress와 Load Balancer가 request body 선행 buffering, response buffering과 shared cache를 비활성화하고 첫 request chunk를 전체 upload 종료 전에 Gateway로 전달
@@ -375,7 +400,7 @@ SSE는 별도 도메인 파이프라인이 아니라 종료가 늦는 HTTP respo
 ### 7.3 내부 설계 원칙
 
 - Control Plane과 Relay Data Plane은 책임과 의존성 방향을 분리하되 초기에는 Gateway 하나의 배포 단위로 유지한다. 책임 경계가 있다는 이유만으로 마이크로서비스로 나누지 않는다.
-- AWS와 사내 서버의 Load Balancer·Ingress·secret manager 차이는 배포 adapter와 설정에만 둔다. Control Plane의 제품 정책과 Relay Core는 특정 클라우드 SDK나 Ingress 제품에 의존하지 않는다.
+- 배포 환경별 Load Balancer·Ingress·secret manager 차이는 adapter와 설정에만 둔다. Control Plane의 제품 정책과 Relay Core는 특정 클라우드 SDK나 Ingress 제품에 의존하지 않는다.
 - Control Plane은 신원·정책·Session configuration과 수명주기를 소유하고 Relay Data Plane은 검증된 context와 Stream만 소비한다. Data Plane에서 Session·권한을 생성하거나 Control Plane이 앱 payload에 의존하는 역방향 의존을 금지한다.
 - Tunnel·Stream 상태 전이, 접근 허용 판단, 라우팅 선택, 헤더 정책과 protocol profile 검증은 가능한 한 순수 함수로 구현한다.
 - 네트워크, PostgreSQL, 비밀번호 해시, 시계, ID 생성과 세션 저장처럼 부수효과가 있는 동작은 명시적인 경계에 둔다.
@@ -390,6 +415,16 @@ SSE는 별도 도메인 파이프라인이 아니라 종료가 늦는 HTTP respo
 ## 8. 핵심 동작
 
 ### 8.1 세션 생성
+
+로컬 네트워크 모드:
+
+1. `share:lan`이 CLI 입력과 루프백 local origin을 검증한다.
+2. 물리 네트워크의 RFC 1918 사설 IPv4를 선택하고 임시 Gateway listener를 연다.
+3. 같은 명령이 Client를 시작해 해당 Gateway에 `review-tunnel.v1` WS Carrier를 만든다.
+4. 공통 설정 적용·local origin 점검·Relay probe·activation barrier를 통과한 뒤 서명된 bootstrap URL을 출력한다.
+5. 브라우저가 bootstrap URL을 열면 Gateway가 서명을 검증하고 host-only route Cookie를 설정한 뒤 앱의 `/`로 이동시킨다.
+
+인증형 Gateway 모드:
 
 1. Client가 CLI 입력을 정규화하고 루프백 대상인지 확인한다.
 2. Client가 로컬 앱에 제한된 health probe를 보낸다.
@@ -409,8 +444,8 @@ local-origin fingerprint는 resume 때 대상이 우연히 바뀌는 것을 막�
 
     검토자        Gateway          Client          로컬 앱
        │              │               │               │
-       │── HTTPS ────▶│               │               │
-       │              │ 인증·인가     │               │
+       │─ HTTPS/HTTP ─▶│               │               │
+       │              │ 인증/route    │               │
        │              │ 세션 조회     │               │
        │              │ 헤더 정책     │               │
        │              │── open/data ─▶│               │
@@ -421,8 +456,8 @@ local-origin fingerprint는 resume 때 대상이 우연히 바뀌는 것을 막�
 
 세부 순서:
 
-1. Gateway가 TLS와 검토자 인증을 처리한다.
-2. 접근 정책을 통과한 요청에서 Tunnel ID를 해석한다.
+1. 인증형 Gateway는 앞단 TLS와 검토자 인증을 확인한다. 로컬 네트워크 모드는 route Cookie를 검증한다.
+2. 각 모드의 접근 정책을 통과한 요청에서 Tunnel ID를 해석한다.
 3. 활성 Session을 찾고 Stream ID를 만든다.
 4. Gateway 소유 인증 정보와 hop-by-hop 헤더를 제거하고 신뢰할 수 있는 프록시 헤더를 설정한다.
 5. 요청 head와 body chunk를 중계 연결로 Client에 전달한다.
@@ -436,7 +471,7 @@ local-origin fingerprint는 resume 때 대상이 우연히 바뀌는 것을 막�
 ### 8.3 브라우저 WebSocket 중계
 
 1. 브라우저가 공유 URL에 `Upgrade: websocket` handshake를 보낸다.
-2. Gateway가 upgrade를 수락하기 전에 검토자 인증·인가, Session 조회와 자원 제한을 확인한다.
+2. Gateway가 upgrade를 수락하기 전에 인증형 모드의 검토자 인증·인가 또는 로컬 네트워크 모드의 route Cookie, Session 조회와 자원 제한을 확인한다.
 3. Gateway가 자기 인증 쿠키와 내부 header를 제거하고 Host·Origin 정책을 적용한 뒤 `websocket-open` Stream을 Client에 보낸다.
 4. Client가 고정된 로컬 origin으로 WebSocket handshake를 보낸다.
 5. 로컬 서버가 유효한 `101 Switching Protocols`를 반환한 경우에만 Gateway가 브라우저 upgrade를 완료한다.
@@ -445,7 +480,7 @@ local-origin fingerprint는 resume 때 대상이 우연히 바뀌는 것을 막�
 8. 브라우저 또는 로컬 socket의 정상 EOF는 해당 raw 방향의 `END_STREAM`으로 전달하고, 반대 방향은 close 응답과 남은 byte를 보낼 수 있도록 유지한다. 양방향 EOF 또는 close timeout에서 정상 완료한다. socket 오류, cancellation, timeout과 protocol 위반만 `RESET_STREAM`으로 양쪽을 즉시 중단한다.
 9. inner WebSocket close frame은 해석하지 않고 일반 opaque `DATA`로 전달한다. 중계 연결이 끊기면 기존 WebSocket은 종료하고 replay·resume하지 않는다.
 
-Client–Gateway WSS heartbeat와 브라우저 앱 WebSocket의 ping/pong은 서로 다른 연결의 동작이며 대체 관계가 아니다.
+Client–Gateway Carrier heartbeat와 브라우저 앱 WebSocket의 ping/pong은 서로 다른 연결의 동작이며 대체 관계가 아니다.
 
 ### 8.4 세션 상태
 
@@ -510,11 +545,11 @@ Session activation Readiness는 상태 진입을 위한 candidate snapshot이다
 
 ### 9.1 중계 전송 요구사항
 
-Client–Gateway 중계 연결은 세션당 하나의 TLS 기반 WebSocket을 사용하고 WSS subprotocol `review-tunnel.v1`을 검증한다. v1은 HTTP streaming, WebSocket upgrade와 flow control을 하나의 고정 profile로 정의한다. 한쪽이라도 v1 전체를 지원하지 않으면 세션 생성을 실패시키며 수동 새로고침 전용 모드로 조용히 낮추지 않는다.
+Client–Gateway 중계 연결은 세션당 하나의 WebSocket을 사용하고 subprotocol `review-tunnel.v1`을 검증한다. 인증형 Gateway는 TLS 기반 WSS, 로컬 네트워크 모드는 같은 개발자 컴퓨터의 사설 IPv4 WS를 사용한다. v1은 HTTP streaming, WebSocket upgrade와 flow control을 하나의 고정 profile로 정의한다. 한쪽이라도 v1 전체를 지원하지 않으면 세션 생성을 실패시키며 수동 새로고침 전용 모드로 조용히 낮추지 않는다.
 
-하나의 Carrier WSS 안에서 여러 논리 Stream을 multiplexing한다.
+하나의 Carrier WebSocket 안에서 여러 논리 Stream을 multiplexing한다.
 
-    Carrier WSS
+    Carrier WebSocket
     ├── stream 0: session control
     ├── stream 1: HTML HTTP
     ├── stream 2: image HTTP
@@ -522,7 +557,7 @@ Client–Gateway 중계 연결은 세션당 하나의 TLS 기반 WebSocket을 �
     ├── stream 4: HMR WebSocket
     └── stream 5: API request
 
-Gateway는 connection generation 안에서 재사용하지 않는 단조 증가 Stream ID를 만들고, 외부 추적용 Request ID는 별도로 발급한다. WSS가 같은 generation의 순서와 무결성을 보장하므로 MVP는 별도 chunk ACK, checksum 또는 replay protocol을 만들지 않는다.
+Gateway는 connection generation 안에서 재사용하지 않는 단조 증가 Stream ID를 만들고, 외부 추적용 Request ID는 별도로 발급한다. WebSocket이 같은 generation의 순서와 무결성을 보장하므로 MVP는 별도 chunk ACK, checksum 또는 replay protocol을 만들지 않는다.
 
 #### 최소 메시지
 
@@ -545,9 +580,9 @@ Gateway는 connection generation 안에서 재사용하지 않는 단조 증가 
 | `RESET_STREAM` | 양방향 | 취소 또는 Stream 단위 오류 |
 | `CONNECTION_ERROR` | 양방향 | Carrier 전체를 닫아야 하는 protocol 오류 |
 
-개발자 신원은 WSS 연결의 인증 context에서만 가져온다. `HELLO` payload에 별도 신원 값이 있더라도 인가 근거로 사용하지 않는다. v1 heartbeat는 Stream 0의 `PING`·`PONG`만 사용한다. candidate generation heartbeat는 activation liveness만, current generation heartbeat는 Carrier lease만 갱신하며 어느 쪽도 Session의 앱 유휴 시간을 갱신하지 않는다.
+인증형 Gateway에서 개발자 신원은 WSS 연결의 인증 context에서만 가져온다. `HELLO` payload에 별도 신원 값이 있더라도 인가 근거로 사용하지 않는다. v1 heartbeat는 Stream 0의 `PING`·`PONG`만 사용한다. candidate generation heartbeat는 activation liveness만, current generation heartbeat는 Carrier lease만 갱신하며 어느 쪽도 Session의 앱 유휴 시간을 갱신하지 않는다.
 
-Carrier credential만 WSS HTTP upgrade의 `Authorization: Bearer`에서 Carrier 인증에 사용한다. 개발자 access·refresh token과 검토자 세션 값은 Carrier endpoint에서 받지 않는다. URL path·query·fragment, Cookie, `Sec-WebSocket-Protocol` 또는 `HELLO`에 실린 값을 Carrier 인증에 사용하지 않으며 `Sec-WebSocket-Protocol`은 `review-tunnel.v1` profile 식별에만 사용한다. Resume secret은 Carrier 인증이 끝난 WSS 안에서 `HELLO`의 resume 필드로만 받고 현재 개발자 신원·Session 복구 검증에 사용한다.
+인증형 Gateway에서는 Carrier credential만 WSS HTTP upgrade의 `Authorization: Bearer`에서 Carrier 인증에 사용한다. 개발자 access·refresh token과 검토자 세션 값은 Carrier endpoint에서 받지 않는다. URL path·query·fragment, Cookie, `Sec-WebSocket-Protocol` 또는 `HELLO`에 실린 값을 Carrier 인증에 사용하지 않으며 `Sec-WebSocket-Protocol`은 `review-tunnel.v1` profile 식별에만 사용한다. Resume secret은 Carrier 인증이 끝난 WSS 안에서 `HELLO`의 resume 필드로만 받고 현재 개발자 신원·Session 복구 검증에 사용한다. 로컬 네트워크 모드는 별도 Carrier credential 없이 같은 실행 명령이 만든 임시 Gateway와 Client를 연결한다.
 
 create의 `SESSION_PROVISIONED`는 config snapshot과 분리한다. Gateway는 Resume secret HMAC만 provisional Session 상태에 저장하고 원문은 receipt timeout이 있는 bounded transient buffer에만 둔다. Client는 secret을 프로세스 메모리에 보관하고 `provision_id`를 `CONFIG_APPLIED`에 되돌려 수신을 확인한다. receipt 누락·불일치·timeout이면 provisional Session, HMAC과 원문 buffer를 모두 폐기하고 URL을 활성화하지 않는다. 이 확인 덕분에 commit 뒤 `SESSION_ACTIVE` frame이나 Carrier가 유실돼도 Client는 이미 가진 Session ID·공유 URL·Resume secret으로 같은 URL의 resume을 시도할 수 있다.
 
@@ -561,7 +596,7 @@ create의 `SESSION_PROVISIONED`는 config snapshot과 분리한다. Gateway는 R
 
 101 전에는 Gateway가 보낸 `DATA`가 request body이고 Client가 보낸 `DATA`가 response body다. 101 후에는 양방향 모두 upgraded raw bytes다. `END_STREAM`은 전체 Stream이 아니라 메시지를 보낸 endpoint의 해당 송신 방향만 half-close한다. 정상 완료는 두 방향이 모두 끝났을 때 성립한다.
 
-`DATA` payload는 항상 binary-safe raw bytes이고 metadata와 분리한다. metadata 인코딩, 정확한 wire layout, metadata·DATA chunk 최대 크기, 알 수 없는 필수 메시지의 fail-closed 처리와 `review-tunnel.v1` 식별자는 Phase 1 구현 전에 확정한다. POC 결과로 계약을 바꿀 때는 같은 v1의 의미를 조용히 바꾸지 않고 새 version으로 올린다. 본문 전체를 JSON 문자열 하나에 담거나 base64로 누적하지 않는다.
+`DATA` payload는 항상 binary-safe raw bytes이고 JSON metadata와 분리한다. v1 envelope는 16-byte header와 최대 65,535-byte payload를 사용하며 `DATA`는 최대 32 KiB chunk로 자른다. 알 수 없는 frame type·flag·version은 fail-closed한다. 계약을 바꿀 때는 같은 v1의 의미를 조용히 바꾸지 않고 새 version으로 올린다. 본문 전체를 JSON 문자열 하나에 담거나 base64로 누적하지 않는다.
 
 #### Stream 상태와 불변식
 
@@ -636,7 +671,7 @@ Host와 Origin 계열을 섞지 않는 이유는 일부 개발 서버가 두 값
 
 다음 값은 환경 설정으로 노출한다. 제품 정책으로 승인된 Session 값은 고정하고 나머지 전송·자원 제한은 POC 측정 뒤 파일럿 전에 확정한다.
 
-- Session: 최대 TTL 8시간, 활성 Stream이 없을 때 유휴 만료 30분, 재연결 유예 2분. 명시적 종료 반영 상한은 Phase 0에서 확정
+- Session: 최대 TTL 8시간, 활성 Stream이 없을 때 유휴 만료 30분, 재연결 유예 2분, Client의 기본 종료 확인 timeout 1초
 - Carrier: handshake timeout, heartbeat 주기·timeout, connection window, aggregate queue와 control message 크기·rate 상한
 - local origin: connect timeout과 response-header timeout
 - HTTP request: 총 크기와 body inactivity timeout
@@ -659,9 +694,9 @@ finite HTTP에만 누적 response 크기 제한을 적용한다. 종료 시점�
 검토자 인증과 Client 인증은 목적과 자격 증명이 다르므로 분리한다.
 
 - 검토자 인증: 공유 URL의 앱 응답을 볼 수 있는지 판단한다.
-- Client 인증: 누가 회사 Gateway에 로컬 원본을 등록할 수 있는지 판단한다.
+- Client 인증: 누가 인증형 Gateway에 로컬 원본을 등록할 수 있는지 판단한다.
 
-두 경계는 같은 내부 계정 저장소를 사용하되 요구 권한과 세션 audience를 분리한다. `REVIEWER` 세션으로 WSS Session을 등록하거나 `DEVELOPER` 전용 자격증명으로 관리자 기능을 사용할 수 없다. 재연결도 현재 유효한 개발자 계정과 Resume secret을 함께 검증한다.
+두 경계는 같은 계정 저장소를 사용하되 요구 권한과 세션 audience를 분리한다. `REVIEWER` 세션으로 WSS Session을 등록하거나 `DEVELOPER` 전용 자격증명으로 관리자 기능을 사용할 수 없다. 재연결도 현재 유효한 개발자 계정과 Resume secret을 함께 검증한다.
 
 공개 회원가입은 없으며 최초 `ADMIN`만 서버 CLI에서 원자적으로 1회 생성한다. 관리자는 이후 UI 또는 인증된 CLI에서 계정을 생성한다. 임시 비밀번호는 발급 응답에 한 번만 표시하고 최초 로그인 후 새 비밀번호로 변경하기 전에는 공유·관리 작업을 허용하지 않는다.
 
@@ -679,27 +714,27 @@ HTTP request와 WebSocket handshake를 열 때 검토자 신원, 인증 만료�
 | 검토자 host 세션 | 하나의 Tunnel host 접근 | `__Host-rt_session` Secure·HttpOnly cookie | host·Tunnel·검토자·expiry에 바인딩된 HMAC session ID | Tunnel TTL, 인증 max-age, 접근 회수 중 먼저 도달한 때 |
 | host 교환 코드 | 중앙 로그인에서 Tunnel host 세션으로 교환 | 브라우저 redirect 동안만 전달 | host·검토자에 바인딩된 HMAC과 consumed 상태 | 매우 짧은 TTL과 1회 소비 |
 
-Gateway는 Carrier credential secret, Resume secret과 opaque 검토자 세션 ID의 원문을 Registry·DB·cache 같은 상태 저장소에 남기지 않는다. 용도별 서버 키와 versioned length-prefix canonical bytes를 사용해 HMAC-SHA-256 lookup 값을 만들고 constant-time으로 비교한다. 원문은 발급·검증 중 bounded transient buffer에만 존재하고 처리 직후 참조를 해제하며 로그·trace·crash dump 수집 대상에서 제외한다. HMAC key는 소스나 일반 설정 파일이 아니라 회사 secret manager에서 관리한다. 새 artifact는 active key로 발급하고 이전 key 목록은 로그인 세션 최대 12시간과 시계 오차를 포함한 제한된 overlap 동안 검증에만 사용한 뒤 제거한다.
+Gateway는 Carrier credential secret, Resume secret과 opaque 검토자 세션 ID의 원문을 Registry·DB·cache 같은 상태 저장소에 남기지 않는다. 용도별 서버 키와 versioned length-prefix canonical bytes를 사용해 HMAC-SHA-256 lookup 값을 만들고 constant-time으로 비교한다. 원문은 발급·검증 중 bounded transient buffer에만 존재하고 처리 직후 참조를 해제하며 로그·trace·crash dump 수집 대상에서 제외한다. HMAC key는 소스나 일반 설정 파일이 아니라 배포 환경의 secret manager에서 관리한다. 새 artifact는 active key로 발급하고 이전 key 목록은 로그인 세션 최대 12시간과 시계 오차를 포함한 제한된 overlap 동안 검증에만 사용한 뒤 제거한다.
 
 Client는 Carrier credential과 Resume secret을 stdout, shell history, debug log, crash report나 telemetry에 출력하지 않는다. 개발자 로그인 자격증명은 필요할 때만 OS 보안 저장소에 두고 Carrier credential과 Resume secret은 기본적으로 디스크에 기록하지 않는다. 진단 bundle은 Authorization·Cookie header 전체와 URL query를 구조적으로 제거한 뒤 생성한다.
 
-Carrier credential은 WSS `Authorization` header 외 위치에서 받지 않으며 성공한 연결 이후의 Session 인증 수명과는 구분한다. credential TTL이 연결 뒤 만료됐다는 이유만으로 정상 Carrier를 자동 종료하지는 않지만, 현재 개발자 권한은 설정된 developer authorization max-age마다 push event, introspection 또는 회사 표준 재검증 방식으로 다시 확인한다. 회수 신호가 없는 환경에서는 이 max-age가 최악의 감지 지연 상한이며 Session 최대 TTL보다 길 수 없다. 개발자·Tunnel 회수, Session 최대 TTL과 인증 max-age는 현재 Carrier와 열린 Stream에 적용하고 재시도와 resume에는 항상 새 Carrier credential이 필요하다.
+Carrier credential은 WSS `Authorization` header 외 위치에서 받지 않으며 성공한 연결 이후의 Session 인증 수명과는 구분한다. credential TTL이 연결 뒤 만료됐다는 이유만으로 정상 Carrier를 자동 종료하지는 않지만, 현재 개발자 권한은 설정된 developer authorization max-age마다 저장소 재검증으로 다시 확인한다. 회수 신호가 없는 환경에서는 이 max-age가 최악의 감지 지연 상한이며 Session 최대 TTL보다 길 수 없다. 개발자·Tunnel 회수, Session 최대 TTL과 인증 max-age는 현재 Carrier와 열린 Stream에 적용하고 재시도와 resume에는 항상 새 Carrier credential이 필요하다.
 
 재사용 가능한 로그인 세션, Carrier credential, Resume secret과 검토자 세션 값은 Gateway 인증 목적으로 URL path·query·fragment나 `Sec-WebSocket-Protocol`에 넣지 않는다. 앱의 `Authorization`과 query는 콘텐츠 중계 데이터일 뿐 Gateway 인증에 사용하지 않는다. 예외는 Gateway가 발급한 짧은 수명·1회용 host 교환 코드뿐이다. 원래 Tunnel host·path·application query는 짧은 수명 서버 측 record에 보관하며, 교환 뒤 code를 제거한 원래 application URL로 `303` 이동시킨다.
 
-### 10.3 검토자 내부 계정 세션 흐름
+### 10.3 검토자 계정 세션 흐름
 
 와일드카드 Tunnel host 전체에 공유되는 Domain cookie는 사용하지 않는다.
 
 1. 인증되지 않은 검토자가 Tunnel host를 열면 Gateway가 대상 Tunnel host, 원래 path·application query와 만료를 서버 측 one-time record에 저장하고 브라우저에는 추측하기 어려운 opaque state handle만 전달한다.
-2. 콘텐츠와 사이트 경계가 다른 control host가 opaque state를 받아 Gateway 소유 로그인 화면을 표시한다.
-3. Gateway가 내부 계정 비밀번호와 로그인 제한을 검증하고 control host 전용 세션을 발급한다.
+2. 콘텐츠 wildcard 바깥의 control host가 opaque state를 받아 Gateway 소유 로그인 화면을 표시한다.
+3. Gateway가 관리자 발급 계정의 비밀번호와 로그인 제한을 검증하고 control host 전용 세션을 발급한다.
 4. Gateway가 대상 host, 검토자 신원과 짧은 만료 시간에 바인딩된 일회용 교환 코드를 발급한다.
 5. 브라우저가 대상 Tunnel host의 `/_review-tunnel/session` 예약 경로로 돌아온다.
 6. Gateway가 코드를 한 번만 소비하고 `Secure`, `HttpOnly`, `SameSite=Lax`, `Path=/` 조건을 가진 `__Host-rt_session` host-only 쿠키를 발급한다.
 7. Gateway가 교환용 parameter만 제거한 원래 path와 application query로 이동시키고 이후 요청마다 접근 정책을 다시 확인한다.
 
-Gateway의 중앙 인증 세션은 control host 전용 `__Host-*` 쿠키만 사용하고 콘텐츠 사이트 경계에 두지 않는다. 콘텐츠 host에는 해당 Tunnel 접근에만 사용하는 `__Host-rt_session` host-only 쿠키만 둔다. state는 무작위 handle이고 원래 host·path·application query는 Gateway의 짧은 수명 record에서 허용된 공유 host만 대상으로 검증해 open redirect를 막는다. 일회용 코드 교환 응답에는 `Cache-Control: no-store`와 `Referrer-Policy: no-referrer`를 적용하고 query를 로그에서 제외한다. 애플리케이션이 반환한 `Set-Cookie`는 Gateway의 예약 쿠키를 만들거나 덮어쓸 수 없다.
+Gateway의 중앙 인증 세션은 control host 전용 `__Host-*` host-only 쿠키만 사용하고 콘텐츠 host로 보내지 않는다. 모든 control 상태 변경은 정확한 control `Origin`을 요구한다. 콘텐츠 host에는 해당 Tunnel 접근에만 사용하는 `__Host-rt_session` host-only 쿠키만 둔다. state는 무작위 handle이고 원래 host·path·application query는 Gateway의 짧은 수명 record에서 허용된 공유 host만 대상으로 검증해 open redirect를 막는다. 일회용 코드 교환 응답에는 `Cache-Control: no-store`와 `Referrer-Policy: no-referrer`를 적용하고 query를 로그에서 제외한다. 애플리케이션이 반환한 `Set-Cookie`는 Gateway의 예약 쿠키를 만들거나 덮어쓸 수 없다.
 
 와일드카드 아래의 콘텐츠 host들은 민감한 보안 경계로 간주하지 않는다. Tunnel 간 앱 쿠키 격리가 필요한 프로젝트는 콘텐츠 도메인의 Public Suffix 정책 또는 별도 격리 방식을 확정하기 전까지 파일럿 대상에서 제외한다.
 
@@ -707,15 +742,15 @@ Gateway의 중앙 인증 세션은 control host 전용 `__Host-*` 쿠키만 사�
 
 | 위협 | 기본 통제 |
 | --- | --- |
-| URL을 획득한 외부인 | 내부 계정 인증과 `REVIEWER` 권한을 요청 전달 전에 적용 |
+| 인증형 Gateway URL을 획득한 사용자 | 관리자 발급 계정 인증과 `REVIEWER` 권한을 요청 전달 전에 적용 |
 | Tunnel ID 추측 | 충분한 엔트로피의 ID 사용. ID와 무관하게 매 요청 인가 수행 |
 | 비인가 Client 등록 | 개발자 인증, 짧은 수명의 연결 자격 증명, 회수 가능한 토큰 |
 | Carrier credential 탈취·재사용 | 짧은 TTL·1회 소비·purpose·audience 바인딩, Authorization header 전용 전달과 상태 저장소 원문 비저장 |
 | 설정 전송과 실제 적용 불일치 | candidate generation의 revision·digest ACK와 Relay probe 전에는 current 승격·`ACTIVE` 전이 금지 |
 | Control 연결은 성공했으나 Data 경로 실패 | 구성 요소별 Readiness를 분리하고 local origin·Relay probe 실패를 명시적으로 노출 |
 | 내부망 대상 프록시 | 기본 대상을 루프백으로 제한하고 입력 정규화 후 검증 |
-| 회사 도메인 쿠키·신뢰 경계 악용 | 회사 핵심 서비스, 인증·제어 plane, 공유 콘텐츠를 서로 다른 사이트 경계에 배치하고 민감한 Domain cookie를 사용하지 않음 |
-| 신뢰된 회사 링크처럼 보이는 피싱 | 전용 도메인 사용, 로그인·오류 화면에 임시 개발 미리보기와 소유 개발자 표시 |
+| 상위 도메인의 기존 Cookie가 공유 콘텐츠로 전달됨 | 다른 서비스와 기준 도메인을 공유할 때 `Domain` Cookie 범위를 검토하고, Gateway 자체 control·content 인증에는 host-only Cookie를 사용하며 control mutation의 정확한 Origin을 확인 |
+| 신뢰된 링크처럼 보이는 피싱 | 로그인·오류 화면에 임시 개발 미리보기와 소유 개발자 표시 |
 | Gateway 인증 정보 유출 | Tunnel host 전용 Secure·HttpOnly·SameSite 쿠키 사용, 로컬 전달 및 로그 기록 차단 |
 | 요청·응답 내용 유출 | 전 구간 TLS, 본문 비저장, 민감 헤더와 query 로그 제외 |
 | 미인증 장기 연결 | WebSocket upgrade 전에 인증·인가하고 Stream을 인증 만료와 Session 수명에 바인딩 |
@@ -737,7 +772,7 @@ Gateway의 중앙 인증 세션은 control host 전용 `__Host-*` 쿠키만 사�
 - 애플리케이션 본문과 파일을 영구 저장하지 않는다.
 - Cookie, Authorization, 비밀번호, 임시 비밀번호와 Resume secret을 평문 로그에 남기지 않는다.
 - Carrier credential, Resume secret과 검토자 세션 원문은 Registry·DB·cache에 저장하지 않고 용도별 HMAC lookup 값만 저장한다. 발급·검증 중의 원문은 bounded transient buffer에서 처리 직후 해제하고 로그·trace·crash dump에서 제외한다.
-- 운영 로그의 보존 기간과 접근 권한은 회사 정책에 맞춰 배포 전에 확정한다.
+- 운영 로그의 보존 기간과 접근 권한은 배포 환경의 운영 정책에 맞춰 확정한다.
 - 개발자 로그인 자격증명만 필요하면 OS 보안 저장소에 둔다. Carrier credential과 Resume secret은 사용자 파일을 포함한 디스크에 기록하지 않고 Client 프로세스 메모리에만 둔다.
 - 로컬 앱의 경로·메서드·데이터 변경, 인증된 검토자의 화면 캡처·복사와 브라우저가 외부 origin에 직접 보내는 요청은 Tunnel의 앱 정책 범위가 아니다.
 - Session 종료는 새 네트워크 접근과 열린 Stream을 막지만 이미 브라우저 cache, Service Worker 또는 사용자 파일로 전달된 사본을 회수하지는 못한다.
@@ -749,8 +784,8 @@ Gateway의 중앙 인증 세션은 control host 전용 `__Host-*` 쿠키만 사�
 
 | 상황 | 응답 원칙 |
 | --- | --- |
-| 인증 세션 없음 | GET·HEAD 최상위 브라우저 탐색만 Gateway 내부 계정 로그인으로 이동한다. 그 밖의 method와 API·SSE·WebSocket handshake는 body를 저장·재생하지 않고 `401 Unauthorized`와 사전 로그인 안내를 반환 |
-| 회사 전역 계정 정책 위반 | Tunnel을 조회하지 않고 `403 Forbidden` |
+| 인증 세션 없음 | GET·HEAD 최상위 브라우저 탐색만 Gateway 계정 로그인으로 이동한다. 그 밖의 method와 API·SSE·WebSocket handshake는 body를 저장·재생하지 않고 `401 Unauthorized`와 사전 로그인 안내를 반환 |
+| 계정 정책 위반 | Tunnel을 조회하지 않고 `403 Forbidden` |
 | Tunnel별 비인가, 존재하지 않음 또는 만료 | 존재 여부를 구분하지 않는 동일한 `404 Not Found` |
 | generic CONNECT 또는 websocket 이외 Upgrade | `501 Not Implemented`와 `UNSUPPORTED_CAPABILITY` |
 | 재연결 유예 중 | `503 Service Unavailable`과 제한된 `Retry-After` |
@@ -825,7 +860,7 @@ Session·Stream lifecycle 로그의 최소 필드이며 이벤트 유형에 해�
 - SSE event와 WebSocket opaque bytes
 - Cookie와 Authorization
 - query string
-- 내부 계정 세션, 비밀번호 및 Client token
+- 관리자 발급 계정 세션, 비밀번호 및 Client token
 - Session configuration 본문, Relay probe nonce와 로컬 origin 주소
 
 동일한 제외 규칙을 Gateway 앞단 access log, Client debug log, trace span과 오류 수집 payload에도 적용하고 자동 수집 설정을 테스트한다.
@@ -854,10 +889,10 @@ Gateway는 process liveness, instance traffic readiness와 Gateway admission rea
 
 | 주제 | MVP 방향 | 상태 | 근거 |
 | --- | --- | --- | --- |
-| 공유 URL | 회사 핵심 서비스 및 인증·제어 plane과 사이트 경계가 다른 랜덤 와일드카드 서브도메인. 실제 도메인은 환경 변수로 주입 | MVP 확정 | 경로 prefix 문제와 회사 쿠키·SameSite·신뢰 경계 위험을 함께 줄임 |
-| 인증·제어 host | 콘텐츠와 다른 사이트 경계의 고정 callback·control host. 실제 host는 환경 변수로 주입 | MVP 확정 | 임의 Tunnel 콘텐츠가 인증 쿠키와 제어 endpoint에 영향을 주지 못하게 함 |
+| 공유 URL | 인증형 Gateway는 기준 도메인의 랜덤 와일드카드 서브도메인, 로컬 네트워크 모드는 서명된 1회 bootstrap URL로 host-only route Cookie 설정 | MVP 확정 | 앱 경로를 바꾸지 않고 두 모드를 지원 |
+| 인증·제어 host | 콘텐츠 wildcard namespace 바깥의 고정 callback·control host. 기준 도메인은 운영자가 선택 | MVP 확정 | host-only Cookie와 정확한 Origin 검증으로 제어 endpoint를 보호 |
 | Ingress routing | 사전 구성한 wildcard 단일 route로 모든 콘텐츠 host를 Gateway에 전달하고 Session route는 Registry에서 수행 | MVP 확정 | Tunnel별 설정 전파 지연과 프록시 제품별 동적 router 의존 제거 |
-| 중계 연결 | `review-tunnel.v1` WSS Carrier 하나 | MVP 확정 | 아웃바운드 연결 하나로 여러 Stream을 중계하고 구현 라이브러리는 Phase 0 ADR로 선택 |
+| 중계 연결 | `review-tunnel.v1` WebSocket Carrier 하나. 인증형은 WSS, 로컬 네트워크는 같은 컴퓨터의 WS | MVP 확정 | 연결 하나로 여러 Stream을 중계 |
 | Relay 모델 | HTTP·SSE·WebSocket 공통 논리 Stream | MVP 확정 | 별도 파이프라인 없이 공통 수명주기·취소·flow control 사용 |
 | SSE | 종료가 늦는 HTTP response stream | MVP 확정 | 별도 event protocol과 replay 저장소가 필요하지 않음 |
 | 브라우저 WebSocket | HTTP 101 이후 opaque 양방향 byte relay | MVP 확정 | fragmentation·compression·ping/pong을 재구현하지 않고 보존 |
@@ -867,18 +902,18 @@ Gateway는 process liveness, instance traffic readiness와 Gateway admission rea
 | Session configuration | 작은 불변 snapshot + revision·digest + 명시적 적용 ACK | MVP 확정 | 설정 전송 성공과 실제 적용 성공을 구분하고 범용 설정 bus를 만들지 않음 |
 | 활성화 gate | Session activation Readiness와 전역 Gateway admission Readiness의 논리곱 | MVP 확정 | Control 연결만 정상인 부분 장애를 사용 가능 상태로 오인하지 않고 Session·배포 상태를 분리 |
 | Session Registry | 프로세스 메모리 | MVP 확정 | Gateway 재시작 때 기존 URL이 종료되는 제약을 승인했으며 MVP에는 영구 세션과 수평 확장이 필요하지 않음 |
-| 검토자 인증 | 관리자 발급 내부 계정 + `REVIEWER` 권한 | MVP 확정 | 외부 IdP 없이 접근 대상을 관리자가 명시적으로 통제 |
-| Client 로그인 | 내부 계정 + `DEVELOPER` 권한, 로그인 세션을 Carrier credential로 교환 | MVP 확정 | 브라우저·CLI가 같은 계정 정책을 사용하되 Carrier 자격증명은 분리 |
-| 계정 저장 | PostgreSQL | MVP 확정 | Gateway 재시작과 무관하게 계정·권한·세션·로그인 제한·감사를 보존하고 AWS·사내 Linux에서 동일하게 사용 |
+| 검토자 인증 | 인증형 Gateway에서 관리자 발급 계정 + `REVIEWER` 권한 | MVP 확정 | 외부 IdP 없이 접근 대상을 관리자가 명시적으로 통제 |
+| Client 로그인 | 인증형 Gateway에서 관리자 발급 계정 + `DEVELOPER` 권한, 로그인 세션을 Carrier credential로 교환 | MVP 확정 | 브라우저·CLI가 같은 계정 정책을 사용하되 Carrier 자격증명은 분리 |
+| 계정 저장 | PostgreSQL | MVP 확정 | Gateway 재시작과 무관하게 계정·권한·세션·로그인 제한·감사를 보존하고 배포 위치와 무관하게 동일하게 사용 |
 | 비밀번호 | Argon2id, 최소 15자, 임시 비밀번호 최초 변경 강제 | MVP 확정 | 평문·복호화 가능한 저장을 금지하고 자체 계정 운영 책임을 명시 |
 | Carrier 인증 | control API가 발급한 짧은 수명·1회용 opaque credential을 WSS Authorization header로 전달 | MVP 확정 | 로그인 token 재사용과 URL token 유출을 막고 create·resume 목적을 분리 |
 | Secret 저장 | 상태 저장소에는 Carrier·Resume·검토자 세션 원문 대신 용도별 HMAC lookup 값만 저장 | MVP 확정 | 원문은 발급·검증의 bounded transient buffer로 제한하고 지속 상태·로그 노출 시 재사용 가능한 비밀값 잔존 방지 |
 | 배포 변경 통제 | Ingress·LB·필수 플러그인 버전과 config digest pinning, public-path canary, drain·rollback 정책 | MVP 확정 | 설정 유효성만으로 발견하기 어려운 route·middleware 부분 장애를 차단하고 메모리 Session 손실을 명시적으로 통제 |
-| 배포 단위 | AWS와 사내 서버에서 동일하게 실행 가능한 단일 컨테이너 Gateway | MVP 확정 | 핵심 흐름을 클라우드 제품에 종속시키지 않고 환경별 차이는 설정과 Ingress adapter로 격리 |
+| 배포 단위 | Linux 또는 컨테이너 환경에서 동일하게 실행 가능한 단일 Gateway | MVP 확정 | 핵심 흐름을 클라우드 제품에 종속시키지 않고 환경별 차이는 설정과 Ingress adapter로 격리 |
 | 구현 언어 | TypeScript 5.9 + Node.js 24 | MVP 확정 | Phase 1 POC의 streaming·WebSocket·flow-control 검증을 통과하고 단일 코드베이스 유지 |
-| TLS 종료 | AWS 또는 사내 환경의 승인된 Ingress·Load Balancer | 환경별 확정 필요 | 회사 DNS·인증서·운영 표준과 고정 public-path canary를 사용 |
+| TLS 종료 | 배포 환경의 Ingress·Load Balancer | 환경별 확정 필요 | 운영자가 선택한 DNS·인증서 구성과 고정 public-path canary를 사용 |
 
-기술 선택은 요구사항을 충족하는 수단이다. Go, Node.js, Nginx, Caddy 같은 제품명은 POC 결과와 회사 운영 환경을 확인한 뒤 확정한다.
+기술 선택은 요구사항을 충족하는 수단이다. Go, Node.js, Nginx, Caddy 같은 제품명은 POC 결과와 실제 배포 환경을 확인한 뒤 확정한다.
 
 ## 13. MVP 인수 기준
 
@@ -886,9 +921,10 @@ Gateway는 process liveness, instance traffic readiness와 Gateway admission rea
 
 ### 13.1 사용자 시나리오
 
-- AC-01. 인증된 개발자가 루프백 주소를 지정해 Client를 실행하면 candidate generation의 설정 적용과 최종 activation gate가 확인되고 current로 승격된 뒤에만 사용 가능한 공유 URL이 출력된다.
-- AC-02. 유효한 목적 제한 Carrier credential이 없거나 `review-tunnel.v1` profile과 일치하지 않는 Client는 Tunnel Session을 만들 수 없고 조용한 downgrade도 일어나지 않는다.
-- AC-03. 관리자가 발급하지 않았거나 비활성·권한 부족·미인증 상태인 내부 계정은 HTTP body, SSE event 또는 WebSocket handshake를 로컬 앱까지 전달할 수 없다.
+- AC-00. `share:lan`은 선택한 사설 IPv4에 임시 Gateway를 열고 서명된 bootstrap URL을 출력한다. 유효한 route Cookie 없이 일반 경로에 접근할 수 없고 bootstrap 뒤 HTTP·WebSocket·Vite HMR이 동작한다.
+- AC-01. 인증형 Gateway에서 인증된 개발자가 루프백 주소를 지정해 Client를 실행하면 candidate generation의 설정 적용과 최종 activation gate가 확인되고 current로 승격된 뒤에만 사용 가능한 공유 URL이 출력된다.
+- AC-02. 인증형 Gateway에서 유효한 목적 제한 Carrier credential이 없거나 `review-tunnel.v1` profile과 일치하지 않는 Client는 Tunnel Session을 만들 수 없고 조용한 downgrade도 일어나지 않는다.
+- AC-03. 인증형 Gateway에서 관리자가 발급하지 않았거나 비활성·권한 부족·미인증 상태인 계정은 HTTP body, SSE event 또는 WebSocket handshake를 로컬 앱까지 전달할 수 없다.
 - AC-04. 호환성 매트릭스에 버전을 고정한 테스트 앱에서 초기 화면, client navigation, 정적·binary 자산, API, 앱 Cookie, 압축 응답과 redirect E2E가 통과한다.
 - AC-05. 표준 parser가 수용한 GET·POST·PUT·PATCH·DELETE·OPTIONS와 custom application method, method-override header가 공유 명령 외 메서드별 추가 opt-in 없이 보존된다. generic CONNECT와 websocket 이외 Upgrade만 `UNSUPPORTED_CAPABILITY`로 거부된다.
 - AC-06. request와 response body가 전체 buffering 없이 chunk로 흐르고 첫 response chunk가 로컬 응답 종료 전에 브라우저에 도착한다.
@@ -904,11 +940,11 @@ Gateway는 process liveness, instance traffic readiness와 Gateway admission rea
 - AC-16. Gateway에 도달 가능한 상태에서 개발자가 종료하면 `close propagation timeout` 안에 모든 Stream과 URL이 제거된다. 이미 단절됐다면 Client는 로컬 Resume secret을 폐기하고 종료 미확인 상태를 표시하며 Gateway는 유예 만료 후 제거한다.
 - AC-17. 활성 앱 Stream은 Session idle 만료를 막지만 최대 TTL과 검토자·개발자 authorization max-age는 적용된다. 만료 시 scope에 속하는 Stream과 URL 또는 Carrier가 종료되고 새 URL은 자동 발급되지 않는다.
 - AC-17a. fake clock 또는 축약 시간 환경에서 최대 8시간, 활성 Stream이 없을 때 유휴 30분과 재연결 유예 2분의 경계 전후 상태 전이가 결정적으로 검증된다.
-- AC-17b. macOS arm64 Client와 관리되는 Chrome에서 회사 표준 Vite·Next.js 테스트 앱의 생성·접속·HMR·재연결·종료 E2E가 통과한다.
+- AC-17b. 지원 대상 OS와 Chromium 계열 브라우저에서 호환성 매트릭스의 Vite·Next.js 테스트 앱 생성·접속·HMR·재연결·종료 E2E가 통과한다.
 
 ### 13.2 보안·운영
 
-- AC-18. 개발자 PC에 외부 인바운드 포트를 열지 않고 모든 외부 통신이 HTTPS/WSS를 사용한다.
+- AC-18. 인증형 Gateway는 개발자 PC에 외부 listener를 열지 않고 외부 통신에 HTTPS/WSS를 사용한다. 로컬 네트워크 모드는 선택한 사설 IPv4 listener, 무인증 HTTP/WS와 접근 가능 범위를 CLI·문서에 분명히 표시한다.
 - AC-19. Gateway 인증 Cookie와 내부 header가 HTTP·SSE·WebSocket 어느 경로에서도 로컬 앱에 전달되지 않으며, 검토자·Client 자격 증명을 서로의 endpoint에서 사용할 수 없다.
 - AC-20. HTTP body, SSE event, WebSocket bytes, Cookie, Authorization, token, Session configuration 본문, Relay probe nonce와 로컬 origin 주소가 전체 중계 인프라의 로그·trace·오류 수집 정보에 남지 않는다.
 - AC-21. 루프백 외 주소는 공유할 수 없고 health probe와 로컬 HTTP Client가 redirect를 자동 추적하지 않는다.
@@ -920,11 +956,11 @@ Gateway는 process liveness, instance traffic readiness와 Gateway admission rea
 - AC-27. 콘텐츠 shared cache가 비활성화되어 한 검토자의 인증된 응답이 다른 사용자나 Session 종료 후 새 네트워크 요청에 재사용되지 않는다.
 - AC-28. create의 정확한 provision receipt, candidate generation의 revision·digest가 담긴 `CONFIG_APPLIED`, Relay probe와 Gateway admission 성공 전에는 candidate가 current로 승격되거나 Session이 외부 요청을 중계하지 않는다. `SESSION_ACTIVE`는 같은 Carrier의 모든 `OPEN_HTTP`보다 FIFO상 먼저 처리된다.
 - AC-29. 정확히 같은 configuration ACK 중복은 idempotent하고 ACK timeout에는 동일 snapshot을 한 번만 재전송한다. stale generation, digest mismatch와 명시적 적용 실패는 candidate Carrier를 fail-closed하며, create provisional Session은 제거하고 resume Session은 기존 상태를 재연결 유예 동안 유지한다.
-- AC-30. Control 인증·WSS가 성공했어도 initial origin, Relay Data Plane, Registry binding 또는 Gateway admission이 실패하면 CLI와 운영 지표가 원인을 구분하고 `control connected`를 `tunnel ready`로 보고하지 않는다.
-- AC-31. Carrier credential은 짧은 TTL·1회 사용·create/resume purpose·control audience 제한을 가지며 `Authorization` header 외 위치의 값과 만료·회수·재사용된 값은 거부된다. Registry·DB·cache에는 Carrier·Resume·검토자 세션 secret의 용도별 HMAC만 남고 원문은 발급·검증 중 bounded transient buffer에서만 처리된 뒤 해제·수집 제외된다.
-- AC-32. 공유 URL·Tunnel ID와 URL bearer token만 가진 사용자는 접근할 수 없다. 원래 application query는 서버 측 one-time record에 남으며, host 교환 값은 대상 host에 바인딩되어 한 번만 소비되고 제거되지만 원래 application URL은 보존된다.
-- AC-33. 검토자 회수는 해당 검토자의 새 요청과 진행 중 finite HTTP·streaming/SSE·WebSocket을, 개발자·Tunnel 회수와 kill switch는 해당 Tunnel의 새 요청·resume·모든 Stream·Carrier를 Gateway의 revocation propagation SLO 안에 종료한다. 이전 generation은 되살아나지 않는다.
-- AC-34. Tunnel 생성·재연결·종료 전후 Ingress·DNS·인증서 설정은 동일하다. pin된 실제 Ingress 경로에서 미인증 negative probe와 별도의 authenticated request streaming·SSE·WebSocket canary가 모두 통과한다. 실패 시 신규 admission 차단과 운영자가 선택한 drain 또는 Session 손실을 명시한 rollback 절차가 검증된다.
+- AC-30. 인증형 Gateway의 Control 인증·WSS가 성공했어도 initial origin, Relay Data Plane, Registry binding 또는 Gateway admission이 실패하면 CLI와 운영 지표가 원인을 구분하고 `control connected`를 `tunnel ready`로 보고하지 않는다.
+- AC-31. 인증형 Gateway의 Carrier credential은 짧은 TTL·1회 사용·create/resume purpose·control audience 제한을 가지며 `Authorization` header 외 위치의 값과 만료·회수·재사용된 값은 거부된다. Registry·DB·cache에는 Carrier·Resume·검토자 세션 secret의 용도별 HMAC만 남고 원문은 발급·검증 중 bounded transient buffer에서만 처리된 뒤 해제·수집 제외된다.
+- AC-32. 인증형 Gateway에서는 공유 URL·Tunnel ID와 URL bearer token만 가진 사용자가 접근할 수 없다. 원래 application query는 서버 측 one-time record에 남으며, host 교환 값은 대상 host에 바인딩되어 한 번만 소비되고 제거되지만 원래 application URL은 보존된다. 로컬 네트워크 bootstrap URL은 서명 검증 뒤 route Cookie를 설정하는 별도 계약이다.
+- AC-33. 인증형 Gateway의 검토자 회수는 해당 검토자의 새 요청과 진행 중 finite HTTP·streaming/SSE·WebSocket을, 개발자·Tunnel 회수와 kill switch는 해당 Tunnel의 새 요청·resume·모든 Stream·Carrier를 Gateway의 revocation propagation SLO 안에 종료한다. 이전 generation은 되살아나지 않는다.
+- AC-34. 인증형 Gateway의 Tunnel 생성·재연결·종료 전후 Ingress·DNS·인증서 설정은 동일하다. pin된 실제 Ingress 경로에서 미인증 negative probe와 별도의 authenticated request streaming·SSE·WebSocket canary가 모두 통과한다. 실패 시 신규 admission 차단과 운영자가 선택한 drain 또는 Session 손실을 명시한 rollback 절차가 검증된다.
 
 ### 13.3 품질 검증
 
@@ -953,15 +989,15 @@ Gateway는 process liveness, instance traffic readiness와 Gateway admission rea
 
 ### Phase 0 — 결정과 테스트 기준 확정
 
-- 내부 계정 역할, 비밀번호·세션 수명, 관리자 생성·정지·초기화와 회수 정책 확정
+- 관리자 발급 계정 역할, 비밀번호·세션 수명, 관리자 생성·정지·초기화와 회수 정책 확정
 - PostgreSQL 백업·복구, HMAC key 회전과 최악의 회수 전파 지연 확인
-- 회사 핵심 서비스, 인증·제어 plane, 공유 콘텐츠의 사이트 경계를 분리한 도메인·DNS·TLS 운영 방식 확인
+- 운영자가 선택한 기준 도메인에서 control host·콘텐츠 wildcard DNS·TLS 운영 방식과 기존 `Domain` Cookie 영향 확인
 - 와일드카드 단일 Ingress route, pin 대상 버전·config digest, 예약 canary host와 rollback 방식 확정
 - outbound-only 연결, HTTP 양방향 streaming, raw WebSocket upgrade, cancellation, bounded memory·flow control과 인증 hook을 기준으로 `review-tunnel.v1` 구현에 재사용할 multiplexing·flow-control 라이브러리와 직접 framing 범위를 비교하는 ADR 작성
 - 선택한 전송의 message envelope, END 의미, 오류 code와 초기 window·queue 상한을 Phase 1 시작 전에 확정
 - Session configuration canonical encoding, revision·digest, 적용 ACK, Relay probe와 activation timeout 계약 확정
 - HTTP·streaming·WebSocket별 timeout과 자원 제한의 초기값 확정
-- macOS arm64 Client와 관리되는 Chrome을 초기 지원 환경으로 두고, 회사 표준 Vite·Next.js·Node·bundler의 정확한 버전과 테스트 앱 선정
+- 초기 지원 OS와 Chromium 계열 브라우저를 정하고 Vite·Next.js·Node·bundler의 정확한 버전과 테스트 앱 선정
 - `local-view`·`proxy-aware` Origin projection 계약 확정
 - POC 평가 기준과 보안 체크리스트 작성
 - Carrier credential TTL·1회 소비·purpose·audience, secret HMAC key 관리와 revocation propagation SLO 확정
@@ -975,7 +1011,7 @@ Gateway는 process liveness, instance traffic readiness와 Gateway admission rea
 검증 항목:
 
 - 여러 동시 HTTP 요청의 양방향 body streaming과 half-close
-- `Expect: 100-continue`, informational 1xx와 trailer의 MVP 처리 정책 검증·기록
+- `Expect: 100-continue`, informational 1xx와 trailer를 MVP 보장 범위에서 제외
 - SSE 첫 chunk 즉시 flush와 browser cancel 전파
 - WebSocket handshake, 101 이후 raw byte 중계와 정상·비정상 close
 - text·binary·compression·subprotocol HMR 트래픽의 의미 보존
@@ -988,13 +1024,13 @@ Gateway는 process liveness, instance traffic readiness와 Gateway admission rea
 - 여러 Session 생성·종료 전후 Ingress configuration이 변하지 않는 경계 검증
 - Go와 Node.js 후보의 raw upgrade 제어, 구현 복잡도와 자원 사용량
 
-POC는 인증과 HTTPS가 빠질 수 있으므로 격리된 개발 환경에서만 실행한다. 인터넷이나 사내 일반 사용자에게 공개하지 않는다.
+POC는 인증과 HTTPS가 빠질 수 있으므로 격리된 개발 환경에서만 실행한다. 신뢰되지 않은 네트워크에 공개하지 않는다.
 
 단일 WSS에서 bounded memory와 공정성을 만족하지 못하면 buffer를 늘리지 않고 control 연결과 복수 데이터 Carrier 같은 전송 어댑터 대안을 비교한다. Session·Stream 상태기계는 이 선택에 의존하지 않게 유지한다.
 
 ### Phase 2 — 보안 포함 MVP
 
-- 내부 계정 로그인·관리자 UI와 `REVIEWER` 접근 정책
+- 관리자 발급 계정 로그인·관리자 UI와 `REVIEWER` 접근 정책
 - `DEVELOPER` 권한 Client 로그인과 짧은 수명·1회용 Carrier credential 교환
 - Carrier·Resume·검토자 세션 secret의 용도별 HMAC 저장과 회수
 - 고정 와일드카드 Ingress·도메인·TLS, version pinning과 public-path canary
@@ -1004,13 +1040,14 @@ POC는 인증과 HTTPS가 빠질 수 있으므로 격리된 개발 환경에서�
 - 장기 Stream 인증 수명, 오류 화면, 로그와 메트릭
 - 공식 지원 Vite·Next.js 브라우저 E2E
 - CLI 기본 사용 흐름
+- 사설 IPv4 listener, signed bootstrap route와 host-only Cookie를 사용하는 로컬 네트워크 모드
 - 검토자·개발자·Tunnel 회수와 kill switch의 실제 열린 Stream 종료·전파 SLO
 
-이 단계의 보안·품질 인수 기준을 통과한 뒤에만 실제 사내 공유를 허용한다.
+이 단계의 보안·품질 인수 기준을 통과한 뒤에만 인증형 Gateway를 공개한다.
 
-2026-08-24 기준 애플리케이션 코드와 로컬 자동 검증은 완료했다. 실제 DNS·TLS·Ingress, secret manager, PostgreSQL 복구 drill, 회사 관리 Chrome·프로젝트와 운영 소유권은 배포 환경 인수 항목으로 남는다. 상세 증거와 실행 절차는 [`poc-status.md`](poc-status.md)와 [`linux-deployment.md`](linux-deployment.md)를 따른다.
+2026-08-25 기준 애플리케이션 코드와 로컬 자동 검증은 완료했다. 실제 DNS·TLS·Ingress, secret manager, PostgreSQL 복구 drill, 대상 브라우저·프로젝트와 운영 소유권은 배포 환경 인수 항목으로 남는다. 상세 증거와 실행 절차는 [`poc-status.md`](poc-status.md)와 [`linux-deployment.md`](linux-deployment.md)를 따른다.
 
-### Phase 3 — 제한된 사내 파일럿
+### Phase 3 — 제한된 파일럿
 
 - 소수 개발자와 검토자에게 opt-in 제공
 - 지원 매트릭스의 프로젝트 종류와 버전 폭 확대
@@ -1029,32 +1066,32 @@ POC는 인증과 HTTPS가 빠질 수 있으므로 격리된 개발 환경에서�
 
 | 항목 | 확정 내용 |
 | --- | --- |
-| 접근 대상 | 관리자가 생성하고 `REVIEWER` 권한을 부여한 활성 내부 계정 중 공유 URL을 아는 사용자 |
+| 접근 대상 | 로컬 네트워크 모드는 listener에 접근할 수 있고 bootstrap URL을 받은 사용자. 인증형 Gateway는 관리자가 `REVIEWER` 권한을 부여한 활성 계정 중 공유 URL을 아는 사용자 |
 | 계정 생성 | 최초 관리자는 Linux CLI에서 1회 bootstrap, 이후 관리자는 웹 UI 또는 인증된 CLI 사용 |
 | 비밀번호 복구 | 공개 이메일 복구 없이 관리자가 일회용 임시 비밀번호로 초기화 |
 | 공유 범위 | 개발자가 선택한 단일 로컬 origin 전체. 데이터 변경 API와 HTTP·SSE·WebSocket·HMR 포함 |
 | 세션 | 최대 8시간, 활성 Stream이 없을 때 30분 유휴 만료, 재연결 유예 2분 |
-| 초기 지원 | macOS arm64 Client, 관리되는 Chrome, 회사 표준 Vite·Next.js 프로젝트 |
+| 초기 지원 | Node.js 24 Client, Chromium 계열 브라우저, 고정 버전 Vite·Next.js fixture |
 | 재시작 정책 | Gateway 재시작 시 기존 Session과 URL 종료 허용 |
-| 도메인 설정 | 실제 콘텐츠·auth·control host를 환경 변수로 주입하고 시작 시 사이트 경계·wildcard·예약 host 불변식 검증 |
-| 배포 대상 | AWS 또는 사내 서버. 동일 Gateway 컨테이너와 환경별 Ingress adapter 사용 |
+| 도메인 설정 | 실제 콘텐츠·control host를 환경 변수로 주입하고 시작 시 control의 wildcard namespace 분리·예약 host 불변식 검증 |
+| 배포 대상 | Linux 또는 컨테이너 환경. 동일 Gateway image와 환경별 Ingress adapter 사용 |
 
 ### 15.2 구현·운영 추적 항목
 
 | ID | 결정할 내용 | 현재 상태·남은 확인 | 확정 시점 |
 | --- | --- | --- | --- |
-| D-01 | MVP 접근 정책 | **확정:** 관리자 발급 활성 내부 계정 + `REVIEWER` 권한 + 공유 URL | 완료 |
+| D-01 | MVP 접근 정책 | **확정:** 로컬 네트워크는 signed bootstrap route, 인증형 Gateway는 관리자 발급 활성 계정 + `REVIEWER` 권한 + 공유 URL | 완료 |
 | D-02 | 계정 정책 | **확정:** 공개 가입 없음, 관리자 발급, 최초 변경 임시 비밀번호, ADMIN·DEVELOPER·REVIEWER | 완료 |
-| D-03 | Client 로그인 방식 | **구현 완료:** 내부 로그인 세션을 60초·1회용 create/resume Carrier credential로 교환하고 create Tunnel ID는 Gateway가 발급 | 완료 |
-| D-04 | 도메인·TLS·Ingress 운영 | **코드·runbook 완료:** canonical public origin, 사이트 경계, 예약 bearer canary host와 배포 identity 검증. 실제 host·인증서·Ingress 제품과 digest 승인은 환경별 남음 | 배포 전 |
+| D-03 | Client 로그인 방식 | **구현 완료:** 인증형 Gateway의 로그인 세션을 60초·1회용 create/resume Carrier credential로 교환하고 create Tunnel ID는 Gateway가 발급 | 완료 |
+| D-04 | 도메인·TLS·Ingress 운영 | **코드·runbook 완료:** 운영자가 선택한 기준 도메인의 canonical public origin, control/wildcard namespace 경계, 예약 bearer canary host와 배포 identity 검증. 실제 host·인증서·Ingress 제품과 digest 승인은 환경별 남음 | 배포 전 |
 | D-05 | 세션·활성화 정책 | **구현 완료:** 8시간·30분·2분, 10초 activation, config ACK·origin·Relay·route·admission gate | 완료 |
-| D-06 | 콘텐츠 Cookie 격리 | **구현 완료:** host-only 유지, effective Domain 제거, parent/shared Domain과 예약 Cookie 거부. 회사 파일럿 앱의 Domain cookie 확인은 환경별 남음 | 파일럿 전 |
+| D-06 | 콘텐츠 Cookie 격리 | **구현 완료:** host-only 유지, effective Domain 제거, parent/shared Domain과 예약 Cookie 거부. 기준 도메인을 공유하는 기존 서비스의 `Domain` Cookie 확인은 환경별 남음 | 파일럿 전 |
 | D-07 | Relay 구현과 protocol v1 wire 형식 | **구현 완료:** canonical config·revision·digest·ACK·probe, generation, 오류 code, window·queue 계약 | 완료 |
 | D-08 | 유형별 제한 | **구현 완료:** finite HTTP·SSE·WebSocket timeout, request·response 크기, buffer, 동시성, 분당 rate를 env로 노출 | 완료 |
 | D-09 | 성능·용량 목표 | 제한과 회귀 테스트는 완료. 실제 first-byte·HMR 지연과 동시 Tunnel 용량 목표는 파일럿 지표로 확정 | 파일럿 중 |
-| D-10 | 공식 호환 범위 | **자동 검증 고정:** Node 24, Chrome, Vite 8.2.2, Next.js 16.3.2, React 19.2.8. 회사 관리 버전·프로젝트 확인은 환경별 남음 | 파일럿 전 |
-| D-11 | 로그 정책 | **코드 완료:** body·secret 비저장, HMAC Tunnel reference와 low-cardinality metrics. 보존 기간·접근 권한은 조직 승인 남음 | 사내 공개 전 |
-| D-12 | 장애 책임 | rollback·drain·kill switch runbook 완료. 운영 소유자·알림 당직·공지 책임자 지정은 조직 승인 남음 | 사내 공개 전 |
+| D-10 | 공식 호환 범위 | **자동 검증 고정:** Node 24, Chrome, Vite 8.2.2, Next.js 16.3.2, React 19.2.8. 실제 대상 브라우저·프로젝트 확인은 환경별 남음 | 파일럿 전 |
+| D-11 | 로그 정책 | **코드 완료:** body·secret 비저장, HMAC Tunnel reference와 low-cardinality metrics. 보존 기간·접근 권한은 운영 정책 확정 남음 | 공개 전 |
+| D-12 | 장애 책임 | rollback·drain·kill switch runbook 완료. 운영 소유자·알림 담당자·공지 책임자 지정은 운영 정책 확정 남음 | 공개 전 |
 | D-13 | Credential 정책 | **구현 완료:** 60초·1회용·purpose·audience, active/previous HMAC overlap과 메모리 Resume secret | 완료 |
 | D-14 | 회수 운영 | **구현 완료:** 기본 5초 `auth_version` 확인, DB 오류 fail-closed, authorization max-age와 PostgreSQL 영속 kill switch. 정확한 SLO·소유자는 파일럿 승인 남음 | 파일럿 전 |
 | D-15 | Ingress 변경 통제 | version·digest pinning, admission과 독립된 canary, 결과 기록 뒤 별도 PostgreSQL 승인, drain·rollback 절차와 검사 스크립트 완료. 실제 환경 훈련 남음 | 배포 전 |
@@ -1077,7 +1114,7 @@ POC는 인증과 HTTPS가 빠질 수 있으므로 격리된 개발 환경에서�
 
 ## 부록 A. Pangolin 참고 분석과 채택 경계
 
-Pangolin은 WireGuard 기반의 영구 원격 접근 플랫폼으로 public reverse proxy, private network, Site·Resource·조직·역할과 다중 Connector를 함께 관리한다. Review Tunnel은 개발자 프로세스 수명에 묶인 단일 loopback 웹 origin을 회사 검토자에게 임시 공유하므로 제품 범위와 운영 모델이 다르다. 이 문서는 Pangolin을 구현 기반이나 런타임 의존성으로 채택하지 않고 운영 패턴과 실패 시나리오만 참고한다. 분석 기준은 Pangolin 공식 [시스템 아키텍처](https://docs.pangolin.net/development/system-architecture), [Resource 모델](https://docs.pangolin.net/manage/resources/understanding-resources)과 저장소 commit [`fd0a0818`](https://github.com/fosrl/pangolin/tree/fd0a0818c187304f2cf3df9fa91d1e4b8de5530d)이다.
+Pangolin은 WireGuard 기반의 영구 원격 접근 플랫폼으로 public reverse proxy, private network, Site·Resource·조직·역할과 다중 Connector를 함께 관리한다. Review Tunnel은 개발자 프로세스 수명에 묶인 단일 loopback 웹 origin을 다른 기기의 브라우저에 임시 공유하므로 제품 범위와 운영 모델이 다르다. 이 문서는 Pangolin을 구현 기반이나 런타임 의존성으로 채택하지 않고 운영 패턴과 실패 시나리오만 참고한다. 분석 기준은 Pangolin 공식 [시스템 아키텍처](https://docs.pangolin.net/development/system-architecture), [Resource 모델](https://docs.pangolin.net/manage/resources/understanding-resources)과 저장소 commit [`fd0a0818`](https://github.com/fosrl/pangolin/tree/fd0a0818c187304f2cf3df9fa91d1e4b8de5530d)이다.
 
 ### A.1 채택하거나 축소 적용한 패턴
 
@@ -1085,7 +1122,7 @@ Pangolin은 WireGuard 기반의 영구 원격 접근 플랫폼으로 public reve
 | --- | --- |
 | Control Plane과 Data Plane 책임 분리 | 물리적 서비스나 별도 네트워크를 만들지 않고 단일 Gateway 내부의 논리 모듈과 의존성 경계로 적용 |
 | Connector 배치와 Resource 공개 분리 | Carrier가 연결됐다는 이유만으로 URL을 열지 않고 명시적 Session configuration·Readiness gate 뒤 Registry route 활성화 |
-| deny-by-default | 개발자·검토자 인증, 고정 loopback 대상, `ACTIVE` Session과 서버 측 접근 정책이 모두 확인된 트래픽만 Relay에 전달 |
+| deny-by-default | 인증형 Gateway의 계정 정책 또는 로컬 네트워크의 signed route, 고정 loopback 대상, `ACTIVE` Session이 확인된 트래픽만 Relay에 전달 |
 | configuration version과 재동기화 | 범용 config bus 대신 세션별 작은 불변 snapshot, revision·digest와 명시적 `CONFIG_APPLIED` ACK 사용 |
 | 연결 상태와 target 상태 구분 | lifecycle enum을 늘리지 않고 Session의 control·Carrier·config·origin·Relay readiness와 전역 Gateway admission을 독립적으로 관찰 |
 | 장기 credential과 임시 session credential 분리 | 개발자 로그인 context를 짧은 수명·1회용 Carrier credential로 교환하고 Resume·검토자 세션과 audience·저장을 분리 |
@@ -1113,4 +1150,4 @@ Review Tunnel은 고정 wildcard Ingress와 Gateway의 메모리 Registry route�
 
 ### A.4 라이선스 경계
 
-Pangolin 저장소는 헤더가 없는 파일을 기본 AGPL-3으로 두고 일부 파일에는 Fossorial Commercial License를 적용한다. Review Tunnel은 문서와 공개 아키텍처의 일반 원칙만 참고하고 Pangolin·Newt·Gerbil·Badger의 소스, 고유 프로토콜이나 설정을 복사하지 않는다. 코드 재사용이나 결합이 필요해지면 파일별 헤더와 분석 기준 commit의 [저장소 LICENSE](https://github.com/fosrl/pangolin/blob/fd0a0818c187304f2cf3df9fa91d1e4b8de5530d/LICENSE)를 확인하고 사내 법무 검토를 먼저 수행한다.
+Pangolin 저장소는 헤더가 없는 파일을 기본 AGPL-3으로 두고 일부 파일에는 Fossorial Commercial License를 적용한다. Review Tunnel은 문서와 공개 아키텍처의 일반 원칙만 참고하고 Pangolin·Newt·Gerbil·Badger의 소스, 고유 프로토콜이나 설정을 복사하지 않는다. 코드 재사용이나 결합이 필요해지면 파일별 헤더와 분석 기준 commit의 [저장소 LICENSE](https://github.com/fosrl/pangolin/blob/fd0a0818c187304f2cf3df9fa91d1e4b8de5530d/LICENSE)를 확인하고 필요한 라이선스 검토를 먼저 수행한다.

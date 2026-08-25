@@ -7,19 +7,19 @@ Review Tunnel Gateway는 화면 없는 Linux 서버에서 단일 컨테이너로
 - Node.js 24 실행 이미지 또는 이 저장소의 `Dockerfile`
 - PostgreSQL 15 이상. 자동 검증 기준 이미지는 PostgreSQL 17.6이다.
 - TLS를 종료하는 승인된 Ingress 또는 Load Balancer
-- 콘텐츠용 wildcard DNS·인증서와 다른 사이트 경계의 control DNS·인증서
+- 하나의 기준 도메인 아래의 control DNS와 콘텐츠 wildcard DNS, 두 이름을 포함하는 TLS 인증서
 - 환경별 secret manager와 암호화된 PostgreSQL 백업 저장소
 - Prometheus scraper 또는 동등한 보호된 metrics 수집기
 
 예시 경계:
 
 ```text
-*.preview.example.com    -> Gateway content path
-canary.preview.example.com -> 예약된 synthetic public-path canary
-control.example.net      -> 로그인, 관리자 UI, Client API와 Carrier WSS
+*.preview.tunnel.example.com       -> Gateway content path
+canary.preview.tunnel.example.com  -> 예약된 synthetic public-path canary
+control.tunnel.example.com         -> 로그인, 관리자 UI, Client API와 Carrier WSS
 ```
 
-`control.preview.example.com`처럼 control host를 콘텐츠 wildcard와 같은 eTLD+1 아래에 두면 Gateway가 시작을 거부한다. Ingress는 외부 `Forwarded`·`X-Forwarded-*`를 신뢰하지 말고 제거한 뒤 승인된 값만 재작성해야 한다. Gateway는 기본적으로 peer socket 주소만 사용하며, `X-Forwarded-For`를 사용하려면 실제 Ingress·Load Balancer 주소 범위를 `TRUSTED_PROXY_CIDRS`에 명시해야 한다.
+위 이름들은 하나의 기준 도메인 아래에 있다. DNS 레코드는 `control.tunnel`과 `*.preview.tunnel` 두 개가 필요하다. 기준 도메인의 선택은 운영 환경의 책임이다. 다른 서비스와 상위 도메인을 공유하면 그 서비스의 `Domain` Cookie가 콘텐츠 host 요청에 포함될 수 있으므로 기존 Cookie 정책을 확인하거나 필요한 경우 별도 기준 도메인을 사용한다. Control host를 `control.preview.tunnel.example.com`처럼 콘텐츠 wildcard 안에 넣으면 Gateway가 시작을 거부한다. 인증 Cookie는 control host 전용이며, 상태 변경 요청은 정확한 control `Origin`만 허용한다. Ingress는 외부 `Forwarded`·`X-Forwarded-*`를 신뢰하지 말고 제거한 뒤 승인된 값만 재작성해야 한다. Gateway는 기본적으로 peer socket 주소만 사용하며, `X-Forwarded-For`를 사용하려면 실제 Ingress·Load Balancer 주소 범위를 `TRUSTED_PROXY_CIDRS`에 명시해야 한다.
 
 ## 환경 변수
 
@@ -28,8 +28,8 @@ control.example.net      -> 로그인, 관리자 UI, Client API와 Carrier WSS
 | `GATEWAY_HOST` | 기본 `127.0.0.1`. 컨테이너는 보통 `0.0.0.0` |
 | `GATEWAY_PORT` | 내부 listener, 기본 `8787` |
 | `CONTENT_DOMAIN` | scheme·wildcard 없는 콘텐츠 도메인 |
-| `PUBLIC_CONTENT_ORIGIN` | 외부 검토자에게 표시할 canonical origin. 예: `https://preview.example.com` |
-| `CONTROL_HOST` | 콘텐츠와 사이트 경계가 다른 control hostname |
+| `PUBLIC_CONTENT_ORIGIN` | 외부 검토자에게 표시할 canonical origin. 예: `https://preview.tunnel.example.com` |
+| `CONTROL_HOST` | 콘텐츠 wildcard namespace 바깥의 control hostname. 예: `control.tunnel.example.com` |
 | `DATABASE_URL` | PostgreSQL 연결 문자열. secret manager에서 주입 |
 | `AUTH_SESSION_HMAC_KEY` | canonical base64url로 인코딩한 32~128바이트 active key |
 | `AUTH_SESSION_HMAC_KEY_PREVIOUS` | 회전 overlap 동안만 쓰는 서로 다른 이전 key의 쉼표 구분 목록. 최대 3개이며 active key와 중복 금지 |
@@ -76,13 +76,13 @@ control.example.net      -> 로그인, 관리자 UI, Client API와 Carrier WSS
 | `MAX_NEW_STREAMS_PER_MINUTE` | Tunnel당 기본 600 |
 | `RESPONSE_HEADER_TIMEOUT_MS` | 기본 10초 |
 | `STREAM_INACTIVITY_TIMEOUT_MS` | 기본 120초 |
-
-`MAX_AUDIT_EVENTS`, `AUDIT_OPERATIONAL_RESERVE`, `MAX_LOGIN_THROTTLES`는 Gateway와 Admin CLI에 동일하게 주입한다. 계정·비밀번호·권한·회수와 운영 제어는 PostgreSQL audit에 저장되며, 로그인 성공·실패는 원문 아이디·원격 주소·비밀번호 없이 HMAC 참조를 포함한 `authentication_event` JSON 로그로 보낸다. 관리자 audit가 `MAX_AUDIT_EVENTS - AUDIT_OPERATIONAL_RESERVE`에 도달하면 계정 변경은 transaction 전체가 실패하고, 운영 reserve가 남아 있는 동안 kill switch 같은 운영 제어는 계속 감사와 함께 기록된다. 전체 audit 상한에 도달한 뒤에는 상태 변경도 fail-closed하므로, 운영자는 그 전에 감사 보존 정책에 따라 백업·외부 보관과 새 배포 DB로의 계획된 전환을 수행한다.
 | `MAX_STREAM_DURATION_MS` | 기본 4시간이며 Session 최대 수명보다 클 수 없음 |
 | `HEARTBEAT_INTERVAL_MS` | 기본 15초 |
 | `CARRIER_LEASE_MS` | 기본 45초이며 heartbeat보다 커야 함 |
 | `AUTHORIZATION_MAX_AGE_MS` | 기본 12시간. 개발자 Carrier와 reviewer Stream 재인가 상한 |
 | `REVOCATION_CHECK_INTERVAL_MS` | 기본 5초. 계정 `auth_version` 회수 확인 주기 |
+
+`MAX_AUDIT_EVENTS`, `AUDIT_OPERATIONAL_RESERVE`, `MAX_LOGIN_THROTTLES`는 Gateway와 Admin CLI에 동일하게 주입한다. 계정·비밀번호·권한·회수와 운영 제어는 PostgreSQL audit에 저장되며, 로그인 성공·실패는 원문 아이디·원격 주소·비밀번호 없이 HMAC 참조를 포함한 `authentication_event` JSON 로그로 보낸다. 관리자 audit가 `MAX_AUDIT_EVENTS - AUDIT_OPERATIONAL_RESERVE`에 도달하면 계정 변경은 transaction 전체가 실패하고, 운영 reserve가 남아 있는 동안 kill switch 같은 운영 제어는 계속 감사와 함께 기록된다. 전체 audit 상한에 도달한 뒤에는 상태 변경도 fail-closed하므로, 운영자는 그 전에 감사 보존 정책에 따라 백업·외부 보관과 새 배포 DB로의 계획된 전환을 수행한다.
 
 Session 최대 수명 8시간, Stream이 없을 때 유휴 30분, resume 유예 2분은 v1 고정 정책이다. 운영 인증 모드에서 HTTP Cookie를 허용하는 `ALLOW_INSECURE_HTTP_AUTH`는 loopback 통합 테스트 외에는 사용하지 않는다.
 
@@ -136,20 +136,19 @@ docker run --rm -it --env-file <runtime-env> \
 
 # public-path canary one-off
 docker run --rm \
-  -e CANARY_CONTENT_URL=https://canary.preview.example.com \
+  -e CANARY_CONTENT_URL=https://canary.preview.tunnel.example.com \
   -e CANARY_BEARER_TOKEN \
   registry.example/review-tunnel-canary:<release>
 ```
 
 계정·admission·kill switch 명령은 migration을 자동 실행하지 않는다. 이 job에는 schema DDL 권한을 주지 않고 필요한 `AUTH_SESSION_HMAC_KEY`와 DML 권한만 별도로 주입한다.
 
-Linux 개발자가 Client image로 같은 호스트의 로컬 개발 서버를 공유하려면 `--network host`를 사용한다. 사내 컨테이너 정책이 host network를 금지하면 로컬 origin에만 접근 가능한 별도 명시적 network를 만든다.
+Linux 개발자가 Client image로 같은 호스트의 로컬 개발 서버를 공유하려면 `--network host`를 사용한다. 배포 환경이 host network를 금지하면 로컬 origin에만 접근 가능한 별도 명시적 network를 만든다.
 
 ```bash
 docker run --rm -it --network host \
-  -e GATEWAY_URL=wss://control.example.net/_review-tunnel/carrier \
-  -e CONTROL_URL=https://control.example.net \
-  -e CONTENT_DOMAIN=preview.example.com \
+  -e GATEWAY_URL=wss://control.tunnel.example.com/_review-tunnel/carrier \
+  -e CONTROL_URL=https://control.tunnel.example.com \
   registry.example/review-tunnel-client:<release> \
   http://127.0.0.1:3000 --username developer1
 ```
@@ -169,11 +168,15 @@ docker compose -f compose.test.yml down
 ## 최초 배포
 
 1. PostgreSQL과 secret을 만들고 DDL 전용 DB role로 Admin CLI image의 `migrate`를 별도 one-off 작업으로 실행한다. Gateway와 일반 Admin CLI DB role에는 DDL 권한을 주지 않으며 `AUTO_MIGRATE`는 기본 `false`를 유지한다.
-2. 최초 관리자와 새 비밀번호를 서버 shell에서 만든다.
+2. `DATABASE_URL`과 `AUTH_SESSION_HMAC_KEY`가 있는 계정 관리 전용 환경 파일을 사용해 최초 관리자와 새 비밀번호를 만든다.
 
 ```bash
-npm run admin -- bootstrap --username admin --display-name "운영 관리자"
-npm run admin -- change-password --username admin
+docker run --rm -it --env-file <account-admin-env> \
+  registry.example/review-tunnel-admin:<release> \
+  bootstrap --username admin --display-name "운영 관리자"
+docker run --rm -it --env-file <account-admin-env> \
+  registry.example/review-tunnel-admin:<release> \
+  change-password --username admin
 ```
 
 3. 후보 Gateway를 사용자 트래픽이 없는 target group에 올린다. `/health/live`와 `/health/ready`가 성공하는지 확인한다.
@@ -181,9 +184,10 @@ npm run admin -- change-password --username admin
 5. `CANARY_HOST`의 예약 경로를 실제 DNS·TLS·Load Balancer·Ingress를 통해 검사한다. 이 fixture는 Gateway 자체의 synthetic marker만 사용하며 Tunnel, 일반 사용자 Cookie, Session admission과 kill switch에 의존하지 않는다.
 
 ```bash
-CANARY_CONTENT_URL=https://canary.preview.example.com \
-CANARY_BEARER_TOKEN="$CANARY_BEARER_TOKEN" \
-npm run verify:public-path
+docker run --rm \
+  -e CANARY_CONTENT_URL=https://canary.preview.tunnel.example.com \
+  -e CANARY_BEARER_TOKEN \
+  registry.example/review-tunnel-canary:<release>
 ```
 
 이 검사는 미인증 요청 차단, 인증된 marker, 전체 upload 종료 전 request 첫 응답, SSE의 첫 read가 두 번째 marker까지 합쳐 버리지 않는 점과 WebSocket binary echo를 확인한다. bearer는 secret manager가 안전한 one-off job에만 주입하며 shell history, CI log, ticket이나 일반 Gateway access log에 남기지 않는다.
@@ -191,16 +195,22 @@ npm run verify:public-path
 6. 검사 결과를 같은 `DEPLOYMENT_ID`·`DEPLOYMENT_CONFIG_DIGEST`에 기록한다. 실패 경로도 반드시 `failed`로 기록하고 후보를 승격하지 않는다.
 
 ```bash
-npm run admin -- record-canary --as release-admin --result passed \
+docker run --rm -it --env-file <account-admin-env> \
+  registry.example/review-tunnel-admin:<release> \
+  record-canary --as admin --result passed \
   --deployment-id "$DEPLOYMENT_ID" --config-digest "$DEPLOYMENT_CONFIG_DIGEST"
 ```
 
 7. canary 성공 기록만으로 admission은 열리지 않는다. 관리자 또는 승인된 배포 파이프라인이 별도 명령으로 같은 identity를 명시 승인한다. 이 두 명령은 모두 관리자 비밀번호 재확인이 필요하며 자동화에서는 `--password-stdin`과 secret input을 사용한다.
 
 ```bash
-npm run admin -- approve-admission --as release-admin \
+docker run --rm -it --env-file <account-admin-env> \
+  registry.example/review-tunnel-admin:<release> \
+  approve-admission --as admin \
   --deployment-id "$DEPLOYMENT_ID" --config-digest "$DEPLOYMENT_CONFIG_DIGEST"
-npm run admin -- admission-status --as release-admin \
+docker run --rm -it --env-file <account-admin-env> \
+  registry.example/review-tunnel-admin:<release> \
+  admission-status --as admin \
   --deployment-id "$DEPLOYMENT_ID" --config-digest "$DEPLOYMENT_CONFIG_DIGEST"
 ```
 

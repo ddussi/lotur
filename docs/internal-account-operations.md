@@ -1,6 +1,6 @@
-# 내부 계정 운영 기준
+# 관리자 발급 계정 운영 기준
 
-Review Tunnel은 외부 IdP 대신 관리자가 발급하는 내부 계정을 사용한다. Linux 서버에는 데스크톱 화면이 필요하지 않다. 최초 관리자는 서버 CLI에서 생성하고, 이후 관리자는 자신의 PC 브라우저로 control host의 `/admin/users`에 접속한다.
+Review Tunnel의 인증형 Gateway는 외부 IdP 대신 관리자가 직접 발급하는 계정을 사용한다. Linux 서버에는 데스크톱 화면이 필요하지 않다. 최초 관리자는 서버 CLI에서 생성하고, 이후 관리자는 브라우저로 control host의 `/admin/users`에 접속한다.
 
 ## 역할
 
@@ -41,7 +41,7 @@ Review Tunnel은 외부 IdP 대신 관리자가 발급하는 내부 계정을 �
 
 ## 구현 상태
 
-다음 내부 계정 기능은 구현과 자동 검증을 마쳤다.
+다음 관리자 발급 계정 기능은 구현과 자동 검증을 마쳤다.
 
 - 중앙 로그인·로그아웃과 최초 비밀번호 변경
 - host·audience에 바인딩된 일회용 콘텐츠 세션 교환
@@ -73,12 +73,12 @@ kill switch 변경은 PostgreSQL에 감사 이벤트와 함께 저장되고 모�
 
 ## Admission 변경
 
-`CANARY_HOST`는 일반 Tunnel과 분리된 synthetic fixture이며 `CANARY_BEARER_TOKEN`으로만 접근한다. 일반 내부 계정 Cookie나 실제 프로젝트 payload를 쓰지 않는다. canary 성공 후 `record-canary`를 실행해도 공유는 아직 닫혀 있으며, 동일한 `DEPLOYMENT_ID`와 `DEPLOYMENT_CONFIG_DIGEST`에 `approve-admission`을 별도로 실행해야 신규 Session이 활성화된다. 실패 기록은 그 identity의 기존 승인을 지운다.
+`CANARY_HOST`는 일반 Tunnel과 분리된 synthetic fixture이며 `CANARY_BEARER_TOKEN`으로만 접근한다. 일반 사용자 계정 Cookie나 실제 프로젝트 payload를 쓰지 않는다. canary 성공 후 `record-canary`를 실행해도 공유는 아직 닫혀 있으며, 동일한 `DEPLOYMENT_ID`와 `DEPLOYMENT_CONFIG_DIGEST`에 `approve-admission`을 별도로 실행해야 신규 Session이 활성화된다. 실패 기록은 그 identity의 기존 승인을 지운다.
 
 ```bash
-npm run admin -- record-canary --as release-admin --result passed \
+npm run admin -- record-canary --as admin --result passed \
   --deployment-id "$DEPLOYMENT_ID" --config-digest "$DEPLOYMENT_CONFIG_DIGEST"
-npm run admin -- approve-admission --as release-admin \
+npm run admin -- approve-admission --as admin \
   --deployment-id "$DEPLOYMENT_ID" --config-digest "$DEPLOYMENT_CONFIG_DIGEST"
 ```
 
@@ -90,4 +90,4 @@ npm run admin -- approve-admission --as release-admin \
 
 ## 운영 책임 경계
 
-실제 공개 운영에는 DNS·TLS·Ingress, secret manager, PostgreSQL 백업·복구 drill, public-path canary와 파일럿 부하 검증이 별도로 필요하다. 구체적인 순서와 환경 변수는 [`linux-deployment.md`](linux-deployment.md)를 따른다. 로그 보존 기간, 운영 소유자, 알림 임계치와 revocation propagation SLO는 회사 정책으로 승인하기 전까지 미확정이다.
+실제 공개 운영에는 DNS·TLS·Ingress, secret manager, PostgreSQL 백업·복구 drill, public-path canary와 파일럿 부하 검증이 별도로 필요하다. 구체적인 순서와 환경 변수는 [`linux-deployment.md`](linux-deployment.md)를 따른다. 로그 보존 기간, 운영 소유자, 알림 임계치와 revocation propagation SLO는 각 배포 환경의 운영 정책으로 확정한다.

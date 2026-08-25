@@ -33,6 +33,29 @@ const documentedOperationalSettings = [
   "MAX_PENDING_CARRIER_BYTES",
   "MAX_CANARY_WEBSOCKETS",
   "CANARY_WEBSOCKET_IDLE_TIMEOUT_MS",
+  "MAX_REQUEST_BODY_BYTES",
+  "MAX_FINITE_RESPONSE_BYTES",
+  "MAX_CONCURRENT_STREAMS",
+  "MAX_NEW_STREAMS_PER_MINUTE",
+  "RESPONSE_HEADER_TIMEOUT_MS",
+  "STREAM_INACTIVITY_TIMEOUT_MS",
+  "MAX_STREAM_DURATION_MS",
+  "HEARTBEAT_INTERVAL_MS",
+  "CARRIER_LEASE_MS",
+  "AUTHORIZATION_MAX_AGE_MS",
+  "REVOCATION_CHECK_INTERVAL_MS",
+];
+
+const authenticatedRequiredSettings = [
+  "CONTENT_DOMAIN",
+  "PUBLIC_CONTENT_ORIGIN",
+  "CONTROL_HOST",
+  "DATABASE_URL",
+  "AUTH_SESSION_HMAC_KEY",
+  "DEPLOYMENT_ID",
+  "DEPLOYMENT_CONFIG_DIGEST",
+  "CANARY_HOST",
+  "CANARY_BEARER_TOKEN",
 ];
 
 test("운영 timeout과 admission 상한은 example env와 배포 문서에 함께 노출한다", async () => {
@@ -40,6 +63,10 @@ test("운영 timeout과 admission 상한은 example env와 배포 문서에 함�
     readFile(new URL("../.env.example", import.meta.url), "utf8"),
     readFile(new URL("../docs/linux-deployment.md", import.meta.url), "utf8"),
   ]);
+  const environmentTable = deploymentGuide.slice(
+    deploymentGuide.indexOf("| 이름 | 기본값·설명 |"),
+    deploymentGuide.indexOf("\n\n", deploymentGuide.indexOf("| 이름 | 기본값·설명 |")),
+  );
 
   for (const name of documentedOperationalSettings) {
     assert.match(
@@ -47,9 +74,21 @@ test("운영 timeout과 admission 상한은 example env와 배포 문서에 함�
       new RegExp(`^# ${name}=`, "m"),
       `${name} is missing from .env.example`,
     );
-    assert.ok(
-      deploymentGuide.includes(`| \`${name}\` |`),
-      `${name} is missing from docs/linux-deployment.md`,
-    );
+    assert.ok(environmentTable.includes(`| \`${name}\` |`), `${name} is outside the environment table`);
+  }
+});
+
+test("인증형 Gateway 시작 안내는 런타임 필수 설정을 모두 포함한다", async () => {
+  const [exampleEnvironment, gettingStarted] = await Promise.all([
+    readFile(new URL("../.env.example", import.meta.url), "utf8"),
+    readFile(new URL("../docs/getting-started.md", import.meta.url), "utf8"),
+  ]);
+
+  for (const name of authenticatedRequiredSettings) {
+    assert.match(exampleEnvironment, new RegExp(`^# ${name}=`, "m"), `${name} is missing from .env.example`);
+    assert.ok(gettingStarted.includes(`${name}=`), `${name} is missing from the first-time guide`);
+  }
+  for (const command of ["verify:public-path", "record-canary", "approve-admission", "admission-status"]) {
+    assert.ok(gettingStarted.includes(command), `${command} is missing from the first-time guide`);
   }
 });

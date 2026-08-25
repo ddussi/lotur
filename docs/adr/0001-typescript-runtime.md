@@ -7,7 +7,7 @@
 
 Gateway와 Tunnel Client의 Phase 0·1 구현은 TypeScript와 Node.js 24를 사용한다.
 
-Gateway는 AWS와 사내 서버에서 동일한 컨테이너 이미지로 실행한다. Client는 먼저 npm 패키지로 제공하고 macOS arm64 단일 실행 파일 배포는 MVP 패키징 단계에서 검증한다.
+Gateway는 클라우드나 자체 Linux 서버에서 동일한 컨테이너 이미지로 실행한다. 버전 `0.1.0`의 Client는 저장소를 clone한 뒤 npm script로 실행한다. npm 패키지와 OS별 단일 실행 파일은 별도 패키징 단계에서 검토한다.
 
 ## 이유
 
@@ -22,4 +22,3 @@ Gateway는 AWS와 사내 서버에서 동일한 컨테이너 이미지로 실행
 - 앱 payload를 JSON이나 문자열로 변환하지 않고 `Uint8Array`로 전달한다.
 - Relay Core는 Node.js HTTP framework나 AWS SDK에 의존하지 않는다.
 - 성능 또는 메모리 목표를 충족하지 못하면 protocol contract를 유지한 채 전송 adapter나 런타임 교체를 검토한다.
-
