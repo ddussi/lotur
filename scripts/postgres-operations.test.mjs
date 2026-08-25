@@ -451,10 +451,12 @@ function shellQuote(value) {
   return `'${value.replaceAll("'", `'"'"'`)}'`;
 }
 
-async function waitFor(predicate) {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    if (predicate()) return;
-    await new Promise((resolve) => setImmediate(resolve));
+async function waitFor(predicate, timeoutMs = 5_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (!predicate()) {
+    if (Date.now() >= deadline) {
+      throw new Error("timed out waiting for test condition");
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
   }
-  throw new Error("timed out waiting for test condition");
 }
