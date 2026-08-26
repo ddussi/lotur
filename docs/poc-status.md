@@ -28,7 +28,6 @@
 - 실패한 resume candidate의 정리와 generation 재사용 방지, 권한 DB 재검증 장애의 fail-closed 종료
 - Gateway·Admin CLI·Client·canary-check 역할별 non-root Docker target
 - CI의 실제 PostgreSQL·framework 완료 게이트와 여섯 production Docker target build·entrypoint smoke
-- 사설 IPv4에 임시 Gateway를 열고 서명된 bootstrap URL과 host-only route Cookie로 HTTP·WebSocket을 전달하는 로컬 네트워크 모드
 - 하나의 기준 도메인 아래에서 control host와 콘텐츠 wildcard를 분리하는 인증형 Gateway 구성
 
 ## 자동 검증 결과
@@ -36,9 +35,8 @@
 2026-08-25 기준 자동 검증 항목은 다음과 같다. 정확한 테스트 수는 현재 `npm run check:mvp` 출력으로 확인한다.
 
 - `npm test`: 전체 단위·통합 테스트 통과. PostgreSQL 실연동 항목은 `TEST_DATABASE_URL`이 없을 때만 명시적으로 건너뛰며 CI 완료 게이트에서는 실제 DB로 모두 실행
-- `npm run test:frameworks`: 3개 통과
+- `npm run test:frameworks`: 2개 통과
   - Vite 8.2.2 인증형 Gateway: 초기 화면, 정적 모듈, 상호작용과 HMR
-  - Vite 8.2.2 로컬 네트워크 경로: bootstrap 링크 이동, 상호작용과 HMR
   - Next.js 16.3.2·React 19.2.8: RSC, Route Handler, Server Action, client navigation, 상태 보존 Fast Refresh
 - `npm run typecheck`, 아키텍처 경계 검사와 `npm run build` 통과
 - npm audit: 알려진 취약점 0개

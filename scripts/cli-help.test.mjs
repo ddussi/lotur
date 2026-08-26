@@ -9,7 +9,6 @@ const { DATABASE_URL: _databaseUrl, ...environmentWithoutDatabase } = process.en
 
 test("사용자용 CLI 도움말은 외부 설정이나 서버 연결 없이 표시된다", async () => {
   const commands = [
-    ["apps/lan/src/main.ts", "npm run share:lan"],
     ["apps/client/src/main.ts", "npm run share"],
     ["apps/admin-cli/src/main.ts", "npm run admin"],
   ];

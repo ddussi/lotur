@@ -30,26 +30,6 @@ test("Vite 8 serves the app and applies HMR through Review Tunnel", async ({ pag
   }
 });
 
-test("LAN bootstrap URL preserves browser navigation and Vite HMR", async ({ page }) => {
-  const runtime = await startRuntime("vite", "lan-cookie");
-  try {
-    await page.setContent(`<a href="${runtime.shareUrl}">open LAN share</a>`);
-    await page.getByRole("link", { name: "open LAN share" }).click();
-    await expect(page).toHaveURL(/^http:\/\/127\.0\.0\.1:\d+\/$/);
-    await expect(page.getByRole("heading", { name: "Vite through Review Tunnel" })).toBeVisible();
-    await page.getByTestId("counter").click();
-    await expect(page.getByTestId("counter")).toHaveText("count: 1");
-
-    const sourcePath = join(runtime.fixtureDirectory, "src", "main.js");
-    const source = await readFile(sourcePath, "utf8");
-    await writeFile(sourcePath, source.replace("vite-hmr-v1", "vite-hmr-lan"));
-    await expect(page.getByTestId("hmr-marker")).toHaveText("vite-hmr-lan");
-  } finally {
-    await page.close();
-    await runtime.close();
-  }
-});
-
 test("Next.js 16 preserves RSC, Route Handler, Server Action, navigation and Fast Refresh", async ({ page }) => {
   const runtime = await startRuntime("next");
   try {
@@ -85,24 +65,19 @@ test("Next.js 16 preserves RSC, Route Handler, Server Action, navigation and Fas
   }
 });
 
-async function startRuntime(kind, contentRouting = "subdomain") {
+async function startRuntime(kind) {
   const fixtureDirectory = await mkdtemp(
     join(repositoryRoot, "tests", "frameworks", `.runtime-${kind}-`),
   );
   await cp(join(fixtureRoot, kind), fixtureDirectory, { recursive: true });
   const originPort = await reservePort();
   const framework = startFramework(kind, fixtureDirectory, originPort);
-  const gateway = contentRouting === "lan-cookie"
-    ? createGatewayServer({
-        contentDomain: "127.0.0.1",
-        contentRouting,
-      })
-    : createGatewayServer();
+  const gateway = createGatewayServer();
   let client;
   try {
     await waitForHttp(`http://127.0.0.1:${originPort}/`, framework);
     const gatewayPort = await gateway.listen();
-    const tunnelId = `${kind}-${contentRouting}-${process.pid}`;
+    const tunnelId = `${kind}-${process.pid}`;
     client = connectTunnelClient({
       gatewayUrl: `ws://127.0.0.1:${gatewayPort}/_review-tunnel/carrier`,
       tunnelId,

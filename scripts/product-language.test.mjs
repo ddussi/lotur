@@ -13,10 +13,8 @@ const productTextFiles = [
   "../docs/review-tunnel-plan.md",
   "../docs/adr/0001-typescript-runtime.md",
   "../docs/adr/0003-internal-account-auth.md",
-  "../docs/adr/0005-hosted-and-local-network-modes.md",
   "../apps/gateway/src/main.ts",
   "../apps/gateway/src/web-auth-pages.ts",
-  "../apps/lan/src/main.ts",
 ];
 
 const forbiddenOrganizationAssumptions = new RegExp(

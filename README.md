@@ -2,49 +2,14 @@
 
 English | [한국어](README.ko.md)
 
-Open a local web project on another device. Share on a trusted local network without a domain, or use one domain for an authenticated Gateway deployment.
+Open a local web project to authenticated reviewers through a Gateway deployment under one domain.
 
 > [!IMPORTANT]
 > Version `0.1.0` has completed the security MVP in code. DNS, TLS, Ingress, secrets, backup/restore, and operational acceptance must still be completed in each production environment.
 
-## One-minute quick start: local network, no domain
+## Deployment model
 
-Requirements: Node.js 24+, npm, and a local HTTP development server.
-
-1. Install Review Tunnel.
-
-```bash
-git clone https://github.com/ddussi/lotur.git
-cd lotur
-npm ci
-```
-
-2. Run your web project. This guide assumes `http://127.0.0.1:3000`.
-
-```bash
-# Run in your web project.
-npm run dev
-```
-
-3. In another terminal inside Review Tunnel, run one command.
-
-```bash
-npm run share:lan -- http://127.0.0.1:3000
-```
-
-Open the printed `http://192.168...` URL on a phone or computer connected to the same local network. Press `Ctrl+C` to close the share.
-
-> [!WARNING]
-> This mode has no login or TLS. Use it only on a trusted local network. Review Tunnel does not verify the Wi-Fi name or subnet, so any device that can reach the selected IP and port can open the share. If automatic interface selection is wrong, pass `--host 192.168.0.23`.
-
-## Two supported modes
-
-| Situation | What you provide | Reachability |
-| --- | --- | --- |
-| No domain | Node.js 24+ and a trusted local network | Networks that can reach the selected private IP |
-| One available domain | Linux server, PostgreSQL, DNS and TLS | Internet or private network |
-
-The hosted mode uses two DNS names under one base domain:
+Review Tunnel requires a Linux server, PostgreSQL, DNS, and TLS. It uses two DNS names under one base domain:
 
 ```text
 control.tunnel.example.com             login, administration, Client connection
@@ -56,7 +21,7 @@ The operator chooses the base domain. If it shares a parent domain with another 
 ## Features
 
 - HTTP, streaming request/response bodies, SSE, and WebSocket relay
-- Temporary LAN-IP or hosted subdomain URL for each share
+- Temporary hosted subdomain URL for each share
 - Administrator-issued `ADMIN`, `DEVELOPER`, and `REVIEWER` accounts with no public sign-up
 - Short-lived, single-use Carrier credentials
 - Same-URL recovery during a two-minute reconnect window
@@ -76,8 +41,6 @@ flowchart LR
 ```
 
 Hosted review URLs use `*.preview.tunnel.example.com`; login, administration, and the Carrier use `control.tunnel.example.com`. Authentication cookies are host-only, mutations require the exact control `Origin`, and Gateway-reserved cookies are never forwarded to the local app.
-
-In local-network mode, another device connects directly to the temporary Gateway on the developer's computer. PostgreSQL, DNS, TLS, and accounts are not required.
 
 ## Authenticated use
 
@@ -115,7 +78,7 @@ New shares remain closed until the public-path canary succeeds and an administra
 
 Follow the [Linux deployment runbook](docs/linux-deployment.md) for environment variables, Docker commands, canary approval, backup/restore, and rollback. [.env.example](.env.example) is a reference only; the application does not automatically load `.env` files.
 
-See the Korean [first-time user guide](docs/getting-started.md) for prerequisites and complete flows for both modes.
+See the Korean [first-time user guide](docs/getting-started.md) for prerequisites and the complete setup flow.
 
 ## Development
 
