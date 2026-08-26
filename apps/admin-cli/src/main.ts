@@ -23,7 +23,6 @@ import {
 } from "../../../packages/storage-postgres/src/index.ts";
 import { readSecrets } from "../../../packages/cli-utils/src/secret-input.ts";
 import { parseAdminCommand, usage, type AdminCommand } from "./arguments.ts";
-import { adminCommandRuntimePolicy } from "./runtime-policy.ts";
 
 const adminArguments = process.argv.slice(2);
 if (
@@ -39,7 +38,6 @@ async function runAdmin(arguments_: readonly string[]): Promise<void> {
   const databaseUrl = process.env.DATABASE_URL;
   if (databaseUrl === undefined) throw new Error("DATABASE_URL is required");
   const command = parseAdminCommand(arguments_);
-  const runtimePolicy = adminCommandRuntimePolicy(command);
 
   const pool = new Pool({
     connectionString: databaseUrl,
@@ -79,13 +77,9 @@ async function runAdmin(arguments_: readonly string[]): Promise<void> {
       auditEventLimits,
     });
     if (command.kind === "migrate") {
-      if (!runtimePolicy.runMigration) throw new Error("invalid admin command runtime policy");
       await repository.migrate();
       console.log("Database migration complete.");
     } else {
-      if (!runtimePolicy.requiresAuthService) {
-        throw new Error("invalid admin command runtime policy");
-      }
       const hmacKeyText = process.env.AUTH_SESSION_HMAC_KEY;
       if (hmacKeyText === undefined) throw new Error("AUTH_SESSION_HMAC_KEY is required");
       const hmacKey = Buffer.from(hmacKeyText, "base64url");

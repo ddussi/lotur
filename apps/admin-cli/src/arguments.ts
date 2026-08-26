@@ -56,8 +56,68 @@ export type AdminCommand =
       passwordStdin: boolean;
     }>;
 
+type CommandArgumentSpec = Readonly<{
+  valueOptions: readonly string[];
+  flags?: readonly string[];
+}>;
+
+const COMMAND_ARGUMENTS: Readonly<Record<string, CommandArgumentSpec>> = {
+  migrate: { valueOptions: [] },
+  bootstrap: { valueOptions: ["--username", "--display-name"] },
+  "change-password": {
+    valueOptions: ["--username"],
+    flags: ["--password-stdin"],
+  },
+  "create-user": {
+    valueOptions: ["--as", "--username", "--display-name", "--roles"],
+    flags: ["--password-stdin"],
+  },
+  "list-users": { valueOptions: ["--as"], flags: ["--password-stdin"] },
+  "disable-user": {
+    valueOptions: ["--as", "--username"],
+    flags: ["--password-stdin"],
+  },
+  "enable-user": {
+    valueOptions: ["--as", "--username"],
+    flags: ["--password-stdin"],
+  },
+  "set-roles": {
+    valueOptions: ["--as", "--username", "--roles"],
+    flags: ["--password-stdin"],
+  },
+  "reset-password": {
+    valueOptions: ["--as", "--username"],
+    flags: ["--password-stdin"],
+  },
+  "revoke-sessions": {
+    valueOptions: ["--as", "--username"],
+    flags: ["--password-stdin"],
+  },
+  "record-canary": {
+    valueOptions: ["--as", "--result", "--deployment-id", "--config-digest"],
+    flags: ["--password-stdin"],
+  },
+  "approve-admission": {
+    valueOptions: ["--as", "--deployment-id", "--config-digest"],
+    flags: ["--password-stdin"],
+  },
+  "close-admission": {
+    valueOptions: ["--as", "--deployment-id", "--config-digest"],
+    flags: ["--password-stdin"],
+  },
+  "admission-status": {
+    valueOptions: ["--as", "--deployment-id", "--config-digest"],
+    flags: ["--password-stdin"],
+  },
+  "enable-kill-switch": { valueOptions: ["--as"], flags: ["--password-stdin"] },
+  "disable-kill-switch": { valueOptions: ["--as"], flags: ["--password-stdin"] },
+};
+
 export function parseAdminCommand(arguments_: readonly string[]): AdminCommand {
   const command = arguments_[0];
+  const argumentSpec = command === undefined ? undefined : COMMAND_ARGUMENTS[command];
+  if (argumentSpec === undefined) throw new Error(usage());
+  validateArguments(arguments_, argumentSpec);
   if (command === "migrate") return { kind: "migrate" };
   if (command === "bootstrap") {
     return {
@@ -176,6 +236,35 @@ function requiredOption(arguments_: readonly string[], name: string): string {
   const value = index < 0 ? undefined : arguments_[index + 1];
   if (value === undefined || value.startsWith("--")) throw new Error(`${name} is required\n\n${usage()}`);
   return value;
+}
+
+function validateArguments(
+  arguments_: readonly string[],
+  spec: CommandArgumentSpec,
+): void {
+  const valueOptions = new Set(spec.valueOptions);
+  const flags = new Set(spec.flags ?? []);
+  const seen = new Set<string>();
+  for (let index = 1; index < arguments_.length; index += 1) {
+    const argument = arguments_[index];
+    if (argument === undefined) continue;
+    if (!argument.startsWith("--")) {
+      throw new Error(`Unexpected argument: ${argument}\n\n${usage()}`);
+    }
+    if (!valueOptions.has(argument) && !flags.has(argument)) {
+      throw new Error(`Unknown option: ${argument}\n\n${usage()}`);
+    }
+    if (seen.has(argument)) {
+      throw new Error(`Duplicate option: ${argument}\n\n${usage()}`);
+    }
+    seen.add(argument);
+    if (flags.has(argument)) continue;
+    const value = arguments_[index + 1];
+    if (value === undefined || value.startsWith("--")) {
+      throw new Error(`${argument} is required\n\n${usage()}`);
+    }
+    index += 1;
+  }
 }
 
 function parseRoles(value: string): readonly AccountRole[] {

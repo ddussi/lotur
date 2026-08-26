@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { parseAdminCommand } from "./arguments.ts";
-import { adminCommandRuntimePolicy } from "./runtime-policy.ts";
 
 test("bootstrap command requires username and display name", () => {
   assert.deepEqual(
@@ -37,6 +36,27 @@ test("unknown roles and commands fail closed", () => {
     /Invalid roles/,
   );
   assert.throws(() => parseAdminCommand(["delete-everything"]), /Usage:/);
+});
+
+test("unknown, duplicate and extra arguments fail closed", () => {
+  assert.throws(
+    () => parseAdminCommand(["migrate", "--typo"]),
+    /Unknown option: --typo/,
+  );
+  assert.throws(
+    () => parseAdminCommand(["enable-kill-switch", "--as", "admin", "--as", "other"]),
+    /Duplicate option: --as/,
+  );
+  assert.throws(
+    () => parseAdminCommand([
+      "list-users", "--as", "admin", "--password-stdin", "--password-stdin",
+    ]),
+    /Duplicate option: --password-stdin/,
+  );
+  assert.throws(
+    () => parseAdminCommand(["bootstrap", "--username", "admin", "--display-name", "Admin", "extra"]),
+    /Unexpected argument: extra/,
+  );
 });
 
 test("운영 admission과 kill switch 명령은 배포 identity와 관리자 재인증을 요구한다", () => {
@@ -84,19 +104,4 @@ test("운영 admission과 kill switch 명령은 배포 identity와 관리자 재
     ]),
     /--result/,
   );
-});
-
-test("migrate만 DDL을 실행하고 HMAC secret을 요구하지 않는다", () => {
-  assert.deepEqual(adminCommandRuntimePolicy({ kind: "migrate" }), {
-    runMigration: true,
-    requiresAuthService: false,
-  });
-  assert.deepEqual(adminCommandRuntimePolicy({
-    kind: "bootstrap",
-    username: "admin",
-    displayName: "Administrator",
-  }), {
-    runMigration: false,
-    requiresAuthService: true,
-  });
 });
