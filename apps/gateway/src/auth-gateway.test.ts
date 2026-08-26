@@ -232,6 +232,55 @@ test("administrator-issued accounts gate HTTP, admin UI and Carrier, then revoke
   assert.equal(clientLoginResponse.status, 200);
   const clientLogin = JSON.parse(clientLoginResponse.body) as { sessionToken?: string };
   assert.equal(typeof clientLogin.sessionToken, "string");
+  const disposableLoginResponse = await send(
+    gatewayPort,
+    "control.localhost",
+    "/api/client/login",
+    {
+      method: "POST",
+      headers: {
+        "x-review-tunnel-client": "1",
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        username: "admin",
+        password: "administrator-password-2026",
+      }).toString(),
+    },
+  );
+  assert.equal(disposableLoginResponse.status, 200);
+  const disposableLogin = JSON.parse(disposableLoginResponse.body) as {
+    sessionToken?: string;
+  };
+  assert.equal(typeof disposableLogin.sessionToken, "string");
+  const cliLogout = await send(
+    gatewayPort,
+    "control.localhost",
+    "/api/client/logout",
+    {
+      method: "POST",
+      headers: {
+        "x-review-tunnel-client": "1",
+        authorization: `Bearer ${disposableLogin.sessionToken}`,
+      },
+    },
+  );
+  assert.equal(cliLogout.status, 204);
+  const rejectedAfterLogout = await send(
+    gatewayPort,
+    "control.localhost",
+    "/api/carrier-credentials",
+    {
+      method: "POST",
+      headers: {
+        "x-review-tunnel-client": "1",
+        "content-type": "application/x-www-form-urlencoded",
+        authorization: `Bearer ${disposableLogin.sessionToken}`,
+      },
+      body: new URLSearchParams({ purpose: "create" }).toString(),
+    },
+  );
+  assert.equal(rejectedAfterLogout.status, 403);
   const credentialResponse = await send(
     gatewayPort,
     "control.localhost",

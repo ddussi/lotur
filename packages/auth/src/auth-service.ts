@@ -178,19 +178,24 @@ export class AuthService {
     username: string;
     password: string;
     remoteAddress: string;
-  }>, now: Date): Promise<Account> {
+  }>, now: Date, knownAccount?: Account): Promise<Account> {
     let username: string | undefined;
     let throttleIdentity: string;
-    try {
-      username = normalizeUsername(input.username);
-      throttleIdentity = username;
-    } catch {
-      username = undefined;
-      throttleIdentity = `invalid:${input.username.trim().toLowerCase().slice(0, 64)}`;
+    if (knownAccount === undefined) {
+      try {
+        username = normalizeUsername(input.username);
+        throttleIdentity = username;
+      } catch {
+        username = undefined;
+        throttleIdentity = `invalid:${input.username.trim().toLowerCase().slice(0, 64)}`;
+      }
+    } else {
+      username = knownAccount.username;
+      throttleIdentity = knownAccount.username;
     }
-    const account = username === undefined
+    const account = knownAccount ?? (username === undefined
       ? undefined
-      : await this.#repository.findAccountByUsername(username);
+      : await this.#repository.findAccountByUsername(username));
     const throttleKeys = [
       this.#throttleKey("identity", throttleIdentity),
       this.#throttleKey("remote", input.remoteAddress),
@@ -442,9 +447,11 @@ export class AuthService {
     input: Readonly<{ currentPassword: string; newPassword: string }>,
   ): Promise<void> {
     const account = await this.#requireEnabledAccount(principal);
-    if (!await this.#passwordHasher.verify(account.passwordHash, input.currentPassword)) {
-      throw new AuthError("INVALID_CREDENTIALS", "현재 비밀번호가 올바르지 않습니다.");
-    }
+    await this.#verifyCredentials({
+      username: account.username,
+      password: input.currentPassword,
+      remoteAddress: `session:${principal.sessionId}`,
+    }, this.#now(), account);
     validatePassword(input.newPassword);
     await this.#replacePassword({
       account,

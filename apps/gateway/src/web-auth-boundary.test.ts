@@ -789,6 +789,81 @@ test("trusted proxy identity is shared by login and administrator reauthenticati
   }
 });
 
+test("current-password checks share the bounded credential-attempt admission", async () => {
+  const authService = createAuthService();
+  const principal: Principal = {
+    accountId: "account-id",
+    username: "developer",
+    displayName: "Developer",
+    roles: ["DEVELOPER"],
+    mustChangePassword: false,
+    authVersion: 1,
+    sessionId: "session-id",
+  };
+  authService.resolveSession = async () => principal;
+  authService.authenticate = async () => ({
+    principal,
+    sessionToken: "replacement-session-token",
+  });
+  let changeCalls = 0;
+  let markStarted!: () => void;
+  const started = new Promise<void>((resolve) => {
+    markStarted = resolve;
+  });
+  let releaseChange!: () => void;
+  const heldChange = new Promise<void>((resolve) => {
+    releaseChange = resolve;
+  });
+  authService.changeOwnPassword = async () => {
+    changeCalls += 1;
+    if (changeCalls === 1) {
+      markStarted();
+      await heldChange;
+    }
+  };
+  const gateway = createGatewayServer({
+    host: "127.0.0.1",
+    port: 0,
+    contentDomain: "localhost",
+    controlHost: "control.localhost",
+    authService,
+    secureCookies: false,
+    maxConcurrentLoginAttempts: 1,
+    maxConcurrentLoginAttemptsPerRemote: 1,
+  });
+  const port = await gateway.listen();
+  const submitChange = () => send(
+    port,
+    "control.localhost",
+    "/account/change-password",
+    {
+      origin: "http://control.localhost",
+      cookie: "rt_control_dev=session-token",
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    new URLSearchParams({
+      currentPassword: "current-password",
+      newPassword: "replacement-password-2026",
+      confirmation: "replacement-password-2026",
+    }).toString(),
+    "POST",
+  );
+
+  const first = submitChange();
+  try {
+    await started;
+    const second = await submitChange();
+    assert.equal(second.status, 429);
+    assert.equal(changeCalls, 1);
+    releaseChange();
+    assert.equal((await first).status, 303);
+  } finally {
+    releaseChange();
+    await first.catch(() => undefined);
+    await gateway.close();
+  }
+});
+
 test("login-intent limiting uses the same trusted client boundary", async () => {
   const authService = createAuthService();
   const gateway = createGatewayServer({
@@ -820,6 +895,130 @@ test("login-intent limiting uses the same trusted client boundary", async () => 
     assert.equal(first.status, 303);
     assert.equal(secondClient.status, 303);
     assert.equal(repeatedClient.status, 429);
+  } finally {
+    await gateway.close();
+  }
+});
+
+test("content authentication rejects authorities outside the configured share domain", async () => {
+  const authService = createAuthService();
+  let intentCreates = 0;
+  let exchangeConsumes = 0;
+  let sessionResolutions = 0;
+  const createLoginIntent = authService.createLoginIntent.bind(authService);
+  const consumeSessionExchange = authService.consumeSessionExchange.bind(authService);
+  authService.createLoginIntent = async (...arguments_) => {
+    intentCreates += 1;
+    return createLoginIntent(...arguments_);
+  };
+  authService.consumeSessionExchange = async (...arguments_) => {
+    exchangeConsumes += 1;
+    return consumeSessionExchange(...arguments_);
+  };
+  authService.resolveSession = async () => {
+    sessionResolutions += 1;
+    return undefined;
+  };
+  const gateway = createGatewayServer({
+    host: "127.0.0.1",
+    port: 0,
+    contentDomain: "preview.example.com",
+    controlHost: "control.example.com",
+    authService,
+    secureCookies: false,
+  });
+  const port = await gateway.listen();
+  const socket = new WebSocket(`ws://127.0.0.1:${port}/socket`, {
+    headers: { host: "attacker.example.net" },
+  });
+  const socketStatus = unexpectedResponseStatus(socket);
+
+  try {
+    const browser = await send(port, "attacker.example.net", "/review", {
+      accept: "text/html",
+    });
+    assert.equal(browser.status, 404);
+    assert.equal(browser.headers.location, undefined);
+
+    const malformedAuthority = await send(
+      port,
+      "preview.preview.example.com:invalid",
+      "/review",
+      { accept: "text/html" },
+    );
+    assert.equal(malformedAuthority.status, 404);
+    assert.equal(malformedAuthority.headers.location, undefined);
+
+    const exchange = await send(
+      port,
+      "attacker.example.net",
+      "/_review-tunnel/session?code=untrusted-host-code",
+      {},
+    );
+    assert.equal(exchange.status, 404);
+    assert.equal(await socketStatus, 404);
+    assert.deepEqual({ intentCreates, exchangeConsumes, sessionResolutions }, {
+      intentCreates: 0,
+      exchangeConsumes: 0,
+      sessionResolutions: 0,
+    });
+  } finally {
+    socket.terminate();
+    await gateway.close();
+  }
+});
+
+test("content authentication creates login intents only for top-level GET navigation", async () => {
+  const authService = createAuthService();
+  let intentCreates = 0;
+  const createLoginIntent = authService.createLoginIntent.bind(authService);
+  authService.createLoginIntent = async (...arguments_) => {
+    intentCreates += 1;
+    return createLoginIntent(...arguments_);
+  };
+  const gateway = createGatewayServer({
+    host: "127.0.0.1",
+    port: 0,
+    contentDomain: "localhost",
+    controlHost: "control.localhost",
+    authService,
+    secureCookies: false,
+  });
+  const port = await gateway.listen();
+
+  try {
+    const getNavigation = await send(
+      port,
+      "preview.localhost",
+      "/review",
+      { accept: "text/html" },
+    );
+    assert.equal(getNavigation.status, 303);
+
+    const headNavigation = await send(
+      port,
+      "preview.localhost",
+      "/review",
+      { accept: "text/html" },
+      undefined,
+      "HEAD",
+    );
+    assert.equal(headNavigation.status, 401);
+
+    const fetch = await send(port, "preview.localhost", "/fragment", {
+      accept: "text/html",
+      "sec-fetch-dest": "empty",
+      "sec-fetch-mode": "cors",
+    });
+    assert.equal(fetch.status, 401);
+
+    const iframe = await send(port, "preview.localhost", "/embedded", {
+      accept: "text/html",
+      "sec-fetch-dest": "iframe",
+      "sec-fetch-mode": "navigate",
+    });
+    assert.equal(iframe.status, 401);
+    assert.equal(intentCreates, 1);
   } finally {
     await gateway.close();
   }
@@ -860,7 +1059,7 @@ async function send(
   path: string,
   headers: Readonly<Record<string, string>>,
   body?: string,
-  method: "GET" | "POST" = "GET",
+  method: "GET" | "HEAD" | "POST" = "GET",
 ): Promise<Readonly<{
   status: number;
   body: string;

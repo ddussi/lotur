@@ -558,6 +558,39 @@ test("five failed logins temporarily lock the account", async () => {
   assert.equal(login.principal.username, "admin");
 });
 
+test("failed current-password checks share the durable login throttle", async () => {
+  const { service } = fixture();
+  const bootstrap = await service.bootstrapAdministrator({
+    username: "admin",
+    displayName: "Admin",
+  });
+  const temporary = await service.authenticate({
+    username: "admin",
+    password: bootstrap.temporaryPassword,
+    remoteAddress: "192.0.2.10",
+  });
+
+  for (let index = 0; index < 5; index += 1) {
+    await assert.rejects(
+      service.changeOwnPassword(temporary.principal, {
+        currentPassword: "incorrect password",
+        newPassword: "administrator-password-2026",
+      }),
+      (error: unknown) =>
+        error instanceof AuthError && error.code === "INVALID_CREDENTIALS",
+    );
+  }
+
+  await assert.rejects(
+    service.changeOwnPassword(temporary.principal, {
+      currentPassword: bootstrap.temporaryPassword,
+      newPassword: "administrator-password-2026",
+    }),
+    (error: unknown) =>
+      error instanceof AuthError && error.code === "LOGIN_THROTTLED",
+  );
+});
+
 test("disabling an account invalidates all of its sessions", async () => {
   const { service } = fixture();
   const bootstrap = await service.bootstrapAdministrator({

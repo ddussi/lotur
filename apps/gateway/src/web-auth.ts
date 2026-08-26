@@ -268,6 +268,24 @@ export function createWebAuthHandler(options: WebAuthOptions): WebAuthHandler {
           writeJson(response, 200, { sessionToken: login.sessionToken, expiresInSeconds: 43_200 });
           return;
         }
+        if (request.method === "POST" && url.pathname === "/api/client/logout") {
+          requireCliRequest(request);
+          const token = bearerToken(request.headers.authorization);
+          const clientPrincipal = token === undefined
+            ? undefined
+            : await runAuthorizationQuery(
+                request,
+                () => options.authService.resolveSession(token),
+              );
+          if (clientPrincipal !== undefined) {
+            await runAuthorizationMutation(
+              request,
+              () => options.authService.logout(clientPrincipal),
+            );
+          }
+          writeNoContent(response);
+          return;
+        }
         if (request.method === "POST" && url.pathname === "/api/carrier-credentials") {
           requireCliRequest(request);
           const token = bearerToken(request.headers.authorization);
@@ -407,10 +425,13 @@ export function createWebAuthHandler(options: WebAuthOptions): WebAuthHandler {
           }
           const intent = form.get("intent") ?? "";
           const { login, exchange } = await runAuthorizationMutation(request, async () => {
-            await options.authService.changeOwnPassword(principal, {
-              currentPassword,
-              newPassword,
-            });
+            await withCredentialAttempt(
+              clientAddress(request),
+              () => options.authService.changeOwnPassword(principal, {
+                currentPassword,
+                newPassword,
+              }),
+            );
             const login = await authenticateWithinAdmission({
               username: principal.username,
               password: newPassword,
@@ -594,8 +615,7 @@ export function createWebAuthHandler(options: WebAuthOptions): WebAuthHandler {
       if (principal !== undefined && principal.roles.includes("REVIEWER") && !principal.mustChangePassword) {
         return principal;
       }
-      const acceptsHtml = request.method === "GET" && (request.headers.accept ?? "").includes("text/html");
-      if (!acceptsHtml) {
+      if (!isTopLevelHtmlNavigation(request)) {
         applySecurityHeaders(response);
         writeJsonError(response, 401, "AUTHENTICATION_REQUIRED");
         return undefined;
@@ -792,6 +812,26 @@ function normalizedAuthority(hostHeader: string | undefined): string {
   }
 }
 
+function isTopLevelHtmlNavigation(request: IncomingMessage): boolean {
+  if (request.method !== "GET") return false;
+  const accept = joinedHeaderValue(request.headers.accept);
+  if (!accept.toLowerCase().includes("text/html")) return false;
+
+  const fetchMode = singleHeaderValue(request.headers["sec-fetch-mode"]);
+  if (fetchMode !== undefined && fetchMode.toLowerCase() !== "navigate") return false;
+  const fetchDestination = singleHeaderValue(request.headers["sec-fetch-dest"]);
+  return fetchDestination === undefined || fetchDestination.toLowerCase() === "document";
+}
+
+function joinedHeaderValue(value: string | readonly string[] | undefined): string {
+  if (value === undefined) return "";
+  return typeof value === "string" ? value : value.join(",");
+}
+
+function singleHeaderValue(value: string | readonly string[] | undefined): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
 export function parseCookie(header: string | undefined, name: string): string | undefined {
   if (header === undefined) return undefined;
   const values = header.split(";").map((part) => part.trim()).filter((part) => part.startsWith(`${name}=`));
@@ -956,6 +996,12 @@ function writeJson(
   response.statusCode = status;
   response.setHeader("Content-Type", "application/json; charset=utf-8");
   response.end(JSON.stringify(value));
+}
+
+function writeNoContent(response: ServerResponse): void {
+  response.statusCode = 204;
+  response.setHeader("Cache-Control", "no-store");
+  response.end();
 }
 
 function handleWebError(
