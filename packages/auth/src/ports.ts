@@ -55,12 +55,18 @@ export type StoredArtifactLimits = Readonly<{
   perAccount: number;
 }>;
 
+export type SessionAccount = Readonly<{
+  session: AuthSession;
+  account: Account;
+}>;
+
 export interface AuthRepository {
   checkHealth(): Promise<void>;
   countAccounts(): Promise<number>;
   createFirstAccount(account: Account, auditEvent: AuditEvent): Promise<boolean>;
   countEnabledAdministrators(): Promise<number>;
   findAccountById(id: string): Promise<Account | undefined>;
+  findAccountsByIds(ids: readonly string[]): Promise<readonly Account[]>;
   findAccountByUsername(username: string): Promise<Account | undefined>;
   listAccounts(): Promise<readonly Account[]>;
   createAccount(input: Readonly<{
@@ -102,7 +108,9 @@ export interface AuthRepository {
     now: Date,
     limits: StoredArtifactLimits,
   ): Promise<boolean>;
-  findSessionByTokenDigest(tokenDigest: string): Promise<AuthSession | undefined>;
+  findSessionAccountByTokenDigests(
+    tokenDigests: readonly string[],
+  ): Promise<SessionAccount | undefined>;
   deleteSession(id: string): Promise<void>;
   deleteSessionsForAccount(accountId: string): Promise<void>;
   getLoginThrottle(key: string): Promise<LoginThrottle | undefined>;

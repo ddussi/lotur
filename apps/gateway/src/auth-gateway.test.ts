@@ -122,6 +122,7 @@ test("administrator-issued accounts gate HTTP, admin UI and Carrier, then revoke
     return realCreateAccount(actor, input);
   };
   const realAuthorizationCheck = authService.isAccountAuthorized.bind(authService);
+  const realAuthorizationBatch = authService.areAccountsAuthorized.bind(authService);
   let authorizationDatabaseAvailable = true;
   let authorizationOutageChecks = 0;
   authService.isAccountAuthorized = async (...arguments_) => {
@@ -130,6 +131,13 @@ test("administrator-issued accounts gate HTTP, admin UI and Carrier, then revoke
       return new Promise<boolean>(() => undefined);
     }
     return realAuthorizationCheck(...arguments_);
+  };
+  authService.areAccountsAuthorized = async (checks) => {
+    if (!authorizationDatabaseAvailable) {
+      authorizationOutageChecks += 1;
+      return new Promise<readonly boolean[]>(() => undefined);
+    }
+    return realAuthorizationBatch(checks);
   };
   const gatewayEvents: string[] = [];
 

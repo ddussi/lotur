@@ -61,14 +61,14 @@ test("stale reviewer revocation cannot remove a reused stream ID after resume", 
     resolveReviewerACheck = resolve;
   });
   let reviewerACheckCaptured = false;
-  authService.isAccountAuthorized = async (accountId) => {
+  setAuthorizationCheck(authService, async (accountId) => {
     if (accountId === reviewerA.accountId && !reviewerACheckCaptured) {
       reviewerACheckCaptured = true;
       markReviewerACheckStarted();
       return heldReviewerACheck;
     }
     return true;
-  };
+  });
 
   let markOriginAStarted!: () => void;
   const originAStarted = new Promise<void>((resolve) => {
@@ -267,12 +267,12 @@ test("one Tunnel authorization query failure does not close another Tunnel", asy
   };
   authService.resolveSession = async () => principal("reviewer", "reviewer-session");
   let rejectDeveloperA = false;
-  authService.isAccountAuthorized = async (accountId) => {
+  setAuthorizationCheck(authService, async (accountId) => {
     if (rejectDeveloperA && accountId === "developer-a") {
       throw new Error("developer A authorization database failure");
     }
     return true;
-  };
+  });
 
   const origin = createServer((_incoming, response) => response.end("isolated-b-alive"));
   const originPort = await listen(origin);
@@ -323,7 +323,7 @@ test("one Tunnel authorization query failure does not close another Tunnel", asy
   }
 });
 
-test("timed-out authorization revalidation keeps a bounded slot until settle", async () => {
+test("timed-out authorization batch keeps its admission until settle", async () => {
   const authService = createAuthService();
   const tunnelByCredential = new Map<string, string>();
   authService.consumeCarrierCredential = async (token) => {
@@ -340,27 +340,29 @@ test("timed-out authorization revalidation keeps a bounded slot until settle", a
   let authorizationCalls = 0;
   let peakAuthorizations = 0;
   let activeAuthorizations = 0;
-  let markFourStarted!: () => void;
-  const fourStarted = new Promise<void>((resolve) => {
-    markFourStarted = resolve;
+  let markFirstStarted!: () => void;
+  const firstStarted = new Promise<void>((resolve) => {
+    markFirstStarted = resolve;
   });
   let releaseAuthorizations!: () => void;
   const heldAuthorizations = new Promise<void>((resolve) => {
     releaseAuthorizations = resolve;
   });
-  let markFifthStarted!: () => void;
-  const fifthStarted = new Promise<void>((resolve) => {
-    markFifthStarted = resolve;
+  let markSecondStarted!: () => void;
+  const secondStarted = new Promise<void>((resolve) => {
+    markSecondStarted = resolve;
   });
-  authService.isAccountAuthorized = async () => {
+  let holdAuthorizationBatches = false;
+  authService.areAccountsAuthorized = async (checks) => {
+    if (!holdAuthorizationBatches) return checks.map(() => true);
     authorizationCalls += 1;
     activeAuthorizations += 1;
     peakAuthorizations = Math.max(peakAuthorizations, activeAuthorizations);
-    if (authorizationCalls === 4) markFourStarted();
-    if (authorizationCalls === 5) markFifthStarted();
+    if (authorizationCalls === 1) markFirstStarted();
+    if (authorizationCalls === 2) markSecondStarted();
     await heldAuthorizations;
     activeAuthorizations -= 1;
-    return true;
+    return checks.map(() => true);
   };
 
   const origin = createServer((_incoming, response) => response.end("ok"));
@@ -391,10 +393,11 @@ test("timed-out authorization revalidation keeps a bounded slot until settle", a
       }));
     }
     await Promise.all(clients.map((client) => client.ready));
-    await withTestDeadline(fourStarted, "bounded revalidation slots were not filled");
+    holdAuthorizationBatches = true;
+    await withTestDeadline(firstStarted, "authorization batch did not start");
     await delay(50);
-    assert.equal(authorizationCalls, 4, "deadline released an unsettled query slot");
-    assert.equal(peakAuthorizations, 4);
+    assert.equal(authorizationCalls, 1, "deadline duplicated an unsettled batch query");
+    assert.equal(peakAuthorizations, 1);
     await withTestDeadline(
       Promise.all(clients.map((client) => client.closed)).then(() => undefined),
       "capacity-limited sessions did not fail closed",
@@ -412,7 +415,7 @@ test("timed-out authorization revalidation keeps a bounded slot until settle", a
     });
     clients.push(finalClient);
     await finalClient.ready;
-    await withTestDeadline(fifthStarted, "settled queries did not release admission");
+    await withTestDeadline(secondStarted, "settled batch did not release admission");
   } finally {
     releaseAuthorizations();
     await Promise.all(clients.map((client) => client.disconnect().catch(() => undefined)));
@@ -441,7 +444,7 @@ test("reviewer revalidation snapshots streams before awaiting account checks", a
   const heldFirstReviewerCheck = new Promise<void>((resolve) => {
     releaseFirstReviewerCheck = resolve;
   });
-  authService.isAccountAuthorized = async (_accountId, _authVersion, role) => {
+  setAuthorizationCheck(authService, async (_accountId, _authVersion, role) => {
     if (role === "DEVELOPER") return true;
     reviewerChecks += 1;
     if (reviewerChecks === 1) {
@@ -449,7 +452,7 @@ test("reviewer revalidation snapshots streams before awaiting account checks", a
       await heldFirstReviewerCheck;
     }
     return true;
-  };
+  });
 
   let markFirstOriginRequest!: () => void;
   const firstOriginRequest = new Promise<void>((resolve) => {
@@ -572,11 +575,11 @@ test("a deferred reviewer RESET send does not block the next stream revalidation
   const reviewerBChecked = new Promise<void>((resolve) => {
     markReviewerBChecked = resolve;
   });
-  authService.isAccountAuthorized = async (accountId, _authVersion, role) => {
+  setAuthorizationCheck(authService, async (accountId, _authVersion, role) => {
     if (!enforceRevocation || role === "DEVELOPER") return true;
     if (accountId === reviewerB.accountId) markReviewerBChecked();
     return accountId !== reviewerA.accountId;
-  };
+  });
 
   let markOriginAStarted!: () => void;
   const originAStarted = new Promise<void>((resolve) => {
@@ -673,7 +676,7 @@ test("reviewer authorization completion cannot open work after server-observed c
     await deferred.settled;
     return reviewer;
   };
-  authService.isAccountAuthorized = async () => true;
+  setAuthorizationCheck(authService, async () => true);
 
   let originHttpRequests = 0;
   let originUpgrades = 0;
@@ -877,6 +880,15 @@ function createAuthService(): AuthService {
     dummyPasswordHash: "hashed:dummy-password",
     authenticationEventSink: { write() {}, reportFailure() {} },
   });
+}
+
+function setAuthorizationCheck(
+  service: AuthService,
+  check: AuthService["isAccountAuthorized"],
+): void {
+  service.isAccountAuthorized = check;
+  service.areAccountsAuthorized = (checks) => Promise.all(checks.map((input) =>
+    check(input.accountId, input.accountAuthVersion, input.role)));
 }
 
 function principal(accountId: string, sessionId: string): Principal {

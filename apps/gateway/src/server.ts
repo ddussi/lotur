@@ -11,7 +11,7 @@ import { WebSocket, WebSocketServer, type RawData } from "ws";
 
 import {
   AuthError,
-  type AccountRole,
+  type AccountAuthorizationCheck,
   type AccountAuthorization,
   type AuthService,
   type DeveloperAuthorization,
@@ -97,6 +97,7 @@ const DEFAULT_MAX_PENDING_CARRIER_FRAMES = 128;
 const DEFAULT_MAX_PENDING_CARRIER_BYTES = 4 * CARRIER_MAX_MESSAGE_BYTES;
 const AUTHORIZATION_REVALIDATION_CONCURRENCY = 4;
 const CONNECTION_ABORTED = Symbol("connection-aborted");
+class PromiseDeadlineError extends Error {}
 const RESERVED_GATEWAY_COOKIES = new Set([
   "__Host-rt_control",
   "__Host-rt_session",
@@ -1513,125 +1514,134 @@ export function createGatewayServer(
     revocationCheckRunning = true;
     void (async () => {
       const pendingSessions = [...sessions.values()].filter((session) => !session.terminal);
-      const authorizationChecks = new Map<string, Promise<boolean>>();
-      const checkAuthorization = (
-        accountId: string,
-        accountAuthVersion: number,
-        role: AccountRole,
-      ): Promise<boolean> => {
-        const key = JSON.stringify([accountId, accountAuthVersion, role]);
-        const existing = authorizationChecks.get(key);
-        if (existing !== undefined) return existing;
-        const started = withRetainedRevalidationAdmission(
-          () => revocationAuthService.isAccountAuthorized(
-            accountId,
-            accountAuthVersion,
-            role,
-          ),
-          `${role.toLowerCase()} authorization query timed out`,
-        );
-        authorizationChecks.set(key, started);
-        return started;
-      };
-      let nextSessionIndex = 0;
-      const workerCount = Math.min(
-        AUTHORIZATION_REVALIDATION_CONCURRENCY,
-        pendingSessions.length,
-      );
-      await Promise.all(Array.from({ length: workerCount }, async () => {
-        sessionLoop: while (nextSessionIndex < pendingSessions.length) {
-          const session = pendingSessions[nextSessionIndex];
-          nextSessionIndex += 1;
-          if (session === undefined) return;
-          const sessionTransport = captureGatewayTransport(session);
-          const ownerAccountId = session.ownerAccountId;
-          const ownerAuthVersion = session.ownerAuthVersion;
-          if (
-            ownerAccountId !== undefined &&
-            ownerAuthVersion !== undefined
-          ) {
-            let developerAuthorized: boolean;
-            try {
-              developerAuthorized = await checkAuthorization(
-                ownerAccountId,
-                ownerAuthVersion,
-                "DEVELOPER",
-              );
-            } catch (error) {
-              if (isCurrentGatewaySessionTransport(sessions, session, sessionTransport)) {
-                emit("authorization.revalidation_failed", session, {
-                  reason: toSafeErrorReason(error),
-                });
-                session.terminal = true;
-                sessionTransport.socket.close(
-                  1011,
-                  "authorization revalidation unavailable",
+      const checkAuthorizations = async (
+        checks: readonly AccountAuthorizationCheck[],
+      ): Promise<readonly PromiseSettledResult<boolean>[]> => {
+        if (checks.length === 0) return [];
+        const role = checks[0]?.role ?? "DEVELOPER";
+        try {
+          const results = await withRetainedRevalidationAdmission(
+            () => revocationAuthService.areAccountsAuthorized(checks),
+            `${role.toLowerCase()} authorization batch query timed out`,
+          );
+          if (results.length !== checks.length) {
+            throw new Error("authorization batch returned an invalid result count");
+          }
+          return results.map((value) => ({ status: "fulfilled", value }));
+        } catch (error) {
+          if (error instanceof PromiseDeadlineError) {
+            return checks.map(() => ({ status: "rejected", reason: error }));
+          }
+          const fallbackResults: PromiseSettledResult<boolean>[] = Array(checks.length);
+          let nextCheck = 0;
+          const workerCount = Math.min(AUTHORIZATION_REVALIDATION_CONCURRENCY, checks.length);
+          await Promise.all(Array.from({ length: workerCount }, async () => {
+            while (nextCheck < checks.length) {
+              const index = nextCheck;
+              nextCheck += 1;
+              const check = checks[index];
+              if (check === undefined) return;
+              try {
+                const value = await withRetainedRevalidationAdmission(
+                  () => revocationAuthService.isAccountAuthorized(
+                    check.accountId,
+                    check.accountAuthVersion,
+                    check.role,
+                  ),
+                  `${check.role.toLowerCase()} authorization query timed out`,
                 );
+                fallbackResults[index] = { status: "fulfilled", value };
+              } catch (reason) {
+                fallbackResults[index] = { status: "rejected", reason };
               }
-              continue sessionLoop;
             }
-            if (
-              !developerAuthorized &&
-              isCurrentGatewaySessionTransport(sessions, session, sessionTransport)
-            ) {
-              session.terminal = true;
-              sessionTransport.socket.close(1008, "developer authorization revoked");
-              continue sessionLoop;
-            }
-          }
-          if (!isCurrentGatewaySessionTransport(sessions, session, sessionTransport)) {
-            continue sessionLoop;
-          }
-          for (const [streamId, stream] of [...session.streams.entries()]) {
-            const reviewerAccountId = stream.reviewerAccountId;
-            const reviewerAuthVersion = stream.reviewerAuthVersion;
-            if (
-              reviewerAccountId === undefined ||
-              reviewerAuthVersion === undefined
-            ) continue;
-            let reviewerAuthorized: boolean;
-            try {
-              reviewerAuthorized = await checkAuthorization(
-                reviewerAccountId,
-                reviewerAuthVersion,
-                "REVIEWER",
-              );
-            } catch (error) {
-              if (isCurrentGatewaySessionStream(sessions, session, streamId, stream)) {
-                emit("authorization.revalidation_failed", session, {
-                  reason: toSafeErrorReason(error),
-                });
-                stream.cancelled = true;
-                removeGatewayStream(session, streamId, stream, "LOCAL_RESET");
-                stream.transport.outboundFlow.closeStream(streamId);
-                if (stream.kind === "HTTP") {
-                  stream.response.destroy();
-                  stream.request.destroy();
-                } else stream.browserSocket.destroy();
-                void sendReset(
-                  stream.transport,
-                  streamId,
-                  "AUTHORIZATION_UNAVAILABLE",
-                );
-              }
-              continue;
-            }
-            if (
-              !reviewerAuthorized &&
-              isCurrentGatewaySessionStream(sessions, session, streamId, stream)
-            ) {
-              stream.cancelled = true;
-              removeGatewayStream(session, streamId, stream, "LOCAL_RESET");
-              stream.transport.outboundFlow.closeStream(streamId);
-              if (stream.kind === "HTTP") {
-                stream.response.destroy();
-                stream.request.destroy();
-              } else stream.browserSocket.destroy();
-              void sendReset(stream.transport, streamId, "AUTHORIZATION_REVOKED");
-            }
-          }
+          }));
+          return fallbackResults;
         }
-      }));
+      };
+      const developerSnapshots = pendingSessions.flatMap((session) => {
+        const accountId = session.ownerAccountId;
+        const accountAuthVersion = session.ownerAuthVersion;
+        return accountId === undefined || accountAuthVersion === undefined ? [] : [{
+          session,
+          transport: captureGatewayTransport(session),
+          check: { accountId, accountAuthVersion, role: "DEVELOPER" as const },
+        }];
+      });
+      const developerResults = await checkAuthorizations(
+        developerSnapshots.map((snapshot) => snapshot.check),
+      );
+      for (const [index, snapshot] of developerSnapshots.entries()) {
+        const result = developerResults[index];
+        if (
+          result === undefined ||
+          !isCurrentGatewaySessionTransport(sessions, snapshot.session, snapshot.transport)
+        ) continue;
+        if (result.status === "rejected") {
+          emit("authorization.revalidation_failed", snapshot.session, {
+            reason: toSafeErrorReason(result.reason),
+          });
+          snapshot.session.terminal = true;
+          snapshot.transport.socket.close(1011, "authorization revalidation unavailable");
+        } else if (!result.value) {
+          snapshot.session.terminal = true;
+          snapshot.transport.socket.close(1008, "developer authorization revoked");
+        }
+      }
+      const reviewerSnapshots = pendingSessions.flatMap((session) => {
+        const transport = captureGatewayTransport(session);
+        if (!isCurrentGatewaySessionTransport(sessions, session, transport)) return [];
+        return [...session.streams.entries()].flatMap(([streamId, stream]) => {
+          const accountId = stream.reviewerAccountId;
+          const accountAuthVersion = stream.reviewerAuthVersion;
+          return accountId === undefined || accountAuthVersion === undefined ? [] : [{
+            session,
+            streamId,
+            stream,
+            check: { accountId, accountAuthVersion, role: "REVIEWER" as const },
+          }];
+        });
+      });
+      const reviewerResults = await checkAuthorizations(
+        reviewerSnapshots.map((snapshot) => snapshot.check),
+      );
+      for (const [index, snapshot] of reviewerSnapshots.entries()) {
+        const result = reviewerResults[index];
+        if (
+          result === undefined ||
+          !isCurrentGatewaySessionStream(
+            sessions,
+            snapshot.session,
+            snapshot.streamId,
+            snapshot.stream,
+          )
+        ) continue;
+        if (result.status === "fulfilled" && result.value) continue;
+        if (result.status === "rejected") {
+          emit("authorization.revalidation_failed", snapshot.session, {
+            reason: toSafeErrorReason(result.reason),
+          });
+        }
+        snapshot.stream.cancelled = true;
+        removeGatewayStream(
+          snapshot.session,
+          snapshot.streamId,
+          snapshot.stream,
+          "LOCAL_RESET",
+        );
+        snapshot.stream.transport.outboundFlow.closeStream(snapshot.streamId);
+        if (snapshot.stream.kind === "HTTP") {
+          snapshot.stream.response.destroy();
+          snapshot.stream.request.destroy();
+        } else snapshot.stream.browserSocket.destroy();
+        void sendReset(
+          snapshot.stream.transport,
+          snapshot.streamId,
+          result.status === "rejected"
+            ? "AUTHORIZATION_UNAVAILABLE"
+            : "AUTHORIZATION_REVOKED",
+        );
+      }
     })()
       .catch((error: unknown) => {
         console.error(JSON.stringify({
@@ -3260,7 +3270,7 @@ async function withPromiseDeadline<T>(
     return await Promise.race([
       operation,
       new Promise<never>((_resolve, reject) => {
-        timer = setTimeout(() => reject(new Error(message)), timeoutMs);
+        timer = setTimeout(() => reject(new PromiseDeadlineError(message)), timeoutMs);
         timer.unref();
       }),
     ]);

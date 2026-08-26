@@ -110,6 +110,14 @@ export class PostgresAuthRepository implements AuthRepository {
     return optionalAccount(result.rows[0]);
   }
 
+  async findAccountsByIds(ids: readonly string[]): Promise<readonly Account[]> {
+    const result = await this.#database.query<AccountRow>(
+      "SELECT * FROM rt_accounts WHERE id = ANY($1::text[])",
+      [ids],
+    );
+    return result.rows.map(toAccount);
+  }
+
   async findAccountByUsername(username: string): Promise<Account | undefined> {
     const result = await this.#database.query<AccountRow>(
       "SELECT * FROM rt_accounts WHERE username = $1",
@@ -313,21 +321,58 @@ export class PostgresAuthRepository implements AuthRepository {
     });
   }
 
-  async findSessionByTokenDigest(tokenDigest: string): Promise<AuthSession | undefined> {
-    const result = await this.#database.query<AuthSessionRow>(
-      "SELECT * FROM rt_auth_sessions WHERE token_digest = $1",
-      [tokenDigest],
+  async findSessionAccountByTokenDigests(tokenDigests: readonly string[]) {
+    const result = await this.#database.query<SessionAccountRow>(
+      `SELECT session.id AS session_id,
+              session.token_digest AS session_token_digest,
+              session.account_id AS session_account_id,
+              session.account_auth_version AS session_account_auth_version,
+              session.audience AS session_audience,
+              session.created_at AS session_created_at,
+              session.expires_at AS session_expires_at,
+              session.last_seen_at AS session_last_seen_at,
+              account.id AS account_id,
+              account.username AS account_username,
+              account.display_name AS account_display_name,
+              account.roles AS account_roles,
+              account.password_hash AS account_password_hash,
+              account.enabled AS account_enabled,
+              account.must_change_password AS account_must_change_password,
+              account.auth_version AS account_auth_version,
+              account.created_at AS account_created_at,
+              account.updated_at AS account_updated_at
+       FROM unnest($1::text[]) WITH ORDINALITY AS candidate(token_digest, priority)
+       JOIN rt_auth_sessions AS session
+         ON session.token_digest = candidate.token_digest
+       JOIN rt_accounts AS account ON account.id = session.account_id
+       ORDER BY candidate.priority
+       LIMIT 1`,
+      [tokenDigests],
     );
     const row = result.rows[0];
     return row === undefined ? undefined : {
-      id: row.id,
-      tokenDigest: row.token_digest,
-      accountId: row.account_id,
-      accountAuthVersion: row.account_auth_version,
-      audience: row.audience,
-      createdAt: row.created_at,
-      expiresAt: row.expires_at,
-      lastSeenAt: row.last_seen_at,
+      session: {
+        id: row.session_id,
+        tokenDigest: row.session_token_digest,
+        accountId: row.session_account_id,
+        accountAuthVersion: row.session_account_auth_version,
+        audience: row.session_audience,
+        createdAt: row.session_created_at,
+        expiresAt: row.session_expires_at,
+        lastSeenAt: row.session_last_seen_at,
+      },
+      account: {
+        id: row.account_id,
+        username: row.account_username,
+        displayName: row.account_display_name,
+        roles: row.account_roles as AccountRole[],
+        passwordHash: row.account_password_hash,
+        enabled: row.account_enabled,
+        mustChangePassword: row.account_must_change_password,
+        authVersion: row.account_auth_version,
+        createdAt: row.account_created_at,
+        updatedAt: row.account_updated_at,
+      },
     };
   }
 
@@ -709,15 +754,25 @@ type AccountRow = QueryResultRow & {
   updated_at: Date;
 };
 
-type AuthSessionRow = QueryResultRow & {
-  id: string;
-  token_digest: string;
+type SessionAccountRow = QueryResultRow & {
+  session_id: string;
+  session_token_digest: string;
+  session_account_id: string;
+  session_account_auth_version: number;
+  session_audience: string;
+  session_created_at: Date;
+  session_expires_at: Date;
+  session_last_seen_at: Date;
   account_id: string;
+  account_username: string;
+  account_display_name: string;
+  account_roles: string[];
+  account_password_hash: string;
+  account_enabled: boolean;
+  account_must_change_password: boolean;
   account_auth_version: number;
-  audience: string;
-  created_at: Date;
-  expires_at: Date;
-  last_seen_at: Date;
+  account_created_at: Date;
+  account_updated_at: Date;
 };
 
 type LoginThrottleRow = QueryResultRow & {

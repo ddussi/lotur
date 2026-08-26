@@ -20,6 +20,24 @@ class TestHasher implements PasswordHasher {
   }
 }
 
+class SessionLookupCountingRepository extends InMemoryAuthRepository {
+  readonly lookupBatchSizes: number[] = [];
+
+  async findSessionAccountByTokenDigests(tokenDigests: readonly string[]) {
+    this.lookupBatchSizes.push(tokenDigests.length);
+    return super.findSessionAccountByTokenDigests(tokenDigests);
+  }
+}
+
+class AuthorizationBatchCountingRepository extends InMemoryAuthRepository {
+  readonly authorizationBatchSizes: number[] = [];
+
+  async findAccountsByIds(accountIds: readonly string[]) {
+    this.authorizationBatchSizes.push(accountIds.length);
+    return super.findAccountsByIds(accountIds);
+  }
+}
+
 const DISCARD_AUTHENTICATION_EVENTS = Object.freeze({
   write() {},
   reportFailure() {},
@@ -915,7 +933,7 @@ test("expired Carrier credentials are rejected and cleaned up", async () => {
 });
 
 test("HMAC key rotation은 이전 세션을 읽고 새 세션은 active key로만 발급한다", async () => {
-  const repository = new InMemoryAuthRepository();
+  const repository = new SessionLookupCountingRepository();
   const oldKey = Buffer.alloc(32, 1);
   const newKey = Buffer.alloc(32, 2);
   const dependencies = {
@@ -957,6 +975,7 @@ test("HMAC key rotation은 이전 세션을 읽고 새 세션은 active key로�
   });
   assert.equal((await rotatedService.resolveSession(newLogin.sessionToken))?.username, "admin");
   assert.equal(await oldService.resolveSession(newLogin.sessionToken), undefined);
+  assert.deepEqual(repository.lookupBatchSizes, [2, 2, 1]);
 });
 
 test("session HMAC rotation keys are bounded and unique by key material", () => {
@@ -1008,6 +1027,45 @@ test("session HMAC rotation keys are bounded and unique by key material", () => 
     }),
     /session HMAC keys must contain between 32 and 128 bytes/,
   );
+});
+
+test("account authorization checks deduplicate IDs and use bounded repository batches", async () => {
+  const repository = new AuthorizationBatchCountingRepository();
+  repository.accounts.set("known-account", {
+    id: "known-account",
+    username: "known",
+    displayName: "Known",
+    roles: ["DEVELOPER"],
+    passwordHash: "hashed:irrelevant",
+    enabled: true,
+    mustChangePassword: false,
+    authVersion: 7,
+    createdAt: new Date("2026-08-21T00:00:00.000Z"),
+    updatedAt: new Date("2026-08-21T00:00:00.000Z"),
+  });
+  const service = new AuthService({
+    repository,
+    passwordHasher: new TestHasher(),
+    sessionHmacKey: Buffer.alloc(32, 7),
+    dummyPasswordHash: "hashed:not-the-password",
+    authenticationEventSink: DISCARD_AUTHENTICATION_EVENTS,
+  });
+  const checks = [
+    { accountId: "known-account", accountAuthVersion: 7, role: "DEVELOPER" as const },
+    { accountId: "known-account", accountAuthVersion: 6, role: "DEVELOPER" as const },
+    { accountId: "known-account", accountAuthVersion: 7, role: "REVIEWER" as const },
+    ...Array.from({ length: 1_024 }, (_, index) => ({
+      accountId: `missing-${index}`,
+      accountAuthVersion: 1,
+      role: "REVIEWER" as const,
+    })),
+  ];
+
+  const results = await service.areAccountsAuthorized(checks);
+
+  assert.deepEqual(results.slice(0, 3), [true, false, false]);
+  assert.equal(results.slice(3).every((authorized) => !authorized), true);
+  assert.deepEqual(repository.authorizationBatchSizes.toSorted((a, b) => a - b), [1, 512, 512]);
 });
 
 test("revoking sessions advances authorization and removes sessions and unused Carrier credentials", async () => {

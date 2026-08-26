@@ -4,6 +4,7 @@ import { AuthError } from "./auth-error.ts";
 import type {
   Account,
   AccountAuthorization,
+  AccountAuthorizationCheck,
   AccountRole,
   AuthenticationEvent,
   AuditAction,
@@ -45,6 +46,8 @@ export const DEFAULT_AUTH_ARTIFACT_LIMITS: AuthArtifactLimits = {
 };
 const AUTH_ARTIFACT_CLEANUP_BATCH_SIZE = 500;
 const AUTH_ARTIFACT_CLEANUP_MAX_BATCHES = 10;
+const AUTHORIZATION_ACCOUNT_BATCH_SIZE = 512;
+const AUTHORIZATION_ACCOUNT_QUERY_CONCURRENCY = 4;
 
 export type AuthServiceDependencies = Readonly<{
   repository: AuthRepository;
@@ -393,9 +396,44 @@ export class AuthService {
     accountAuthVersion: number,
     role: AccountRole,
   ): Promise<boolean> {
-    const account = await this.#repository.findAccountById(accountId);
-    return account !== undefined && account.enabled && !account.mustChangePassword &&
-      account.authVersion === accountAuthVersion && account.roles.includes(role);
+    const [authorized] = await this.areAccountsAuthorized([{
+      accountId,
+      accountAuthVersion,
+      role,
+    }]);
+    return authorized ?? false;
+  }
+
+  async areAccountsAuthorized(
+    checks: readonly AccountAuthorizationCheck[],
+  ): Promise<readonly boolean[]> {
+    if (checks.length === 0) return [];
+    const accountIds = [...new Set(checks.map((check) => check.accountId))];
+    const batches = Array.from(
+      { length: Math.ceil(accountIds.length / AUTHORIZATION_ACCOUNT_BATCH_SIZE) },
+      (_, index) => accountIds.slice(
+        index * AUTHORIZATION_ACCOUNT_BATCH_SIZE,
+        (index + 1) * AUTHORIZATION_ACCOUNT_BATCH_SIZE,
+      ),
+    );
+    const accounts = new Map<string, Account>();
+    let nextBatch = 0;
+    const workerCount = Math.min(AUTHORIZATION_ACCOUNT_QUERY_CONCURRENCY, batches.length);
+    await Promise.all(Array.from({ length: workerCount }, async () => {
+      while (nextBatch < batches.length) {
+        const batch = batches[nextBatch];
+        nextBatch += 1;
+        if (batch === undefined) return;
+        for (const account of await this.#repository.findAccountsByIds(batch)) {
+          accounts.set(account.id, account);
+        }
+      }
+    }));
+    return checks.map((check) => {
+      const account = accounts.get(check.accountId);
+      return account !== undefined && account.enabled && !account.mustChangePassword &&
+        account.authVersion === check.accountAuthVersion && account.roles.includes(check.role);
+    });
   }
 
   async cleanupExpiredArtifacts(): Promise<void> {
@@ -418,16 +456,13 @@ export class AuthService {
     expectedAudience = "control",
   ): Promise<Principal | undefined> {
     if (sessionToken.length < 20 || sessionToken.length > 512) return undefined;
-    let session;
-    for (const digest of this.#digestSessionTokenCandidates(sessionToken)) {
-      session = await this.#repository.findSessionByTokenDigest(digest);
-      if (session !== undefined) break;
-    }
-    if (session === undefined) return undefined;
+    const resolved = await this.#repository.findSessionAccountByTokenDigests(
+      this.#digestSessionTokenCandidates(sessionToken),
+    );
+    if (resolved === undefined) return undefined;
+    const { session, account } = resolved;
     if (session.audience !== expectedAudience) return undefined;
-    const account = await this.#repository.findAccountById(session.accountId);
     if (
-      account === undefined ||
       !account.enabled ||
       account.authVersion !== session.accountAuthVersion ||
       session.expiresAt.getTime() <= this.#now().getTime()

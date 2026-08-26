@@ -110,3 +110,9 @@ export type AccountAuthorization = Readonly<{
   accountId: string;
   authVersion: number;
 }>;
+
+export type AccountAuthorizationCheck = Readonly<{
+  accountId: string;
+  accountAuthVersion: number;
+  role: AccountRole;
+}>;

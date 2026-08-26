@@ -61,6 +61,13 @@ export class InMemoryAuthRepository implements AuthRepository {
     return this.accounts.get(id);
   }
 
+  async findAccountsByIds(ids: readonly string[]): Promise<readonly Account[]> {
+    return ids.flatMap((id) => {
+      const account = this.accounts.get(id);
+      return account === undefined ? [] : [account];
+    });
+  }
+
   async findAccountByUsername(username: string): Promise<Account | undefined> {
     return [...this.accounts.values()].find((account) => account.username === username);
   }
@@ -232,8 +239,16 @@ export class InMemoryAuthRepository implements AuthRepository {
     return true;
   }
 
-  async findSessionByTokenDigest(tokenDigest: string): Promise<AuthSession | undefined> {
-    return [...this.sessions.values()].find((session) => session.tokenDigest === tokenDigest);
+  async findSessionAccountByTokenDigests(tokenDigests: readonly string[]) {
+    for (const tokenDigest of tokenDigests) {
+      const session = [...this.sessions.values()].find(
+        (candidate) => candidate.tokenDigest === tokenDigest,
+      );
+      if (session === undefined) continue;
+      const account = this.accounts.get(session.accountId);
+      return account === undefined ? undefined : { session, account };
+    }
+    return undefined;
   }
 
   async deleteSession(id: string): Promise<void> {
