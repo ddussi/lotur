@@ -628,27 +628,16 @@ function compactSessionLimits(
   environment: Readonly<Record<string, string | undefined>>,
 ): Partial<SessionLimits> {
   const mappings = [
-    ["maxRequestBodyBytes", "MAX_REQUEST_BODY_BYTES"],
-    ["maxFiniteResponseBytes", "MAX_FINITE_RESPONSE_BYTES"],
-    ["maxConcurrentStreams", "MAX_CONCURRENT_STREAMS"],
-    ["maxNewStreamsPerMinute", "MAX_NEW_STREAMS_PER_MINUTE"],
-    ["responseHeaderTimeoutMs", "RESPONSE_HEADER_TIMEOUT_MS"],
-    ["streamInactivityTimeoutMs", "STREAM_INACTIVITY_TIMEOUT_MS"],
-    ["maxStreamDurationMs", "MAX_STREAM_DURATION_MS"],
+    ["maxRequestBodyBytes", "MAX_REQUEST_BODY_BYTES", 1024 * 1024 * 1024],
+    ["maxFiniteResponseBytes", "MAX_FINITE_RESPONSE_BYTES", 1024 * 1024 * 1024],
+    ["maxConcurrentStreams", "MAX_CONCURRENT_STREAMS", 10_000],
+    ["maxNewStreamsPerMinute", "MAX_NEW_STREAMS_PER_MINUTE", 100_000],
+    ["responseHeaderTimeoutMs", "RESPONSE_HEADER_TIMEOUT_MS", 10 * 60_000],
+    ["streamInactivityTimeoutMs", "STREAM_INACTIVITY_TIMEOUT_MS", 24 * 60 * 60_000],
+    ["maxStreamDurationMs", "MAX_STREAM_DURATION_MS", MAX_NODE_TIMER_MS],
   ] as const;
   const limits: Partial<Record<keyof SessionLimits, number>> = {};
-  for (const [property, environmentName] of mappings) {
-    const maximum = property === "maxRequestBodyBytes" || property === "maxFiniteResponseBytes"
-      ? 1024 * 1024 * 1024
-      : property === "maxConcurrentStreams"
-        ? 10_000
-        : property === "maxNewStreamsPerMinute"
-          ? 100_000
-          : property === "responseHeaderTimeoutMs"
-            ? 10 * 60_000
-            : property === "streamInactivityTimeoutMs"
-              ? 24 * 60 * 60_000
-              : MAX_NODE_TIMER_MS;
+  for (const [property, environmentName, maximum] of mappings) {
     const parsed = optionalBoundedPositiveInteger(
       environment[environmentName],
       environmentName,

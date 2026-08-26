@@ -49,24 +49,6 @@ export async function sendCarrierFrame(
   });
 }
 
-export async function sendDataChunks(
-  socket: CarrierSocket,
-  input: Readonly<{
-    generation: number;
-    streamId: number;
-    chunk: Uint8Array;
-  }>,
-): Promise<void> {
-  for (let offset = 0; offset < input.chunk.byteLength; offset += MAX_DATA_CHUNK_BYTES) {
-    await sendCarrierFrame(socket, {
-      type: FrameType.Data,
-      generation: input.generation,
-      streamId: input.streamId,
-      payload: input.chunk.subarray(offset, offset + MAX_DATA_CHUNK_BYTES),
-    });
-  }
-}
-
 export async function sendFlowControlledData(
   socket: CarrierSocket,
   window: OutboundFlowWindow,

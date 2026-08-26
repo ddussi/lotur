@@ -751,7 +751,10 @@ test("finite-response 초과를 일으킨 DATA도 retired receive allowance를 �
     payload: encodeMetadata({
       statusCode: 200,
       statusMessage: "OK",
-      headers: [["content-type", "text/plain"]],
+      headers: [
+        ["content-type", "text/plain"],
+        ["content-length", "2"],
+      ],
     }),
   }));
   carrier.send(encodeEnvelope({
@@ -1467,7 +1470,7 @@ test("request·finite response 크기 제한을 초과하면 명시적으로 거
   assert.match(download.body.toString(), /UPSTREAM_RESPONSE_TOO_LARGE/);
 });
 
-test("Content-Length 없는 일반 응답은 chunked여도 finite response 상한을 적용한다", async (context) => {
+test("Content-Length 없는 일반 응답은 stream 정책으로 끝까지 전달한다", async (context) => {
   const origin = createServer((_incoming, response) => {
     response.writeHead(200, { "content-type": "text/plain" });
     response.write("123");
@@ -1488,13 +1491,15 @@ test("Content-Length 없는 일반 응답은 chunked여도 finite response 상�
   context.after(() => client.close());
   await client.ready;
 
-  await assert.rejects(sendRequest({
+  const result = await sendRequest({
     port: gatewayPort,
     host: "chunked-size-limit-test.localhost",
     method: "GET",
     path: "/download",
     chunks: [],
-  }));
+  });
+  assert.equal(result.statusCode, 200);
+  assert.equal(result.body.toString(), "12345");
 });
 
 test("HEAD의 representation Content-Length는 본문 크기로 거부하지 않는다", async (context) => {

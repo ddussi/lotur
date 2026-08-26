@@ -2197,7 +2197,8 @@ async function handleClientFrame(
         stream.request.method,
         metadata.statusCode,
       );
-      stream.finiteResponse = stream.responseBodyAllowed && isFiniteHttpResponse(metadata.headers);
+      stream.finiteResponse = stream.responseBodyAllowed &&
+        isFiniteHttpResponse(metadata.headers, declaredResponseBytes);
       if (
         stream.finiteResponse &&
         declaredResponseBytes !== undefined &&
@@ -2471,7 +2472,8 @@ function touchRequestInactivity(
   expire: (code: string) => void,
 ): void {
   if (stream.requestInactivityTimer !== undefined) {
-    clearTimeout(stream.requestInactivityTimer);
+    stream.requestInactivityTimer.refresh();
+    return;
   }
   stream.requestInactivityTimer = setTimeout(() => expire("IDLE_TIMEOUT"), timeoutMs);
   stream.requestInactivityTimer.unref();
@@ -2524,13 +2526,14 @@ function contentLengthFromPairs(headers: readonly (readonly [string, string])[])
 
 function isFiniteHttpResponse(
   headers: readonly (readonly [string, string])[],
+  declaredResponseBytes: number | undefined,
 ): boolean {
   const contentType = headers.find(([name]) => name.toLowerCase() === "content-type")?.[1]
     .split(";", 1)[0]
     ?.trim()
     .toLowerCase();
   if (contentType === "text/event-stream") return false;
-  return true;
+  return declaredResponseBytes !== undefined;
 }
 
 function responseCanHaveBody(method: string | undefined, statusCode: number): boolean {

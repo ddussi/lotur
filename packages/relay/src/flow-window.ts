@@ -10,11 +10,18 @@ type StreamCredit = {
   outstanding: number;
 };
 
+type CreditWaiter = Readonly<{
+  streamId: number;
+  maximumBytes: number;
+  resolve(bytes: number): void;
+  reject(error: Error): void;
+}>;
+
 export class OutboundFlowWindow {
   readonly #initialConnectionBytes: number;
   #connectionAvailable: number;
   readonly #streams = new Map<number, StreamCredit>();
-  readonly #waiters = new Set<() => void>();
+  readonly #waiters: CreditWaiter[] = [];
   #closed = false;
 
   constructor(initialConnectionBytes: number) {
@@ -29,24 +36,17 @@ export class OutboundFlowWindow {
     if (this.#closed) throw new FlowWindowError("connection window is closed");
     if (this.#streams.has(streamId)) throw new FlowWindowError("stream window already exists");
     this.#streams.set(streamId, { available: initialStreamBytes, outstanding: 0 });
-    this.#notify();
+    this.#drainWaiters();
   }
 
   async take(streamId: number, maximumBytes: number): Promise<number> {
     assertPositiveInteger(maximumBytes, "maximumBytes");
-    while (true) {
-      if (this.#closed) throw new FlowWindowError("connection window is closed");
-      const stream = this.#streams.get(streamId);
-      if (stream === undefined) throw new FlowWindowError("stream window does not exist");
-      const granted = Math.min(maximumBytes, stream.available, this.#connectionAvailable);
-      if (granted > 0) {
-        stream.available -= granted;
-        stream.outstanding += granted;
-        this.#connectionAvailable -= granted;
-        return granted;
-      }
-      await new Promise<void>((resolve) => this.#waiters.add(resolve));
-    }
+    if (this.#closed) throw new FlowWindowError("connection window is closed");
+    if (!this.#streams.has(streamId)) throw new FlowWindowError("stream window does not exist");
+    return new Promise<number>((resolve, reject) => {
+      this.#waiters.push({ streamId, maximumBytes, resolve, reject });
+      this.#drainWaiters();
+    });
   }
 
   update(streamId: number, bytes: number): void {
@@ -62,7 +62,7 @@ export class OutboundFlowWindow {
     if (this.#connectionAvailable > this.#initialConnectionBytes) {
       throw new FlowWindowError("connection window exceeds configured maximum");
     }
-    this.#notify();
+    this.#drainWaiters();
   }
 
   closeStream(streamId: number): void {
@@ -70,19 +70,48 @@ export class OutboundFlowWindow {
     if (stream === undefined) return;
     this.#streams.delete(streamId);
     this.#connectionAvailable += stream.outstanding;
-    this.#notify();
+    for (let index = this.#waiters.length - 1; index >= 0; index -= 1) {
+      const waiter = this.#waiters[index];
+      if (waiter?.streamId !== streamId) continue;
+      this.#waiters.splice(index, 1);
+      waiter.reject(new FlowWindowError("stream window does not exist"));
+    }
+    this.#drainWaiters();
   }
 
   close(): void {
     this.#closed = true;
     this.#streams.clear();
-    this.#notify();
+    for (const waiter of this.#waiters.splice(0)) {
+      waiter.reject(new FlowWindowError("connection window is closed"));
+    }
   }
 
-  #notify(): void {
-    const waiters = [...this.#waiters];
-    this.#waiters.clear();
-    for (const resolve of waiters) resolve();
+  #drainWaiters(): void {
+    for (let index = 0; index < this.#waiters.length;) {
+      const waiter = this.#waiters[index];
+      if (waiter === undefined) break;
+      const stream = this.#streams.get(waiter.streamId);
+      if (stream === undefined) {
+        this.#waiters.splice(index, 1);
+        waiter.reject(new FlowWindowError("stream window does not exist"));
+        continue;
+      }
+      const granted = Math.min(
+        waiter.maximumBytes,
+        stream.available,
+        this.#connectionAvailable,
+      );
+      if (granted === 0) {
+        index += 1;
+        continue;
+      }
+      stream.available -= granted;
+      stream.outstanding += granted;
+      this.#connectionAvailable -= granted;
+      this.#waiters.splice(index, 1);
+      waiter.resolve(granted);
+    }
   }
 }
 
@@ -91,4 +120,3 @@ function assertPositiveInteger(value: number, name: string): void {
     throw new RangeError(`${name} must be a positive integer`);
   }
 }
-

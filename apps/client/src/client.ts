@@ -1388,7 +1388,10 @@ function clearResponseHeaderTimer(stream: ClientStream): void {
 }
 
 function touchClientStream(stream: ClientStream, timeoutMs: number): void {
-  if (stream.inactivityTimer !== undefined) clearTimeout(stream.inactivityTimer);
+  if (stream.inactivityTimer !== undefined) {
+    stream.inactivityTimer.refresh();
+    return;
+  }
   stream.inactivityTimer = setTimeout(
     () => stream.terminate?.("IDLE_TIMEOUT"),
     timeoutMs,
