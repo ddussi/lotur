@@ -2,10 +2,26 @@
 
 English | [한국어](README.ko.md)
 
-Open a local web project to authenticated reviewers through a Gateway deployment under one domain.
+Share a local web application with authenticated reviewers and collect feedback in the context of the page being reviewed.
+
+Review Tunnel is moving from a general-purpose tunnel toward a focused review workflow: a developer shares a local preview, reviewers open it without installing a client, and page or region comments stay attached to the relevant review revision.
 
 > [!IMPORTANT]
-> Version `0.1.0` has completed the security MVP in code. DNS, TLS, Ingress, secrets, backup/restore, and operational acceptance must still be completed in each production environment.
+> Version `0.1.0` implements the secure sharing foundation. The contextual comment overlay described below is the next product phase and is not implemented yet. DNS, TLS, Ingress, secrets, backup/restore, and operational acceptance must still be completed in each production environment.
+
+## Product direction
+
+The intended workflow is deliberately narrower than a generic public tunnel:
+
+1. A developer runs a local web application and starts an authenticated share.
+2. A reviewer opens the generated URL in a browser and signs in.
+3. The reviewer leaves a page comment or places a numbered pin on a region.
+4. The developer replies, updates the page, and resolves the thread.
+5. Feedback remains associated with a stable project and review revision rather than an ephemeral tunnel ID.
+
+The short product promise is: **share a local web app securely and review it directly on the page.**
+
+See [Contextual review design](docs/contextual-review.md) for the proposed experience, scope, data model, security boundaries, and delivery plan.
 
 ## Deployment model
 
@@ -18,7 +34,9 @@ control.tunnel.example.com             login, administration, Client connection
 
 The operator chooses the base domain. If it shares a parent domain with another service, review that service's `Domain` cookies because the browser may include them in requests to preview hosts.
 
-## Features
+## Current and planned scope
+
+### Available in `0.1.0`
 
 - HTTP, streaming request/response bodies, SSE, and WebSocket relay
 - Temporary hosted subdomain URL for each share
@@ -27,6 +45,16 @@ The operator chooses the base domain. If it shares a parent domain with another 
 - Same-URL recovery during a two-minute reconnect window
 - PostgreSQL-backed audit, deployment admission, and global kill switch
 - Vite 8 and Next.js 16 compatibility checks
+
+### Planned review workflow
+
+- Comments attached to a page route
+- Click-to-place numbered region pins
+- Comment threads with open and resolved states
+- Stable project and review revision association
+- An isolated overlay that does not interfere with the reviewed application
+
+The first review release will not promise automatic pixel-perfect element tracking, screenshots, mentions, or pull-request integration. Those remain follow-up candidates after the page and region workflow is validated.
 
 ## Authenticated Gateway architecture
 
@@ -92,6 +120,7 @@ The PostgreSQL integration-test procedure is documented in the [deployment runbo
 ## Documentation
 
 - [Korean README](README.ko.md)
+- [Contextual review product and technical design (Korean)](docs/contextual-review.md)
 - [First-time user guide (Korean)](docs/getting-started.md)
 - [Architecture plan](docs/review-tunnel-plan.md)
 - [Security MVP status](docs/poc-status.md)

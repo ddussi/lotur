@@ -2,8 +2,12 @@
 
 - 상태: Phase 2 애플리케이션 구현 완료, 환경별 운영 인수 대기
 - 기준일: 2026-08-25
+- 제품 방향 갱신: 2026-08-31
 - 런타임: TypeScript 5.9, Node.js 24
 - Carrier profile: `review-tunnel.v1`
+
+> [!NOTE]
+> 이 문서는 `0.1.0`의 안전한 공유 기반 구현 상태를 기록한다. 제품은 페이지·영역 댓글과 해결 흐름을 제공하는 리뷰 도구로 확장하기로 했으며, 해당 기능은 아직 구현되지 않았다. 다음 단계의 범위는 [화면 맥락 리뷰 설계](contextual-review.md)를 따른다.
 
 ## 완료한 애플리케이션 범위
 
@@ -55,3 +59,15 @@ PostgreSQL 검증은 [`compose.test.yml`](../compose.test.yml)의 PostgreSQL 17.
 6. 운영 소유자, 알림 임계치, 로그 보존 기간, 회수 전파 SLO와 kill switch 권한자를 배포 환경의 운영 정책으로 확정한다.
 
 이 인수 작업이 끝나기 전 상태는 “코드 완료”이지 “운영 공개 승인”이 아니다.
+
+## 다음 제품 단계: 화면 맥락 리뷰
+
+공유 기반 위에 다음 기능을 순서대로 추가한다.
+
+1. stable Project·Review revision과 Tunnel binding
+2. 페이지 path 단위 댓글과 격리된 sidebar overlay
+3. 클릭 위치 영역 핀, 답글과 해결·다시 열기
+4. 인증된 Review API와 SSE 실시간 갱신
+5. Vite·Next.js integration 호환성 및 XSS·CSRF·프로젝트 격리 검증
+
+이 목록은 로드맵이며 위의 “완료한 애플리케이션 범위”에 포함되지 않는다.

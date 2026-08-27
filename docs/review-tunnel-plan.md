@@ -1,35 +1,39 @@
-# Review Tunnel 기획안
+# Review Tunnel 공유 기반 기획안
 
-> 개발자의 로컬 웹 애플리케이션을 별도 배포 없이 다른 기기의 브라우저에 임시 공유하는 시스템
+> 개발자의 로컬 웹 애플리케이션을 별도 배포 없이 인증된 검토자에게 공유하는 보안·중계 기반
 
 | 항목 | 내용 |
 | --- | --- |
-| 문서 상태 | Draft v0.8 — 인증형 Gateway 반영 |
+| 문서 상태 | Draft v0.9 — 리뷰 중심 제품 방향과 공유 기반 범위 분리 |
 | 제품명 | Review Tunnel(가칭) |
 | 대상 독자 | 제품 담당자, 개발자, 인프라·보안 검토자 |
-| 문서 목적 | MVP의 범위, 핵심 흐름, 시스템 경계, 보안 기준과 검증 조건을 합의한다. |
+| 문서 목적 | `0.1.0` 공유 기반의 범위, 핵심 흐름, 시스템 경계, 보안 기준과 검증 조건을 기록한다. |
+
+> [!NOTE]
+> Review Tunnel의 제품 방향은 “로컬 웹앱을 안전하게 공유하고 화면 위에서 바로 리뷰받는 도구”다. 이 문서의 4~15장은 현재 구현된 안전한 공유 기반을 중심으로 설명한다. 다음 단계인 페이지·영역 댓글, 스레드와 리뷰 버전 설계는 [화면 맥락 리뷰 제품·기술 설계](contextual-review.md)와 [ADR-0006](adr/0006-contextual-review-overlay.md)을 기준으로 한다.
 
 ## 1. 배경과 목적
 
 ### 1.1 해결하려는 문제
 
-개발 중인 웹 화면을 디자이너나 동료에게 보여주려면 보통 별도 개발 서버에 배포해야 한다. 이 과정은 작은 변경을 검토할 때도 배포 대기, 환경 구성, URL 관리 비용을 만든다.
+개발 중인 웹 화면을 디자이너나 동료에게 보여주려면 보통 별도 개발 서버에 배포해야 한다. 이 과정은 작은 변경을 검토할 때도 배포 대기, 환경 구성, URL 관리 비용을 만든다. 화면을 공유한 뒤에도 메신저의 “두 번째 카드 버튼” 같은 피드백은 대상 페이지와 영역의 맥락을 쉽게 잃는다.
 
 개발자 PC의 로컬 서버를 다른 네트워크에서 직접 열어 두는 방식은 NAT와 방화벽 환경에서 동작하기 어렵고, 인증 없이 공개하면 프로젝트가 노출될 수 있다.
 
 ### 1.2 제품 목적
 
-Review Tunnel은 개발자 PC에서 실행 중인 로컬 개발 서버를 별도 배포 없이 다른 기기의 브라우저에 임시 공유한다.
+Review Tunnel은 개발자 PC에서 실행 중인 로컬 개발 서버를 별도 배포 없이 다른 기기의 브라우저에 임시 공유하고, 공유 화면의 페이지와 영역에 연결된 피드백 흐름을 제공하는 것을 제품 목적으로 한다.
 
 Tunnel Client가 배포된 Gateway에 아웃바운드 연결을 만들고 유지하면, Gateway는 관리자 발급 계정으로 인증·인가된 검토자의 HTTPS 요청, streaming 응답과 브라우저 WebSocket 연결을 해당 로컬 서버로 중계한다. 개발자 PC에는 외부 listener를 열지 않는다. 하나의 기준 도메인 아래에 콘텐츠 wildcard와 그 바깥의 control host를 둔다.
 
-공유 대상은 하나의 로컬 origin이다. Review Tunnel은 브라우저가 사용하는 HTTP, HTTP streaming(SSE 포함), WebSocket 동작의 의미를 가능한 한 그대로 보존한다. HTTP 메서드의 이름이나 데이터 변경 여부를 제품이 판단하거나 앱을 읽기 전용으로 만들지 않는다. Gateway의 개입은 인증, 예약 경로·자격 증명 격리, 고정 원본 라우팅, 프로토콜 안전성, 자원 제한과 관찰 가능성에 한정한다.
+`0.1.0`의 공유 대상은 하나의 로컬 origin이다. Review Tunnel은 브라우저가 사용하는 HTTP, HTTP streaming(SSE 포함), WebSocket 동작의 의미를 가능한 한 그대로 보존한다. HTTP 메서드의 이름이나 데이터 변경 여부를 제품이 판단하거나 앱을 읽기 전용으로 만들지 않는다. Gateway의 중계 개입은 인증, 예약 경로·자격 증명 격리, 고정 원본 라우팅, 프로토콜 안전성, 자원 제한과 관찰 가능성에 한정한다. 다음 단계의 리뷰 기능은 별도 예약 API와 격리 오버레이로 추가해 이 중계 경계를 유지한다.
 
 여기서 투명성은 byte-for-byte 전송이나 동일한 네트워크 프로토콜을 뜻하지 않는다. 브라우저와 로컬 개발 서버가 관찰하는 요청·응답·stream·WebSocket 메시지의 의미를 보존한다는 뜻이다.
 
-### 1.3 MVP 성공의 한 문장 정의
+### 1.3 단계별 성공의 한 문장 정의
 
-개발자가 공유 명령 하나로 임시 URL을 만들고, 관리자 발급 계정으로 인증한 검토자가 화면·API·실시간 갱신을 사용할 수 있다. 개발자가 공유를 종료하면 URL과 장기 연결도 함께 종료된다.
+- **공유 기반 `0.1.0`:** 개발자가 공유 명령 하나로 임시 URL을 만들고, 관리자 발급 계정으로 인증한 검토자가 화면·API·실시간 갱신을 사용할 수 있다. 개발자가 공유를 종료하면 URL과 장기 연결도 함께 종료된다.
+- **다음 리뷰 MVP:** 검토자가 별도 설치 없이 페이지 또는 영역에 댓글을 남기고, 개발자가 답글과 해결 처리를 하며, 댓글이 Tunnel 재생성 후에도 동일 프로젝트·리뷰 버전에 유지된다.
 
 ## 2. 목표와 비목표
 
@@ -38,6 +42,7 @@ Tunnel Client가 배포된 Gateway에 아웃바운드 연결을 만들고 유지
 - 별도 배포 없이 단일 로컬 웹 애플리케이션을 공유한다.
 - 개발자는 CLI 한 번으로 공유를 시작하고 종료한다.
 - 검토자는 별도 프로그램 설치 없이 브라우저에서 관리자 발급 계정으로 로그인한다.
+- 검토자는 공유 화면의 페이지 또는 영역에 피드백을 남기고 개발자와 해결 상태를 공유한다.
 - 일반 HTTP, streaming/SSE, 브라우저 WebSocket과 공식 지원 개발 서버의 HMR을 전달한다.
 - 인증형 Gateway의 외부 요청은 인증·인가, TLS, 명시적인 프록시 정책을 거친다.
 - 인증형 Gateway의 control host와 공유 콘텐츠의 Cookie·Origin 경계를 분리한다.
@@ -55,7 +60,7 @@ Tunnel Client가 배포된 Gateway에 아웃바운드 연결을 만들고 유지
 - 고정 도메인과 영구 URL
 - 글로벌 엣지 네트워크, 로드 밸런싱, 다중 리전
 - 대용량 파일 전송 최적화
-- 프로젝트 대시보드와 세밀한 초대 권한
+- 범용 프로젝트 관리 대시보드와 조직 단위의 세밀한 초대 권한
 - 영구 Site·Resource 카탈로그, 조직별 RBAC와 다중 Connector 관리
 - Tunnel마다 Ingress router·인증서·프록시 설정을 동적으로 생성하는 방식
 - HTTP/2 wire-level 보존, native gRPC, WebTransport와 QUIC
@@ -70,6 +75,7 @@ Review Tunnel이 책임지는 영역:
 - HTTP·streaming·WebSocket 의미 보존
 - Tunnel과 논리 stream의 수명주기, 취소, 흐름 제어와 자원 제한
 - Gateway 소유 자격 증명 격리와 운영 상태 관찰
+- 다음 리뷰 단계에서 프로젝트·리뷰 버전별 페이지·영역 댓글, 답글과 해결 상태 관리
 
 로컬 개발 서버가 책임지는 영역:
 
@@ -109,6 +115,10 @@ Tunnel은 앱의 업무 의미를 판단하거나 바꾸지 않는다. 범용 TC
 | Resume secret | 동일한 Tunnel Session을 일시 단절 뒤 복구할 때 Client가 제시하는 고엔트로피 비밀값 |
 | 사이트 경계 | 브라우저의 Cookie·SameSite 판단 기준이 되는 등록 가능 도메인(eTLD+1). 다른 서비스와 상위 도메인을 공유할 때는 기존 `Domain` Cookie의 전달 범위를 검토해야 한다. |
 | host 경계 | 정확한 hostname 기준 경계. 운영 모드의 control Cookie는 host-only이고 상태 변경은 정확한 control Origin만 허용한다. |
+| Project | 여러 Tunnel에 걸쳐 같은 작업물을 식별하는 리뷰 데이터의 안정적인 상위 단위 |
+| Review revision | 댓글이 어느 화면 버전을 기준으로 작성됐는지 구분하는 Project 하위 단위. Git commit SHA 또는 명시적인 opaque ID를 사용한다. |
+| Review overlay | 검토 대상 앱 위에 toolbar, pin과 댓글 panel을 표시하는 선택적·격리된 브라우저 UI |
+| Anchor | 댓글을 page, region 또는 후속 element 위치와 연결하는 구조화된 정보 |
 
 ## 4. MVP 전제와 기본 정책
 
@@ -181,6 +191,17 @@ Tunnel은 앱의 업무 의미를 판단하거나 바꾸지 않는다. 범용 TC
 - 개발자가 명시적으로 Client를 종료하면 Gateway는 현재 연결의 종료 요청을 검증하고 Session을 먼저 라우팅 불가능하게 만든 뒤 열린 Stream을 정리한다. CLI는 Gateway의 종료 확인을 받은 뒤 URL이 폐기됐다고 표시하며, 확인 응답이 유실돼도 URL이 다시 활성화되지는 않는다.
 - 네트워크가 일시적으로 끊기면 CLI는 재연결 중임을, 검토자에게는 일시적인 오프라인 상태를 표시한다.
 - 연결이 복구되면 같은 URL을 계속 사용한다. 복구할 수 없으면 CLI가 이전 URL의 만료와 공유 명령을 다시 실행해야 한다는 점을 분명히 알린다. 상세 상태 규칙은 8.4절을 따른다.
+
+### 5.4 화면 맥락 리뷰를 수행한다 — 다음 제품 단계
+
+1. 개발자는 stable Project와 Review revision을 지정해 review 모드로 공유한다.
+2. 검토자는 공유 URL에서 현재 path의 페이지 댓글과 영역 핀을 확인한다.
+3. 검토자는 페이지 전체 또는 클릭한 위치에 댓글을 남긴다.
+4. 개발자와 검토자는 같은 스레드에서 답글을 주고받는다.
+5. 개발자는 수정 후 스레드를 해결 처리한다.
+6. Tunnel ID가 바뀌어도 같은 Project와 Review revision이면 댓글이 유지된다.
+
+이 흐름의 상세 요구사항, 데이터 모델과 인수 기준은 [화면 맥락 리뷰 설계](contextual-review.md)에서 관리한다. 아래 6장부터 15장까지의 MVP 표는 `0.1.0` 공유 기반의 완료 기준이다.
 
 ## 6. MVP 요구사항
 
@@ -354,6 +375,17 @@ SSE는 별도 도메인 파이프라인이 아니라 종료가 늦는 HTTP respo
 - 비밀번호 해시, 계정·권한, 로그인 제한, 세션과 감사 이벤트는 PostgreSQL 저장소 포트를 통해 영구 보관
 - 계정 정지, 비밀번호 초기화와 권한 변경 때 대상 계정의 세션과 열린 Tunnel·Stream을 회수
 - 비밀번호 구현과 저장소 구현을 Relay Core 및 UI에서 분리
+
+#### Review API·Overlay — 다음 제품 단계
+
+- stable Project와 Review revision을 Tunnel Session과 별도 수명주기로 관리
+- 페이지 댓글, 영역 anchor, 답글과 해결 상태를 PostgreSQL에 저장
+- 콘텐츠 host의 `/_review-tunnel/review/*` 예약 경로에서 인증된 API와 SSE 제공
+- 개발 서버 integration이 명시적으로 활성화한 Shadow DOM 오버레이 렌더링
+- 앱 Cookie·body·DOM 전체·화면 이미지를 자동 수집하지 않는 데이터 경계 유지
+- review 모드가 꺼졌거나 오버레이 로딩이 실패해도 Relay Data Plane의 앱 중계는 그대로 유지
+
+Review API는 앱 트래픽을 운반하는 `review-tunnel.v1` Carrier에 댓글 메시지를 추가하지 않는다. Tunnel ID는 현재 Review revision을 가리키는 임시 binding일 뿐 댓글의 영속 식별자가 아니다. 상세 결정은 [ADR-0006](adr/0006-contextual-review-overlay.md)을 따른다.
 
 #### DNS·TLS 경계
 
@@ -1015,16 +1047,29 @@ POC는 인증과 HTTPS가 빠질 수 있으므로 격리된 개발 환경에서�
 
 2026-08-25 기준 애플리케이션 코드와 로컬 자동 검증은 완료했다. 실제 DNS·TLS·Ingress, secret manager, PostgreSQL 복구 drill, 대상 브라우저·프로젝트와 운영 소유권은 배포 환경 인수 항목으로 남는다. 상세 증거와 실행 절차는 [`poc-status.md`](poc-status.md)와 [`linux-deployment.md`](linux-deployment.md)를 따른다.
 
-### Phase 3 — 제한된 파일럿
+### Phase 3 — 화면 맥락 리뷰 MVP
+
+- stable Project·Review revision·Tunnel binding 저장 모델
+- 예약 Review API와 기존 content session 역할 검사 결합
+- 페이지 댓글과 클릭 위치 영역 핀
+- 답글, 해결·다시 열기와 SSE 실시간 갱신
+- Shadow DOM overlay와 Vite·Next.js·generic integration
+- 댓글 입력의 XSS·CSRF·rate limit·프로젝트 격리 테스트
+- 새 Tunnel에서도 동일 Project·revision 댓글이 유지되는 E2E
+
+세부 범위와 인수 기준은 [`contextual-review.md`](contextual-review.md)를 따른다. 이 단계가 끝나기 전에는 README와 릴리스 노트에서 화면 댓글 기능을 구현 완료로 표시하지 않는다.
+
+### Phase 4 — 제한된 파일럿
 
 - 소수 개발자와 검토자에게 opt-in 제공
 - 지원 매트릭스의 프로젝트 종류와 버전 폭 확대
 - 연결 성공률, 오류율, 추가 지연과 사용성 측정
+- 페이지 댓글 대비 영역 핀 사용 비율, 해결률과 anchor 이탈률 측정
 - 지원 범위와 운영 기본값 조정
 - config ACK·Readiness dimension별 실패, Ingress canary와 revocation 전파 지연 측정
 - 중단·롤백 절차 검증
 
-### Phase 4 — 운영 보강
+### Phase 5 — 운영 보강
 
 파일럿의 호환성·운영 지표와 사용자 피드백을 근거로 16장의 확장 후보 중 필요한 항목만 우선순위화한다.
 
@@ -1043,6 +1088,9 @@ POC는 인증과 HTTPS가 빠질 수 있으므로 격리된 개발 환경에서�
 | 재시작 정책 | Gateway 재시작 시 기존 Session과 URL 종료 허용 |
 | 도메인 설정 | 실제 콘텐츠·control host를 환경 변수로 주입하고 시작 시 control의 wildcard namespace 분리·예약 host 불변식 검증 |
 | 배포 대상 | Linux 또는 컨테이너 환경. 동일 Gateway image와 환경별 Ingress adapter 사용 |
+| 제품 방향 | 범용 터널이 아니라 로컬 웹앱의 페이지·영역 피드백과 해결 흐름에 집중 |
+| 리뷰 데이터 | Project·Review revision에 영속하고 Tunnel ID에는 임시 binding만 유지 |
+| 오버레이 | 명시적으로 활성화한 개발 서버 integration과 Gateway 예약 API 사용. 전체 HTML 자동 rewrite는 기본값으로 사용하지 않음 |
 
 ### 15.2 구현·운영 추적 항목
 
@@ -1063,6 +1111,7 @@ POC는 인증과 HTTPS가 빠질 수 있으므로 격리된 개발 환경에서�
 | D-13 | Credential 정책 | **구현 완료:** 60초·1회용·purpose·audience, active/previous HMAC overlap과 메모리 Resume secret | 완료 |
 | D-14 | 회수 운영 | **구현 완료:** 기본 5초 `auth_version` 확인, DB 오류 fail-closed, authorization max-age와 PostgreSQL 영속 kill switch. 정확한 SLO·소유자는 파일럿 승인 남음 | 파일럿 전 |
 | D-15 | Ingress 변경 통제 | version·digest pinning, admission과 독립된 canary, 결과 기록 뒤 별도 PostgreSQL 승인, drain·rollback 절차와 검사 스크립트 완료. 실제 환경 훈련 남음 | 배포 전 |
+| D-16 | 화면 맥락 리뷰 | **방향 확정·구현 전:** Project·revision 기반 페이지 댓글, 영역 핀, 답글·해결 상태. 선택적 Shadow DOM overlay와 예약 Review API 사용 | Phase 3 |
 
 ## 16. 향후 확장 후보
 
@@ -1070,6 +1119,9 @@ POC는 인증과 HTTPS가 빠질 수 있으므로 격리된 개발 환경에서�
 - 프로젝트별 고정 URL과 사용자 지정 별칭
 - 사용자 지정 만료와 예약 종료
 - 프로젝트 목록, 연결 상태와 요청 로그 Dashboard
+- `data-review-id` 기반 안정적인 요소 anchor
+- 사용자 확인을 거치는 선택적 스크린샷
+- 댓글 멘션·알림과 Git Pull Request 연동
 - 여러 포트와 선택적 사설망 대상 공유
 - 로컬 HTTPS origin, custom CA와 명시적 self-signed 인증서 정책
 - HTTP/2 wire semantics, native gRPC, WebTransport와 QUIC

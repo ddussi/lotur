@@ -12,6 +12,8 @@ Review Tunnel의 인증형 Gateway는 외부 IdP 대신 관리자가 직접 발�
 
 한 계정은 여러 역할을 가질 수 있다. 마지막 활성 `ADMIN`은 비활성화하거나 관리자 권한을 제거할 수 없다.
 
+위 표는 `0.1.0`에서 구현된 권한이다. 다음 화면 맥락 리뷰 단계에서는 `REVIEWER`와 `DEVELOPER` 모두 댓글·답글을 작성하고, `DEVELOPER`가 스레드를 해결·다시 열 수 있도록 확장할 예정이다. 아직 구현되지 않은 상세 권한은 [화면 맥락 리뷰 설계](contextual-review.md)를 따른다.
+
 ## 최초 설치 흐름
 
 1. PostgreSQL을 준비하고 `DATABASE_URL`을 secret으로 주입한다.
