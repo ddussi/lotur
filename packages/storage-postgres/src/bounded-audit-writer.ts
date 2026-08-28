@@ -1,13 +1,10 @@
-import type { Pool, PoolClient } from "pg";
-
 import {
   AuditEventCapacityError,
   type AuditEventLimits,
   validateAuditEventLimits,
 } from "../../auth/src/index.ts";
 import { AUDIT_EVENT_CAPACITY_LOCK_ID } from "./capacity-locks.ts";
-
-type Queryable = Pick<Pool, "query"> | Pick<PoolClient, "query">;
+import type { Queryable } from "./postgres-transaction.ts";
 
 export type StoredAuditEvent = Readonly<{
   id: string;
