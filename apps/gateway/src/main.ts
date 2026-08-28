@@ -8,9 +8,11 @@ import {
   DEFAULT_LOGIN_THROTTLE_LIMITS,
 } from "../../../packages/auth/src/index.ts";
 import { OperationalStateCache } from "../../../packages/operations/src/index.ts";
+import { createReviewService, type ReviewService } from "../../../packages/review/src/index.ts";
 import {
   PostgresAuthRepository,
   PostgresOperationalStateRepository,
+  PostgresReviewRepository,
 } from "../../../packages/storage-postgres/src/index.ts";
 import { readGatewayConfig } from "./config.ts";
 import { retainAdmissionUntilSettled } from "./retained-operation.ts";
@@ -22,6 +24,7 @@ const databaseQueryTimeoutMs = config.databaseQueryTimeoutMs ?? 3_000;
 const deploymentIdentity = config.deploymentIdentity;
 let databasePool: Pool | undefined;
 let authService: AuthService | undefined;
+let reviewService: ReviewService | undefined;
 let operationalRepository: PostgresOperationalStateRepository | undefined;
 let operationalState: OperationalStateCache | undefined;
 if (
@@ -44,6 +47,12 @@ if (
   };
   const repository = new PostgresAuthRepository(databasePool, { auditEventLimits });
   if (config.autoMigrate) await repository.migrate();
+  const reviewRepository = new PostgresReviewRepository(
+    databasePool,
+    config.reviewEventRetention,
+  );
+  if (config.autoMigrate) await reviewRepository.migrate();
+  reviewService = createReviewService({ repository: reviewRepository });
   if (deploymentIdentity === undefined) {
     throw new Error("authenticated Gateway has no deployment identity");
   }
@@ -132,6 +141,9 @@ const gateway = createGatewayServer({
   ...(config.authorizationCheckIntervalMs === undefined
     ? {}
     : { authorizationCheckIntervalMs: config.authorizationCheckIntervalMs }),
+  ...(config.reviewEventStreamPolicy === undefined
+    ? {}
+    : { reviewEventStreamPolicy: config.reviewEventStreamPolicy }),
   authorizationQueryTimeoutMs: databaseQueryTimeoutMs,
   authCleanupTimeoutMs: databaseQueryTimeoutMs,
   ...(config.maxPendingTunnels === undefined
@@ -217,6 +229,7 @@ const gateway = createGatewayServer({
     : { canaryWebSocketIdleTimeoutMs: config.canaryWebSocketIdleTimeoutMs }),
   ...(config.controlHost === undefined ? {} : { controlHost: config.controlHost }),
   ...(authService === undefined ? {} : { authService }),
+  ...(reviewService === undefined ? {} : { reviewService }),
   ...(operationalRepository === undefined ||
       operationalState === undefined ||
       deploymentIdentity === undefined

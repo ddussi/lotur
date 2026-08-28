@@ -3,12 +3,14 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 import {
   AuthError,
+  canAccessSharedContent,
   type AccountAuthorization,
   type AccountRole,
   type AuthService,
   type Principal,
 } from "../../../packages/auth/src/index.ts";
 import { createClientAddressResolver } from "./client-address.ts";
+import { createKeyedConcurrentAdmission } from "./keyed-concurrent-admission.ts";
 import { retainAdmissionUntilSettled } from "./retained-operation.ts";
 import {
   accountPage,
@@ -49,6 +51,14 @@ export type WebAuthOptions = Readonly<{
   maxConcurrentWebAuthorizationsPerRemote?: number;
   trustedProxyCidrs?: readonly string[];
   maxForwardedForEntries?: number;
+  clientControlExtension?: Readonly<{
+    matches(method: string, pathname: string): boolean;
+    handle(input: Readonly<{
+      request: IncomingMessage;
+      response: ServerResponse;
+      principal: Principal;
+    }>): Promise<void>;
+  }>;
 }>;
 
 export type WebAuthHandler = Readonly<{
@@ -328,6 +338,32 @@ export function createWebAuthHandler(options: WebAuthOptions): WebAuthHandler {
             throw error;
           }
           writeJson(response, 201, { credential, tunnelId, expiresInSeconds: 60 });
+          return;
+        }
+        if (
+          options.clientControlExtension?.matches(request.method ?? "GET", url.pathname) === true
+        ) {
+          requireCliRequest(request);
+          const token = bearerToken(request.headers.authorization);
+          const clientPrincipal = token === undefined
+            ? undefined
+            : await runAuthorizationQuery(
+                request,
+                () => options.authService.resolveSession(token),
+              );
+          if (
+            clientPrincipal === undefined ||
+            clientPrincipal.mustChangePassword ||
+            !clientPrincipal.roles.includes("DEVELOPER")
+          ) throw new AuthError("FORBIDDEN", "개발자 권한이 필요합니다.");
+          await runAuthorizationMutation(
+            request,
+            () => options.clientControlExtension!.handle({
+              request,
+              response,
+              principal: clientPrincipal,
+            }),
+          );
           return;
         }
         if (
@@ -612,7 +648,11 @@ export function createWebAuthHandler(options: WebAuthOptions): WebAuthHandler {
         contentCookie,
         `content:${host}`,
       );
-      if (principal !== undefined && principal.roles.includes("REVIEWER") && !principal.mustChangePassword) {
+      if (
+        principal !== undefined &&
+        !principal.mustChangePassword &&
+        canAccessSharedContent(principal.roles)
+      ) {
         return principal;
       }
       if (!isTopLevelHtmlNavigation(request)) {
@@ -648,7 +688,9 @@ export function createWebAuthHandler(options: WebAuthOptions): WebAuthHandler {
         contentCookie,
         `content:${authority}`,
       );
-      return principal?.roles.includes("REVIEWER") === true && !principal.mustChangePassword
+      return principal !== undefined &&
+          !principal.mustChangePassword &&
+          canAccessSharedContent(principal.roles)
         ? principal
         : undefined;
     },
@@ -928,27 +970,7 @@ function createConcurrentAdmission(input: Readonly<{
       "web authorization limits must be positive safe integers and perRemote must not exceed global",
     );
   }
-  let concurrent = 0;
-  const concurrentByRemote = new Map<string, number>();
-  return {
-    acquire(remoteAddress) {
-      const remoteConcurrent = concurrentByRemote.get(remoteAddress) ?? 0;
-      if (concurrent >= input.global || remoteConcurrent >= input.perRemote) {
-        return undefined;
-      }
-      concurrent += 1;
-      concurrentByRemote.set(remoteAddress, remoteConcurrent + 1);
-      let released = false;
-      return () => {
-        if (released) return;
-        released = true;
-        concurrent -= 1;
-        const remaining = (concurrentByRemote.get(remoteAddress) ?? 1) - 1;
-        if (remaining === 0) concurrentByRemote.delete(remoteAddress);
-        else concurrentByRemote.set(remoteAddress, remaining);
-      };
-    },
-  };
+  return createKeyedConcurrentAdmission({ global: input.global, perKey: input.perRemote });
 }
 
 async function withDeadline<T>(

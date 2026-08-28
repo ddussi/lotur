@@ -11,6 +11,11 @@ export type CarrierAuthentication = Readonly<{
     tunnelId: string,
     signal: AbortSignal,
   ): Promise<string>;
+  bindReview(input: Readonly<{
+    tunnelId: string;
+    projectSlug: string;
+    revisionKey: string;
+  }>, signal?: AbortSignal): Promise<void>;
   close(signal?: AbortSignal): Promise<void>;
 }>;
 
@@ -71,6 +76,19 @@ export async function createCarrierAuthentication(input: Readonly<{
         }
         return resumed.credential;
       },
+      async bindReview(binding, signal) {
+        await postForm(
+          `${input.controlUrl}/api/client/review-bindings/${encodeURIComponent(binding.tunnelId)}`,
+          {
+            projectSlug: binding.projectSlug,
+            revisionKey: binding.revisionKey,
+          },
+          sessionToken,
+          signal,
+          fetchImplementation,
+          "PUT",
+        );
+      },
       close,
     };
   } catch (error) {
@@ -92,6 +110,7 @@ export async function postForm(
   bearer?: string,
   signal?: AbortSignal,
   fetchImplementation: FetchImplementation = fetch,
+  method: "POST" | "PUT" = "POST",
 ): Promise<Record<string, unknown>> {
   const response = await sendForm(
     url,
@@ -99,6 +118,7 @@ export async function postForm(
     bearer,
     signal,
     fetchImplementation,
+    method,
   );
   const body: unknown = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -126,6 +146,7 @@ async function postFormWithoutResponse(
     bearer,
     signal,
     fetchImplementation,
+    "POST",
   );
   await response.body?.cancel();
   if (!response.ok) {
@@ -139,12 +160,13 @@ function sendForm(
   bearer: string | undefined,
   signal: AbortSignal | undefined,
   fetchImplementation: FetchImplementation,
+  method: "POST" | "PUT",
 ): Promise<Response> {
   const requestSignal = signal === undefined
     ? AbortSignal.timeout(10_000)
     : AbortSignal.any([signal, AbortSignal.timeout(10_000)]);
   return fetchImplementation(url, {
-    method: "POST",
+    method,
     redirect: "error",
     headers: {
       "content-type": "application/x-www-form-urlencoded",

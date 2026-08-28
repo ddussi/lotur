@@ -41,6 +41,13 @@ control.tunnel.example.com         -> 로그인, 관리자 UI, Client API와 Car
 | `OPERATIONAL_STATE_POLL_INTERVAL_MS` | PostgreSQL admission·kill switch 동기화 주기, 기본 2초 |
 | `DATABASE_CONNECT_TIMEOUT_MS` | PostgreSQL connection 수립 deadline, 기본 5초 |
 | `DATABASE_QUERY_TIMEOUT_MS` | client query·server statement·lock deadline, 기본 3초 |
+| `REVIEW_EVENT_POLL_INTERVAL_MS` | PostgreSQL Review event log polling 주기, 기본 500ms |
+| `REVIEW_EVENT_HEARTBEAT_INTERVAL_MS` | Review SSE heartbeat 주기, 기본 15초 |
+| `REVIEW_EVENT_RETRY_MS` | 브라우저에 알리는 Review SSE 재연결 지연, 기본 1초 |
+| `MAX_REVIEW_EVENT_CONNECTIONS` | Review SSE 전역 연결 상한, 기본 128 |
+| `MAX_REVIEW_EVENT_CONNECTIONS_PER_ACCOUNT` | 계정별 Review SSE 연결 상한, 기본 4이며 전역 상한 이하여야 함 |
+| `MAX_REVIEW_EVENTS` | PostgreSQL에 보존할 Review event 수 상한, 기본 100000 |
+| `REVIEW_EVENT_RETENTION_MS` | Review event 보존 기간, 기본 7일·최대 365일. 수량 상한과 함께 적용 |
 | `METRICS_BEARER_TOKEN` | 32~512자 별도 token. 없으면 `/metrics`는 404 |
 | `MAX_PENDING_TUNNELS` | credential 예약·activation 중 Tunnel과 HELLO 대기 Carrier의 전역 상한, 기본 64 |
 | `MAX_ACTIVE_TUNNELS` | ACTIVE·RECONNECTING Tunnel의 전역 상한, 기본 1024 |
@@ -118,6 +125,44 @@ docker build --target client -t registry.example/review-tunnel-client:<release> 
 docker build --target canary-check -t registry.example/review-tunnel-canary:<release> .
 docker build --target db-backup -t registry.example/review-tunnel-db-backup:<release> .
 docker build --target db-restore -t registry.example/review-tunnel-db-restore:<release> .
+```
+
+### 공식 image digest 확인과 Docker Desktop credential 문제
+
+`Dockerfile`은 2026-09-01에 Docker Hub 공식 Registry v2 응답으로 재확인한 `node:24-bookworm-slim@sha256:ba849c60be29959425b8734d57b8b4b7d56f98edd9504c9af091d5281095a71e`와 `postgres:17.6-bookworm@sha256:f3bd19c606e442c3d7bdfa8002e03fe260a1023351e0ea4598032022b68dd6e3`에 고정한다. tag의 multi-platform OCI index digest를 pin하므로 amd64와 arm64가 같은 Dockerfile에서 각 플랫폼 image를 선택한다.
+
+macOS Docker Desktop에서 `docker pull`이나 `docker buildx imagetools inspect`가 image 조회 전에 멈추고 `error getting credentials`로 끝나며 `~/.docker/config.json`이 `credsStore: desktop`을 사용하는 경우, registry나 digest가 아니라 credential helper 상태를 먼저 의심한다. 사용자 설정을 수정하지 않고 공개 공식 image만 진단하려면 빈 임시 Docker config로 built-in manifest 명령을 실행한다.
+
+```bash
+mkdir -p /tmp/review-tunnel-docker-anonymous
+DOCKER_CONFIG=/tmp/review-tunnel-docker-anonymous \
+  docker manifest inspect node:24-bookworm-slim
+DOCKER_CONFIG=/tmp/review-tunnel-docker-anonymous \
+  docker manifest inspect postgres:17.6-bookworm
+```
+
+같은 `DOCKER_CONFIG`로 실제 target build까지 통과하면 registry 접근과 digest는 정상이고 기존 credential helper가 실패 지점이다. 이 우회는 공개 image 진단에만 사용한다. private registry 자격 증명이나 운영자의 Docker 설정을 지우지 말고, Docker Desktop 재시작·credential store 복구가 필요한 경우에는 환경 소유자의 명시적 승인과 절차를 따른다.
+
+2026-09-01 재확인 때처럼 `docker manifest inspect`와 `docker buildx imagetools inspect`가 credential 오류 없이도 출력 없이 끝나면 Docker Hub 공식 Registry v2의 Bearer 인증과 `HEAD` 응답으로 index digest를 교차 확인한다. 아래 token은 공개 `pull` scope의 단기 token이며 저장하거나 로그로 출력하지 않는다.
+
+```bash
+node_registry_token=$(curl -fsSL \
+  'https://auth.docker.io/token?service=registry.docker.io&scope=repository:library/node:pull' \
+  | jq -r .token)
+curl -fsSI \
+  -H "Authorization: Bearer ${node_registry_token}" \
+  -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json' \
+  'https://registry-1.docker.io/v2/library/node/manifests/24-bookworm-slim' \
+  | grep -i '^docker-content-digest:'
+
+postgres_registry_token=$(curl -fsSL \
+  'https://auth.docker.io/token?service=registry.docker.io&scope=repository:library/postgres:pull' \
+  | jq -r .token)
+curl -fsSI \
+  -H "Authorization: Bearer ${postgres_registry_token}" \
+  -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json' \
+  'https://registry-1.docker.io/v2/library/postgres/manifests/17.6-bookworm' \
+  | grep -i '^docker-content-digest:'
 ```
 
 Gateway·Admin CLI·Client·canary target은 non-root `node` 사용자로, PostgreSQL backup/restore target은 client image의 non-root `postgres` 사용자로 실행된다. Gateway는 read-only root filesystem, `no-new-privileges`, 명시적인 CPU·memory 제한과 종료 유예를 배포 정의에서 추가한다. Admin CLI와 canary는 상주 service가 아니라 `--rm` one-off job으로 실행하고 Gateway image의 command를 바꿔 재사용하지 않는다.

@@ -1,6 +1,11 @@
 import { randomBytes } from "node:crypto";
 import { isIP } from "node:net";
 
+import {
+  normalizeProjectSlug,
+  normalizeRevisionKey,
+} from "../../../packages/review/src/index.ts";
+
 export type ClientOptions = Readonly<{
   localOrigin: string;
   gatewayUrl: string;
@@ -8,18 +13,25 @@ export type ClientOptions = Readonly<{
   controlUrl: string;
   username?: string;
   passwordStdin: boolean;
+  review?: Readonly<{
+    projectSlug: string;
+    revisionKey: string;
+  }>;
 }>;
 
 export const CLIENT_USAGE =
   "Usage: npm run share -- http://127.0.0.1:3000 " +
   "[--gateway wss://control.tunnel.example.com/_review-tunnel/carrier] " +
-  "[--username developer1]";
+  "[--username developer1] " +
+  "[--review-project storefront --review-revision <commit-or-version>]";
 
 const VALUE_OPTIONS = new Set([
   "--gateway",
   "--tunnel-id",
   "--control-url",
   "--username",
+  "--review-project",
+  "--review-revision",
 ]);
 const FLAG_OPTIONS = new Set(["--password-stdin"]);
 
@@ -99,6 +111,20 @@ export function parseClientArguments(
   if (username !== undefined && values.has("--tunnel-id")) {
     throw new Error("--tunnel-id cannot be used in authenticated mode");
   }
+  const reviewProject = values.get("--review-project");
+  const reviewRevision = values.get("--review-revision");
+  if ((reviewProject === undefined) !== (reviewRevision === undefined)) {
+    throw new Error("--review-project and --review-revision must be provided together");
+  }
+  if (reviewProject !== undefined && username === undefined) {
+    throw new Error("review mode requires --username or REVIEW_TUNNEL_USERNAME");
+  }
+  const review = reviewProject === undefined || reviewRevision === undefined
+    ? undefined
+    : {
+        projectSlug: normalizeProjectSlug(reviewProject),
+        revisionKey: normalizeRevisionKey(reviewRevision),
+      };
   if (username !== undefined) {
     if (gateway.host !== control.host) {
       throw new Error(
@@ -127,6 +153,7 @@ export function parseClientArguments(
     controlUrl,
     passwordStdin: flags.has("--password-stdin"),
     ...(username === undefined ? {} : { username }),
+    ...(review === undefined ? {} : { review }),
   };
 }
 

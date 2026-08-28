@@ -233,6 +233,13 @@ test("인증 운영 설정은 HTTPS public origin과 bounded timeout·quota를 �
     MAX_PENDING_CARRIER_BYTES: "524408",
     MAX_CANARY_WEBSOCKETS: "3",
     CANARY_WEBSOCKET_IDLE_TIMEOUT_MS: "12000",
+    REVIEW_EVENT_POLL_INTERVAL_MS: "250",
+    REVIEW_EVENT_HEARTBEAT_INTERVAL_MS: "12000",
+    REVIEW_EVENT_RETRY_MS: "750",
+    MAX_REVIEW_EVENT_CONNECTIONS: "200",
+    MAX_REVIEW_EVENT_CONNECTIONS_PER_ACCOUNT: "5",
+    MAX_REVIEW_EVENTS: "50000",
+    REVIEW_EVENT_RETENTION_MS: "604800000",
   });
   assert.equal(config.databaseConnectionTimeoutMs, 1200);
   assert.equal(config.databaseQueryTimeoutMs, 900);
@@ -264,6 +271,17 @@ test("인증 운영 설정은 HTTPS public origin과 bounded timeout·quota를 �
   assert.equal(config.maxPendingCarrierBytes, 524408);
   assert.equal(config.maxCanaryWebSockets, 3);
   assert.equal(config.canaryWebSocketIdleTimeoutMs, 12000);
+  assert.deepEqual(config.reviewEventStreamPolicy, {
+    pollIntervalMs: 250,
+    heartbeatIntervalMs: 12000,
+    retryMs: 750,
+    maxConnections: 200,
+    maxConnectionsPerAccount: 5,
+  });
+  assert.deepEqual(config.reviewEventRetention, {
+    maxEvents: 50000,
+    maxEventAgeMs: 604800000,
+  });
   assert.throws(
     () => readGatewayConfig({
       ...authenticated,
@@ -295,6 +313,14 @@ test("인증 운영 설정은 HTTPS public origin과 bounded timeout·quota를 �
   assert.throws(
     () => readGatewayConfig({ ...authenticated, MAX_LOGIN_THROTTLES: "1" }),
     /MAX_LOGIN_THROTTLES must be at least 2/,
+  );
+  assert.throws(
+    () => readGatewayConfig({
+      ...authenticated,
+      MAX_REVIEW_EVENT_CONNECTIONS: "2",
+      MAX_REVIEW_EVENT_CONNECTIONS_PER_ACCOUNT: "3",
+    }),
+    /MAX_REVIEW_EVENT_CONNECTIONS_PER_ACCOUNT.*MAX_REVIEW_EVENT_CONNECTIONS/,
   );
   assert.throws(
     () => readGatewayConfig({
