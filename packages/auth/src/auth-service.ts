@@ -8,12 +8,14 @@ import type {
   AccountRole,
   AuthenticationEvent,
   AuditAction,
+  CarrierCredential,
   CarrierPurpose,
   DeveloperAuthorization,
   AuditEvent,
   Principal,
+  SessionExchange,
 } from "./model.ts";
-import { ACCOUNT_ROLES } from "./model.ts";
+import { ACCOUNT_ROLES, canAccessSharedContent } from "./model.ts";
 import {
   normalizeDisplayName,
   normalizeUsername,
@@ -279,8 +281,8 @@ export class AuthService {
     intentId: string,
   ): Promise<Readonly<{ code: string; targetHost: string; targetPath: string }>> {
     const account = await this.#requireCurrentAccount(principal);
-    if (!account.roles.includes("REVIEWER")) {
-      throw new AuthError("FORBIDDEN", "검토자 권한이 필요합니다.");
+    if (!canAccessSharedContent(account.roles)) {
+      throw new AuthError("FORBIDDEN", "공유 화면 접근 권한이 필요합니다.");
     }
     const intent = await this.#repository.consumeLoginIntent(intentId, this.#now());
     if (intent === undefined) throw new AuthError("FORBIDDEN", "로그인 요청이 만료됐거나 이미 사용됐습니다.");
@@ -305,7 +307,7 @@ export class AuthService {
     code: string,
     targetHost: string,
   ): Promise<Readonly<{ principal: Principal; sessionToken: string; targetPath: string }>> {
-    let exchange;
+    let exchange: SessionExchange | undefined;
     for (const digest of this.#digestSessionTokenCandidates(`exchange:${code}`)) {
       exchange = await this.#repository.consumeSessionExchange(
         digest,
@@ -320,9 +322,9 @@ export class AuthService {
       !account.enabled ||
       account.mustChangePassword ||
       account.authVersion !== exchange.accountAuthVersion ||
-      !account.roles.includes("REVIEWER")
+      !canAccessSharedContent(account.roles)
     ) {
-      throw new AuthError("FORBIDDEN", "검토자 권한이 필요합니다.");
+      throw new AuthError("FORBIDDEN", "공유 화면 접근 권한이 필요합니다.");
     }
     return {
       ...await this.#issueSession(account, this.#now(), `content:${exchange.targetHost}`),
@@ -365,7 +367,7 @@ export class AuthService {
     if (separator < 1 || token.length > 512) throw new AuthError("FORBIDDEN", "Carrier 인증에 실패했습니다.");
     const id = token.slice(0, separator);
     const secret = token.slice(separator + 1);
-    let credential;
+    let credential: CarrierCredential | undefined;
     for (const digest of this.#digestSessionTokenCandidates(`carrier:${id}:${secret}`)) {
       credential = await this.#repository.consumeCarrierCredential(
         id,

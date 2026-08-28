@@ -1,6 +1,10 @@
 export const ACCOUNT_ROLES = ["ADMIN", "DEVELOPER", "REVIEWER"] as const;
 export type AccountRole = (typeof ACCOUNT_ROLES)[number];
 
+export function canAccessSharedContent(roles: readonly AccountRole[]): boolean {
+  return roles.includes("REVIEWER") || roles.includes("DEVELOPER");
+}
+
 export type Account = Readonly<{
   id: string;
   username: string;

@@ -790,6 +790,47 @@ test("content-host session exchange is host-bound and one-time", async () => {
   );
 });
 
+test("developers can obtain a content-host session for their review workflow", async () => {
+  const { service } = fixture();
+  const bootstrap = await service.bootstrapAdministrator({
+    username: "developer",
+    displayName: "Developer",
+  });
+  const temporary = await service.authenticate({
+    username: "developer",
+    password: bootstrap.temporaryPassword,
+    remoteAddress: "127.0.0.1",
+  });
+  await service.changeOwnPassword(temporary.principal, {
+    currentPassword: bootstrap.temporaryPassword,
+    newPassword: "developer-password-2026",
+  });
+  let developer = await service.authenticate({
+    username: "developer",
+    password: "developer-password-2026",
+    remoteAddress: "127.0.0.1",
+  });
+  await service.setAccountRoles(
+    developer.principal,
+    developer.principal.accountId,
+    ["ADMIN", "DEVELOPER"],
+  );
+  developer = await service.authenticate({
+    username: "developer",
+    password: "developer-password-2026",
+    remoteAddress: "127.0.0.1",
+  });
+
+  const intent = await service.createLoginIntent("dev.preview.example", "/review");
+  const exchange = await service.createSessionExchange(developer.principal, intent);
+  const content = await service.consumeSessionExchange(exchange.code, "dev.preview.example");
+  assert.equal(content.principal.accountId, developer.principal.accountId);
+  assert.equal(
+    (await service.resolveSession(content.sessionToken, "content:dev.preview.example"))?.username,
+    "developer",
+  );
+});
+
 test("carrier credential is purpose-bound, short-lived state consumed only once", async () => {
   const { service } = fixture();
   const bootstrap = await service.bootstrapAdministrator({ username: "admin", displayName: "Admin" });
