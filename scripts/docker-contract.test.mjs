@@ -7,6 +7,15 @@ import { fileURLToPath } from "node:url";
 import { collectModuleSpecifiers } from "./check-boundaries-lib.mjs";
 
 const dockerfile = await readFile(new URL("../Dockerfile", import.meta.url), "utf8");
+const rootManifest = JSON.parse(
+  await readFile(new URL("../package.json", import.meta.url), "utf8"),
+);
+const runtimeManifest = JSON.parse(
+  await readFile(new URL("../deploy/runtime/package.json", import.meta.url), "utf8"),
+);
+const runtimeLock = JSON.parse(
+  await readFile(new URL("../deploy/runtime/package-lock.json", import.meta.url), "utf8"),
+);
 const workspaceRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 test("Docker image는 상주 Gateway와 one-off 역할을 별도 target으로 고정한다", () => {
@@ -52,6 +61,27 @@ test("운영 image base는 floating tag가 아니라 digest로 고정한다", ()
     dockerfile,
     /FROM postgres:17\.6-bookworm@sha256:[a-f0-9]{64} AS postgres-tools/,
   );
+});
+
+test("운영 dependency stage는 개발 workspace와 분리된 lockfile만 설치한다", () => {
+  assert.deepEqual(runtimeManifest.dependencies, rootManifest.dependencies);
+  assert.equal(runtimeManifest.workspaces, undefined);
+  assert.deepEqual(
+    runtimeLock.packages[""].dependencies,
+    runtimeManifest.dependencies,
+  );
+  for (const developmentPackage of ["next", "vite", "@playwright/test", "typescript"]) {
+    assert.equal(runtimeLock.packages[`node_modules/${developmentPackage}`], undefined);
+  }
+  assert.match(
+    dockerfile,
+    /FROM node:[^\n]+ AS production-dependencies[\s\S]*COPY deploy\/runtime\/package\.json deploy\/runtime\/package-lock\.json \.\/[\s\S]*RUN npm ci --omit=dev/,
+  );
+  assert.match(
+    dockerfile,
+    /COPY --from=production-dependencies --chown=node:node \/app\/node_modules \.\/node_modules/,
+  );
+  assert.doesNotMatch(dockerfile, /npm prune --omit=dev/);
 });
 
 test("script runtime stage는 entrypoint의 transitive local module closure를 모두 복사한다", async () => {
