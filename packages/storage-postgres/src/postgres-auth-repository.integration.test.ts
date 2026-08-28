@@ -297,7 +297,7 @@ test("PostgreSQL auth commands preserve authorization invariants under concurren
     assert.equal(passwordChanged.status, "UPDATED");
     assert.deepEqual((await repository.findAccountById(target.account.id))?.roles, ["REVIEWER"]);
 
-    await Promise.all(Array.from({ length: 20 }, (_, index) => repository.recordLoginFailure({
+    await Promise.all(Array.from({ length: 20 }, () => repository.recordLoginFailure({
       keys: ["identity-key", "remote-key"],
       now,
       windowStartsAt: new Date(now.getTime() - 15 * 60_000),

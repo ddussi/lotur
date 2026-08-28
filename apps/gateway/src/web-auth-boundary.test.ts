@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { once } from "node:events";
 import { request } from "node:http";
 import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";

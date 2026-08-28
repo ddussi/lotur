@@ -32,7 +32,9 @@ export function normalizeUsername(username: string): string {
 
 export function normalizeDisplayName(displayName: string): string {
   const normalized = displayName.trim();
-  if (normalized.length < 1 || normalized.length > 80 || /[\u0000-\u001f\u007f]/.test(normalized)) {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: Display names intentionally reject ASCII control characters.
+  const hasControlCharacters = /[\u0000-\u001f\u007f]/.test(normalized);
+  if (normalized.length < 1 || normalized.length > 80 || hasControlCharacters) {
     throw new AuthError("INVALID_ACCOUNT_INPUT", "표시 이름은 1~80자여야 합니다.");
   }
   return normalized;
