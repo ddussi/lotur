@@ -7,7 +7,7 @@
 Review Tunnel은 범용 터널보다 리뷰 작업 흐름에 집중합니다. 개발자는 로컬 화면을 공유하고, 검토자는 별도 프로그램 설치 없이 브라우저에서 페이지 또는 특정 영역에 댓글을 남기며, 개발자는 수정과 답변 및 해결 처리를 이어갑니다.
 
 > [!IMPORTANT]
-> 버전 `0.1.0`은 안전한 공유 기반을 구현한 상태입니다. 아래의 화면 댓글 오버레이는 다음 제품 단계이며 아직 구현되지 않았습니다. 실제 운영 전에는 환경별 DNS, TLS, Ingress, secret, 백업·복구, 운영 인수 작업도 필요합니다.
+> 현재 소스 트리는 안전한 공유 기반과 화면 맥락 리뷰 MVP를 구현합니다. 페이지·영역 댓글, 답글, 버전 기반 수정·삭제 tombstone, 해결·다시 열기, Review SSE, 참여자 멘션·내부 알림, Vite/Next integration이 포함됩니다. 실제 운영 전에는 환경별 DNS, TLS, Ingress, secret, 백업·복구, 운영 인수 작업도 필요합니다.
 
 ## 제품 방향
 
@@ -46,15 +46,24 @@ control.tunnel.example.com             로그인·관리·Client 연결
 - PostgreSQL에 저장되는 감사 기록, 배포 admission, 전역 kill switch
 - Vite 8과 Next.js 16 호환성 검사
 
-### 다음 제품 단계
+### 현재 소스 트리의 리뷰 기능
 
 - 페이지 경로에 연결되는 댓글
-- 클릭한 영역에 표시되는 번호 핀
-- 답글과 미해결·해결 상태
 - 안정적인 프로젝트 및 리뷰 버전 연결
 - 검토 대상 애플리케이션과 스타일·동작이 충돌하지 않는 격리 오버레이
+- `DEVELOPER`의 명시적 review binding과 `DEVELOPER`·`REVIEWER`의 댓글 작성
+- 프로젝트·리뷰 버전·경로별 PostgreSQL 영속성과 새 Tunnel에서의 재조회
+- `DEVELOPER`·`REVIEWER`의 plain-text 답글 작성
+- `DEVELOPER`의 스레드 해결·다시 열기와 동시 상태 변경 충돌 감지
+- 클릭 핀·드래그 영역을 정규화된 `REGION_V1` 좌표로 저장·재표시
+- 연결 상한·재전송·PostgreSQL 보존 정책이 있는 Review 전용 SSE
+- 작성자 수정, 작성자 또는 Developer 삭제, content version과 영속 tombstone
+- 프로젝트 소유자·기존 revision 참여자로 제한한 `@username` 멘션과 수신자 전용 내부 알림·읽음 상태
+- `@review-tunnel/vite`, `@review-tunnel/next` 개발 integration
 
-첫 리뷰 버전에서는 요소를 픽셀 단위로 완벽하게 추적하거나 스크린샷, 멘션, Pull Request 연동까지 제공한다고 약속하지 않습니다. 페이지·영역 댓글 흐름을 먼저 검증한 뒤 확장합니다.
+### 의도적으로 미룬 범위
+
+픽셀 단위 요소 추적, 스크린샷, 외부 이메일·Slack·push 알림, revision 간 자동 승계, 전체 편집 이력, Pull Request 연동은 현재 범위에 포함하지 않습니다.
 
 ## 인증형 Gateway 아키텍처
 
@@ -95,6 +104,25 @@ npm run share -- http://127.0.0.1:3000 --username developer1
 ```
 
 Client가 비밀번호를 입력받아 공유 URL을 출력하면, 검토자는 해당 URL을 열고 `REVIEWER` 역할이 있는 계정으로 로그인합니다.
+
+페이지·영역 댓글을 켜려면 검토할 앱의 review 전용 HTML entry에 Gateway bootstrap을 명시적으로 포함합니다. Gateway는 앱 HTML을 자동으로 바꾸지 않습니다.
+
+```html
+<script type="module" src="/_review-tunnel/review/bootstrap.js"></script>
+```
+
+그다음 프로젝트 slug와 변경되지 않는 revision key를 한 쌍으로 전달합니다. Client는 Tunnel 활성화와 review binding이 모두 성공한 뒤에만 공유 URL을 출력하며, binding이 실패하면 방금 연 Tunnel을 닫습니다.
+
+```bash
+GATEWAY_URL=wss://control.tunnel.example.com/_review-tunnel/carrier \
+CONTROL_URL=https://control.tunnel.example.com \
+npm run share -- http://127.0.0.1:3000 --username developer1 \
+  --review-project storefront --review-revision 4a1b2c3d
+```
+
+bootstrap을 포함하지 않으면 review 데이터 binding만 생성되고 sidebar는 표시되지 않습니다. Vite plugin은 공식 HTML transform으로 bootstrap을 주입하고, Next integration은 root layout용 script props와 통제된 `allowedDevOrigins` 병합을 제공합니다. 사용법은 [처음 사용하는 사람을 위한 안내](docs/getting-started.md#vite와-nextjs-integration)를 확인하세요.
+
+로그인한 `DEVELOPER`와 `REVIEWER`는 sidebar에서 페이지·영역 댓글과 답글을 작성할 수 있습니다. 작성자는 자신의 본문을 수정하고, 작성자 또는 `DEVELOPER`는 본문을 tombstone으로 삭제할 수 있습니다. `DEVELOPER`는 스레드를 해결하거나 다시 열 수 있습니다. `@username` 알림은 프로젝트 소유자 또는 같은 revision의 기존 참여자에게만 생성됩니다.
 
 계정 생성, 역할, 비밀번호 초기화, 회수 절차는 [관리자 발급 계정 운영 문서](docs/internal-account-operations.md)를 확인하세요.
 

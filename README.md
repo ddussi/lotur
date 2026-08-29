@@ -7,7 +7,7 @@ Share a local web application with authenticated reviewers and collect feedback 
 Review Tunnel is moving from a general-purpose tunnel toward a focused review workflow: a developer shares a local preview, reviewers open it without installing a client, and page or region comments stay attached to the relevant review revision.
 
 > [!IMPORTANT]
-> Version `0.1.0` implements the secure sharing foundation. The contextual comment overlay described below is the next product phase and is not implemented yet. DNS, TLS, Ingress, secrets, backup/restore, and operational acceptance must still be completed in each production environment.
+> The current source tree implements the secure sharing foundation and the contextual-review MVP: page and region comments, replies, optimistic edit/delete tombstones, resolve/reopen, Review SSE, participant mentions, internal notifications, and first-party Vite/Next integrations. DNS, TLS, Ingress, secrets, backup/restore, and operational acceptance must still be completed in each production environment.
 
 ## Product direction
 
@@ -46,15 +46,24 @@ The operator chooses the base domain. If it shares a parent domain with another 
 - PostgreSQL-backed audit, deployment admission, and global kill switch
 - Vite 8 and Next.js 16 compatibility checks
 
-### Planned review workflow
+### Review features in the current source tree
 
 - Comments attached to a page route
-- Click-to-place numbered region pins
-- Comment threads with open and resolved states
 - Stable project and review revision association
 - An isolated overlay that does not interfere with the reviewed application
+- Explicit review binding by a `DEVELOPER`, with comments available to `DEVELOPER` and `REVIEWER` accounts
+- PostgreSQL persistence isolated by project, revision, and route, including reuse from a new tunnel
+- Plain-text replies from `DEVELOPER` and `REVIEWER` accounts
+- Resolve/reopen controls for `DEVELOPER` accounts with concurrent status-conflict detection
+- Click pins and drag-selected `REGION_V1` areas using normalized document coordinates
+- Dedicated, replayable Review SSE updates with bounded connections and PostgreSQL retention
+- Author-only edits, author-or-developer deletion, content versions, and persistent tombstones
+- Participant-limited `@username` mentions with recipient-only internal notifications and read state
+- `@review-tunnel/vite` and `@review-tunnel/next` development integrations
 
-The first review release will not promise automatic pixel-perfect element tracking, screenshots, mentions, or pull-request integration. Those remain follow-up candidates after the page and region workflow is validated.
+### Deliberately deferred
+
+Pixel-perfect element tracking, screenshots, external email/Slack/push alerts, revision carry-over, complete edit history, and pull-request integration are outside the current scope.
 
 ## Authenticated Gateway architecture
 
@@ -95,6 +104,25 @@ npm run share -- http://127.0.0.1:3000 --username developer1
 ```
 
 The Client prompts for the password and prints the review URL after activation. A reviewer opens that URL and signs in with an account that has the `REVIEWER` role.
+
+To enable page and region comments, explicitly include the Gateway bootstrap in a review-only HTML entry for the local app. The Gateway does not rewrite application HTML.
+
+```html
+<script type="module" src="/_review-tunnel/review/bootstrap.js"></script>
+```
+
+Then pass a project slug and an immutable revision key together. The Client prints the share URL only after both tunnel activation and review binding succeed; if binding fails, it closes the newly opened tunnel.
+
+```bash
+GATEWAY_URL=wss://control.tunnel.example.com/_review-tunnel/carrier \
+CONTROL_URL=https://control.tunnel.example.com \
+npm run share -- http://127.0.0.1:3000 --username developer1 \
+  --review-project storefront --review-revision 4a1b2c3d
+```
+
+Without the bootstrap, the review data binding still exists but no sidebar is rendered. The first-party Vite plugin injects this bootstrap through Vite's HTML transform; the Next integration provides explicit root-layout script props and merges controlled `allowedDevOrigins`. See the [first-time guide](docs/getting-started.md#vite와-nextjs-integration).
+
+Signed-in `DEVELOPER` and `REVIEWER` accounts can add page or region comments and replies in the sidebar. Authors can edit their own live content; authors and developers can delete it while preserving thread/reply tombstones. A `DEVELOPER` can resolve or reopen a thread. `@username` creates an internal notification only when the target is the project owner or an existing revision participant.
 
 See [Administrator-issued account operations](docs/internal-account-operations.md) for account creation, roles, password reset, and revocation.
 

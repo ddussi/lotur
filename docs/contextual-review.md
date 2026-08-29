@@ -1,10 +1,10 @@
 # 화면 맥락 리뷰 제품·기술 설계
 
-> 상태: 제품 방향 승인, 구현 전 설계
+> 상태: 화면 맥락 리뷰 MVP 구현 완료, 환경별 운영 인수 대기
 >
-> 기준일: 2026-08-31
+> 기준일: 2026-09-01
 >
-> 이 문서의 기능은 아직 현재 릴리스에 포함되지 않았다. `0.1.0`이 제공하는 인증·중계 기반 위에 추가할 다음 제품 단계를 정의한다.
+> 현재 소스 트리는 stable Project·Review revision·Tunnel binding, 페이지·영역 댓글, 답글, 버전 기반 수정·삭제 tombstone, Developer 해결·다시 열기, Review SSE, 참여자 멘션·내부 알림, PostgreSQL 영속화, generic Shadow DOM sidebar와 Vite·Next.js integration을 구현한다.
 
 ## 1. 제품 정의
 
@@ -71,23 +71,43 @@ sequenceDiagram
 
 ## 3. 범위
 
-### 3.1 첫 리뷰 MVP
+### 3.1 구현된 Phase 1
 
 - URL path 단위의 페이지 댓글
-- 문서 좌표 비율을 이용한 클릭 위치 번호 핀
-- 댓글 스레드와 답글
-- `OPEN`, `RESOLVED` 상태
-- 프로젝트와 리뷰 버전 연결
-- 현재 페이지의 미해결 댓글 개수 표시
-- 댓글 생성·답글·상태 변경의 실시간 갱신
-- Vite와 Next.js 공식 fixture에서 오버레이 호환성 검증
+- 소유자별 프로젝트와 프로젝트별 리뷰 버전 연결
+- 현재 Tunnel session의 임시 binding과 새 Tunnel에서의 동일 revision 댓글 재사용
+- `DEVELOPER`와 `REVIEWER`의 페이지 댓글 조회·작성
+- generic script로 켜는 Shadow DOM sidebar
+- `pushState`, `replaceState`, `popstate` 기반 path 변경 반영
+- plain-text 렌더링, exact Origin, 입력 크기와 예약 path 격리
 
-### 3.2 첫 리뷰 MVP의 비목표
+### 3.2 구현된 Phase 2 대화 슬라이스
+
+- `DEVELOPER`와 `REVIEWER`의 plain-text 답글
+- `OPEN`, `RESOLVED` 상태와 `DEVELOPER`의 해결·다시 열기
+- 해결된 스레드의 새 답글 거부
+- `expectedStatus`를 이용한 상태 변경 경합 감지
+- 기존 Phase 1 thread row를 유지하는 additive PostgreSQL migration
+
+### 3.3 구현된 리뷰 MVP 완성 범위
+
+- 정규화 문서 좌표를 이용한 클릭 위치 핀과 드래그 사각 영역
+- 현재 페이지의 미해결 댓글 개수 표시
+- 댓글·답글의 수정·삭제 tombstone과 `expectedVersion` 충돌 감지
+- 댓글 생성·답글·상태·콘텐츠·멘션 알림 변경의 Review 전용 SSE 갱신
+- 프로젝트 참여자 제한 `@username` 멘션과 읽음·안 읽음 내부 알림
+- Vite와 Next.js integration 및 실제 fixture의 오버레이·탐색·갱신 호환성 검증
+- 최신 댓글·답글을 먼저 보장하는 안정 키셋 cursor, 더 오래된 항목 불러오기와 전체 열린 댓글 수
+- revision·path별로 생성 뒤 바뀌지 않는 영역 핀 번호
+- 만료 시각을 가진 Tunnel binding과 비정상 종료 뒤 만료 binding만 회수하는 재연결
+
+### 3.4 리뷰 MVP의 비목표
 
 - 모든 DOM 변경을 견디는 자동 요소 추적
 - 디자인 파일과의 픽셀 비교
 - 화면 녹화, 자동 스크린샷 또는 DOM 본문 수집
-- `@mention`, 이메일·메신저 알림
+- 이메일·메신저·모바일 push 같은 외부 알림
+- 댓글·답글의 전체 편집 이력 보관
 - GitHub Pull Request나 이슈 자동 연동
 - 익명 댓글과 공개 링크만으로 쓰기 권한을 주는 방식
 - 음성·영상 피드백과 파일 첨부
@@ -103,14 +123,14 @@ sequenceDiagram
 
 ### 4.2 영역 핀
 
-검토자가 `댓글 달기`를 누르고 화면의 지점을 선택하면 번호 핀과 작성 창을 표시한다. 첫 버전의 anchor는 문서 전체 크기에 대한 비율 좌표를 사용한다.
+검토자가 영역 선택을 켠 뒤 화면의 지점을 클릭하면 번호 핀을, 드래그하면 사각 영역과 작성 창을 표시한다. `Esc`는 선택을 취소한다. anchor는 문서 전체 크기에 대한 비율 좌표를 사용하며 값 객체에서 유한 수, 범위, 크기와 exact key를 검증한다.
 
 ```text
 x_ratio = click_x / document_width
 y_ratio = click_y / document_height
 ```
 
-저장 시 viewport 너비·높이와 문서 너비·높이도 진단 정보로 함께 기록한다. 화면 구조가 크게 바뀌어 원래 지점을 신뢰하기 어려우면 핀을 억지로 정확한 요소에 붙이지 않고 “위치가 변경되었을 수 있음” 상태로 표시한다.
+저장 시 viewport 너비·높이와 문서 너비·높이도 진단 정보로 함께 기록한다. POINT는 너비·높이 0, RECT는 양수 크기를 갖는 `REGION_V1`으로 저장한다. path 이동, scroll과 resize 뒤 현재 문서 크기를 기준으로 다시 배치하고, 핀·영역과 sidebar 항목을 서로 강조한다.
 
 ### 4.3 요소 anchor 확장
 
@@ -124,10 +144,14 @@ y_ratio = click_y / document_height
 
 ### 4.4 스레드 상태
 
-- 댓글 작성자는 자신의 댓글과 답글을 수정할 수 있다.
-- 개발자와 댓글 작성자는 스레드에 답글을 남길 수 있다.
+- 개발자와 검토자는 열린 스레드에 답글을 남길 수 있다.
 - 개발자는 스레드를 `RESOLVED`로 바꾸거나 다시 열 수 있다.
-- 댓글과 답글은 기본적으로 hard delete하지 않고 감사 가능한 수정·숨김 정책을 사용한다. 정확한 보존 기간은 파일럿 전에 확정한다.
+- 해결된 스레드는 다시 열기 전까지 새 답글을 받지 않는다.
+- 상태 변경은 화면이 알고 있는 `expectedStatus`와 DB의 현재 상태가 다르면 `409` 충돌로 실패한다.
+- 작성자는 열린 스레드의 자기 댓글·답글만 수정할 수 있다.
+- 작성자 또는 `DEVELOPER`는 명시적 확인 뒤 댓글·답글을 삭제할 수 있다.
+- 삭제는 본문을 `NULL`로 제거하고 작성자·답글 관계를 유지하는 tombstone이다.
+- 수정·삭제는 `expectedVersion`과 현재 version이 다르면 `409` 충돌로 실패한다.
 
 ## 5. 시스템 설계
 
@@ -153,10 +177,13 @@ flowchart LR
 
 ### 5.1 오버레이 전달 방식
 
-기본 방식은 **명시적으로 활성화하는 개발 서버 integration**이다.
+기본 방식은 **명시적으로 활성화하는 개발 서버 integration**이다. generic script와 제거 가능한 Vite·Next.js adapter를 함께 제공한다.
 
 - Client의 review 모드를 켠 프로젝트만 오버레이 bootstrap을 로드한다.
-- Vite plugin, Next.js 개발용 integration과 generic script snippet을 얇은 adapter로 제공한다.
+- generic script snippet은 review 전용 HTML entry에 직접 넣을 수 있다.
+- Vite plugin은 개발 서버의 `transformIndexHtml`로 bootstrap만 주입하고 Tunnel 프로세스 수명주기는 CLI에 둔다.
+- Next.js integration은 개발 모드에서만 새 값으로 `allowedDevOrigins`를 병합하고 root layout용 script props를 제공하며 production에서는 둘 다 비활성화된다.
+- 두 integration tarball은 컴파일된 JavaScript·타입 선언만 포함하고 비공개 workspace 패키지에 의존하지 않는다.
 - bootstrap은 공유 콘텐츠 host의 `/_review-tunnel/review/*` 예약 경로에서 오버레이 asset과 API를 사용한다.
 - 오버레이 UI는 Shadow DOM 안에서 렌더링해 앱 CSS와의 충돌을 줄인다.
 - 오버레이 host는 기본적으로 `pointer-events: none`이고 toolbar, pin, sidebar처럼 필요한 부분만 입력을 받는다.
@@ -168,17 +195,30 @@ Gateway가 모든 HTML 응답을 자동으로 다시 쓰는 방식은 기본값�
 
 ### 5.2 Gateway 예약 경로
 
-Review API와 asset은 로컬 앱으로 전달하지 않는 Gateway 예약 namespace를 사용한다. 아래 경로는 계약을 설명하기 위한 초안이며 구현 전 API review에서 확정한다.
+Review API와 asset은 로컬 앱으로 전달하지 않는 Gateway 예약 namespace를 사용한다. 현재 구현 계약은 다음과 같다.
 
 ```text
+PUT    /api/client/review-bindings/:tunnelId
 GET    /_review-tunnel/review/bootstrap.js
 GET    /_review-tunnel/review/context
-GET    /_review-tunnel/review/comments?path=/products
+GET    /_review-tunnel/review/comments?path=/products[&before=cursor]
 POST   /_review-tunnel/review/comments
+PATCH  /_review-tunnel/review/comments/:commentId
+DELETE /_review-tunnel/review/comments/:commentId
 POST   /_review-tunnel/review/comments/:commentId/replies
+GET    /_review-tunnel/review/comments/:commentId/replies?path=/products[&before=cursor]
+PATCH  /_review-tunnel/review/comments/:commentId/replies/:replyId
+DELETE /_review-tunnel/review/comments/:commentId/replies/:replyId
 PATCH  /_review-tunnel/review/comments/:commentId/status
-GET    /_review-tunnel/review/events
+GET    /_review-tunnel/review/events?path=/products
+GET    /_review-tunnel/review/notifications?path=/products
+PATCH  /_review-tunnel/review/notifications/:notificationId
 ```
+
+`PATCH .../status`는 `path`, `expectedStatus`, `status`를 받고 transaction 안에서 예상 상태를 비교한다. 답글과 상태 API도 현재 binding의 정확한 revision과 path에서만 thread를 찾는다.
+댓글·답글 PATCH·DELETE는 `path`와 `expectedVersion`을 받고, PATCH는 새 plain-text `body`도 받는다. 알림 PATCH는 `path`와 `read`를 받는다. 다른 project·revision·path 또는 수신자에게 속한 ID는 존재하지 않는 것처럼 응답한다.
+
+댓글 목록 응답은 현재 page에 적재한 `comments`, 전체 `openCount`, 다음 오래된 page의 불투명 `pageInfo.nextCursor`를 반환한다. 각 thread의 초기 답글에도 독립적인 `replyPageInfo`가 있다. cursor는 생성 시각과 ID의 정렬 위치만 담고 exact 형식으로 검증한다.
 
 `context`는 현재 사용자의 표시 이름과 역할, 프로젝트, 리뷰 버전 및 쓰기 가능 여부만 반환한다. 앱 Cookie, 앱 응답 본문이나 Gateway credential은 반환하지 않는다.
 
@@ -190,19 +230,26 @@ Tunnel과 리뷰 데이터의 수명주기를 분리한다.
 | --- | --- | --- |
 | Project | `id`, `owner_account_id`, `slug`, `display_name` | 여러 공유에 걸쳐 유지 |
 | Review revision | `id`, `project_id`, `revision_key`, `created_by`, `created_at` | 동일 검토 기준 버전 동안 유지 |
-| Tunnel binding | `tunnel_id`, `review_revision_id` | Client 실행부터 종료까지 임시 유지 |
-| Comment thread | `id`, `revision_id`, `route_path`, `anchor_type`, `anchor`, `status`, `author_id` | 정책에 따른 영속 데이터 |
-| Reply | `id`, `thread_id`, `author_id`, `body`, `created_at`, `edited_at` | Thread와 함께 유지 |
+| Tunnel binding | `tunnel_id`, `session_id`, `review_revision_id`, `owner_account_id`, `expires_at` | Client 실행부터 종료 또는 session 최대 수명까지 임시 유지 |
+| Comment thread | `id`, `revision_id`, `route_path`, `anchor_type`, `anchor`, `pin_number`, `body`, `version`, `status`, `author_id`, `deleted_by`, `deleted_at` | 정책에 따른 영속 데이터 |
+| Reply | `id`, `thread_id`, `author_id`, `body`, `version`, `deleted_by`, `deleted_at` | Thread와 함께 유지 |
+| Review event | 단조 `id`, `revision_id`, `route_path`, `thread_id`, `type`, 선택적 `recipient_account_id` | 수량·기간 상한 안에서 SSE replay용 유지 |
+| Mention·notification | content·recipient 매핑, `read_at`, `created_at` | revision·path와 수신자 범위에 유지 |
 
-`revision_key`의 기본 후보는 Git commit SHA다. Git 정보를 사용할 수 없으면 Client가 명시적으로 받은 이름이나 생성한 opaque revision ID를 사용한다. Branch 이름만으로는 시간이 지나면서 내용이 바뀌므로 단독 revision key로 사용하지 않는다.
+`revision_key`의 기본 후보는 Git commit SHA다. 현재 CLI는 `--review-project`와 `--review-revision`을 함께 받은 경우에만 review mode를 켜며 revision 값을 자동 생성하지 않는다. Git 정보를 사용할 수 없으면 개발자가 변경되지 않는 opaque revision ID를 명시한다. Branch 이름만으로는 시간이 지나면서 내용이 바뀌므로 단독 revision key로 사용하지 않는다.
+
+`Comment thread`는 `PAGE` 또는 `REGION_V1` anchor를 가지며 `OPEN`과 `RESOLVED`를 전이한다. Reply는 별도 테이블에 저장한다. 댓글·답글 삭제는 row를 제거하지 않고 본문을 비운 tombstone으로 보존한다. 이벤트와 알림은 콘텐츠 mutation transaction에서 함께 기록한다.
 
 Anchor 예시:
 
 ```json
 {
-  "type": "REGION",
-  "xRatio": 0.42,
-  "yRatio": 0.31,
+  "type": "REGION_V1",
+  "selection": "RECT",
+  "x": 0.42,
+  "y": 0.31,
+  "width": 0.18,
+  "height": 0.09,
   "viewport": { "width": 1440, "height": 900 },
   "document": { "width": 1440, "height": 2840 }
 }
@@ -210,9 +257,9 @@ Anchor 예시:
 
 ### 5.4 실시간 갱신
 
-첫 버전은 Gateway의 별도 Review SSE endpoint로 댓글 생성, 답글과 상태 변경을 전달한다. 이 채널은 로컬 앱의 SSE·WebSocket 및 Client–Gateway Carrier와 별개다.
+Gateway의 별도 Review SSE endpoint가 댓글·답글 생성, 상태 전이, 수정·삭제와 수신자별 알림 생성을 전달한다. 이 채널은 로컬 앱의 SSE·WebSocket 및 Client–Gateway Carrier와 별개다.
 
-이벤트는 전체 댓글 본문을 무제한 broadcast하지 않고 권한이 확인된 현재 프로젝트·리뷰 버전 구독자에게만 전달한다. 연결이 끊기면 마지막 이벤트 ID 이후를 제한적으로 다시 받거나 현재 목록을 재조회한다.
+이벤트는 댓글 본문을 broadcast하지 않고 권한이 확인된 현재 project·revision·path 구독자에게만 전달한다. 알림 이벤트는 정확한 수신자에게만 보인다. PostgreSQL 단조 ID와 `Last-Event-ID`로 제한적 replay를 지원하고 heartbeat, 전역·계정별 연결 상한, write backpressure, 수량·기간 보존 정책을 적용한다. 연결 중에도 authorization version과 binding을 재검증하며 여러 Gateway 인스턴스는 같은 event log를 polling한다. 브라우저는 event burst 동안 목록 조회를 하나만 실행하고 dirty 표시를 남겨 완료 뒤 한 번만 추가 조회한다. 각 조회는 시작 path를 캡처해 SPA가 이미 이동한 뒤 도착한 응답을 렌더링하지 않는다.
 
 ## 6. 인증·인가와 보안 경계
 
@@ -220,10 +267,13 @@ Anchor 예시:
 
 | 작업 | `REVIEWER` | `DEVELOPER` | `ADMIN` |
 | --- | --- | --- | --- |
-| 허용된 리뷰 열람 | 가능 | 가능 | 운영 정책에 따라 가능 |
-| 댓글·답글 작성 | 가능 | 가능 | 운영 정책에 따라 가능 |
-| 스레드 해결·다시 열기 | 불가 | 가능 | 가능 |
-| 프로젝트·리뷰 버전 생성 | 불가 | 가능 | 가능 |
+| 허용된 리뷰 열람 | 가능 | 가능 | 해당 역할을 함께 가진 경우 |
+| 댓글·답글 작성 | 가능 | 가능 | 해당 역할을 함께 가진 경우 |
+| 자기 댓글·답글 수정 | 열린 스레드에서 가능 | 열린 스레드에서 가능 | 해당 역할을 함께 가진 경우 |
+| 댓글·답글 삭제 | 자기 콘텐츠 가능 | 자기 콘텐츠와 프로젝트 콘텐츠 가능 | 해당 역할을 함께 가진 경우 |
+| 참여자 멘션·내부 알림 | 가능 | 가능 | 해당 역할을 함께 가진 경우 |
+| 스레드 해결·다시 열기 | 불가 | 가능 | `DEVELOPER`를 함께 가진 경우 |
+| 프로젝트·리뷰 버전 생성 | 불가 | 가능 | `DEVELOPER`를 함께 가진 경우 |
 
 Tunnel URL을 안다는 사실만으로 댓글을 읽거나 쓸 수 없다. 기존 content session 인증과 서버 측 역할 검사를 모두 통과해야 한다.
 
@@ -250,11 +300,11 @@ Tunnel URL을 안다는 사실만으로 댓글을 읽거나 쓸 수 없다. 기�
 - Gateway 인증 Cookie와 review 내부 header를 로컬 앱에 전달하지 않는다.
 - 로컬 앱 Cookie를 Review API의 인증이나 저장 데이터로 사용하지 않는다.
 - 오버레이 전역 객체, DOM ID, CSS와 keyboard shortcut은 product namespace로 격리한다.
-- 앱의 CSP가 strict nonce 정책을 사용하는 경우 integration이 명시적으로 호환 설정을 제공하며 보안 정책을 임의로 약화하지 않는다.
+- 앱의 CSP가 strict nonce 정책을 사용하는 경우 Vite의 `reviewTunnel({ nonce })` 또는 Next의 `reviewTunnelScriptProps(enabled, nonce)`로 응답별 nonce를 전달한다. bootstrap은 같은 nonce를 Shadow DOM 스타일에 이어 쓰고 동적 위치는 SVG 속성으로 표현하므로 `unsafe-inline` 허용을 추가하지 않는다.
 
 ## 7. 구현 순서
 
-### 단계 1 — 최소 세로 기능
+### 단계 1 — 최소 세로 기능 — 구현 완료
 
 - Project, review revision, Tunnel binding 저장 모델
 - 예약 Review API와 기존 content session authorization 연결
@@ -262,36 +312,69 @@ Tunnel URL을 안다는 사실만으로 댓글을 읽거나 쓸 수 없다. 기�
 - Shadow DOM sidebar와 현재 path 변경 감지
 - 댓글 plain-text 처리와 XSS·CSRF·권한 테스트
 
-### 단계 2 — 리뷰 MVP 완성
+### 단계 1.5 — 대화 슬라이스 — 구현 완료
+
+- plain-text 답글
+- 해결·다시 열기와 optimistic 상태 충돌
+- 기존 thread 호환 additive migration
+- 역할·XSS·CSRF·경합·권한 회수 테스트
+
+### 단계 2 — 리뷰 MVP 완성 — 구현 완료
 
 - 클릭 위치 영역 핀
-- 답글과 해결·다시 열기
 - SSE 실시간 갱신
 - Vite·Next.js integration과 framework E2E
-- 재접속·새 Tunnel에서도 동일 revision 댓글 유지
+- 정식 integration을 켠 상태의 프레임워크 E2E
+- 버전 기반 댓글·답글 수정·삭제 tombstone
+- 참여자 제한 멘션과 내부 알림
 
 ### 단계 3 — 파일럿 후 확장
 
 - `data-review-id` 기반 요소 anchor
 - 선택적 스크린샷과 민감 정보 확인 흐름
-- 멘션·알림
+- 외부 이메일·메신저·push 알림
+- 전체 편집 이력
 - Git commit·Pull Request 연결
 - 프로젝트별 초대와 더 세밀한 권한
 
-## 8. 리뷰 MVP 인수 기준
+## 8. 단계별 인수 기준
+
+### 8.1 Phase 1 — 구현 완료
 
 1. 검토자는 브라우저 외 별도 설치 없이 공유 URL에서 댓글을 볼 수 있다.
 2. 인증되지 않았거나 권한이 없는 사용자는 댓글 존재 여부도 알 수 없다.
 3. `/products`에 남긴 페이지 댓글은 다른 path에서 기본적으로 보이지 않는다.
-4. 영역 핀은 같은 revision과 유사한 문서 크기에서 저장 위치에 다시 표시된다.
-5. 댓글, 답글과 해결 상태는 Gateway나 Tunnel 재시작 뒤에도 유지된다.
-6. 새 Tunnel ID를 발급받아도 같은 프로젝트·revision을 선택하면 기존 댓글을 볼 수 있다.
-7. 다른 프로젝트 또는 revision의 댓글이 섞이지 않는다.
-8. 악성 댓글 문자열이 앱 또는 오버레이에서 script로 실행되지 않는다.
-9. Review API 요청과 Cookie가 로컬 앱에 전달되지 않는다.
-10. 오버레이를 끈 공유는 기존 HTTP, SSE, WebSocket, Vite HMR과 Next.js Fast Refresh 동작을 유지한다.
-11. 오버레이를 켠 상태에서도 공식 Vite·Next.js fixture의 탐색과 갱신이 정상 동작한다.
-12. 댓글 기능은 앱 body, DOM 전체, 화면 이미지나 앱 Cookie를 자동 저장하지 않는다.
+4. Gateway를 다시 시작해도 댓글은 PostgreSQL에 유지되고, 새 Tunnel을 같은 프로젝트·revision에 연결하면 다시 볼 수 있다. 정상 종료는 해당 Tunnel binding만 제거하며, 비정상 종료로 남은 binding은 session 최대 수명의 `expires_at` 뒤 회수한다. 다른 활성 Gateway binding과 리뷰 데이터는 삭제하지 않는다.
+5. 다른 소유자의 동일 project slug, 다른 revision 또는 다른 path의 댓글이 섞이지 않는다.
+6. 악성 댓글 문자열이 앱 또는 오버레이에서 script로 실행되지 않는다.
+7. Review API 요청과 Gateway 예약 Cookie·header가 로컬 앱에 전달되지 않는다.
+8. review mode를 쓰지 않는 공유는 기존 HTTP, SSE, WebSocket, Vite HMR과 Next.js Fast Refresh 동작을 유지한다.
+9. SPA의 `pushState`, `replaceState`, `popstate` 탐색 뒤 현재 path 댓글을 다시 조회한다.
+10. 저장소가 실패해도 대상 앱은 계속 동작하고 sidebar와 구조화 로그에 실패 상태가 드러난다.
+11. 댓글 기능은 앱 body, DOM 전체, 화면 이미지, query string이나 앱 Cookie를 자동 저장하지 않는다.
+
+### 8.2 Phase 2 대화 슬라이스 — 구현 완료
+
+1. `REVIEWER`와 `DEVELOPER`가 열린 스레드에 plain-text 답글을 작성할 수 있다.
+2. `DEVELOPER`만 스레드를 해결하거나 다시 열 수 있다.
+3. 해결된 스레드는 새 답글을 거부하고 다시 연 뒤에만 받는다.
+4. 동일한 예상 상태에서 경합한 변경은 하나만 성공하고 나머지는 `409`로 실패한다.
+5. 다른 project·revision·path의 thread ID는 현재 binding에서 존재하지 않는 것처럼 처리한다.
+6. 답글과 해결 상태는 Gateway 재시작 및 새 Tunnel 뒤에도 유지된다.
+7. Phase 1 형식의 기존 thread row는 migration 뒤 `OPEN`, 빈 답글로 계속 조회된다.
+8. 권한이 회수된 계정의 답글·상태 mutation은 DB transaction에서 거부된다.
+
+### 8.3 리뷰 MVP 완성 — 구현 완료
+
+1. 영역 핀은 같은 revision과 유사한 문서 크기에서 저장 위치에 다시 표시된다.
+2. Review SSE가 권한이 확인된 프로젝트·revision 범위 안에서 실시간 변경을 전달한다.
+3. 정식 Vite·Next.js integration을 켠 fixture의 탐색과 갱신이 정상 동작한다.
+4. 작성자 수정과 작성자·Developer 삭제가 권한·열린 상태·`expectedVersion`을 지키며 삭제 본문은 tombstone에서 제거된다.
+5. 멘션은 현재 project·revision 참여자로 제한되고 자기·중복·알 수 없는 username은 알림을 만들지 않는다.
+6. 알림은 수신자와 path가 정확히 일치할 때만 조회·읽음 변경되며 외부 채널로 전송되지 않는다.
+7. 댓글·답글이 각각 100개를 넘겨도 최신 항목은 첫 page에 보이고 안정 cursor로 이전 항목을 중복·누락 없이 읽는다.
+8. 영역 핀 번호는 revision·path 안에서 단조 증가하며 댓글 편집·삭제·서버 재시작 뒤에도 바뀌지 않는다.
+9. 실제 Next production HTML에는 review bootstrap이 포함되지 않고 Vite·Next tarball은 외부 프로젝트에서 비공개 의존성 없이 import된다.
 
 ## 9. 파일럿 전에 확정할 항목
 
@@ -301,7 +384,7 @@ Tunnel URL을 안다는 사실만으로 댓글을 읽거나 쓸 수 없다. 기�
 | 리뷰 버전 | Git commit SHA 우선, opaque ID fallback | dirty working tree 표현 방식 |
 | Query string | 저장·식별에서 제외 | query별 화면이 핵심인 앱의 allowlist 필요 여부 |
 | 댓글 보존 | 프로젝트 소유자가 삭제하기 전 유지 | 조직 정책과 export 필요 여부 |
-| 해결 권한 | `DEVELOPER`, `ADMIN` | 댓글 작성자의 self-resolve 허용 여부 |
+| 해결 권한 | `DEVELOPER` | 댓글 작성자의 self-resolve 허용 여부 |
 | 오버레이 integration | Vite·Next.js·generic snippet | 첫 파일럿 대상 프레임워크 우선순위 |
 | 표시 이름 | 기존 account `display_name` | 변경 이력과 비활성 계정 표시 방식 |
 

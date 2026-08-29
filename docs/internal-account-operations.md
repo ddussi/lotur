@@ -7,12 +7,12 @@ Review Tunnel의 인증형 Gateway는 외부 IdP 대신 관리자가 직접 발�
 | 역할 | 허용 작업 |
 | --- | --- |
 | `ADMIN` | 계정 생성, 권한 변경, 비활성화, 비밀번호 초기화, 세션 회수 |
-| `DEVELOPER` | Tunnel 생성·재연결·종료 |
-| `REVIEWER` | 공유 URL의 로컬 앱 접근 |
+| `DEVELOPER` | Tunnel 생성·재연결·종료, review project·revision binding, 공유 URL 접근, 댓글·답글 작성과 해결·다시 열기 |
+| `REVIEWER` | 공유 URL의 로컬 앱 접근과 댓글·답글 작성 |
 
 한 계정은 여러 역할을 가질 수 있다. 마지막 활성 `ADMIN`은 비활성화하거나 관리자 권한을 제거할 수 없다.
 
-위 표는 `0.1.0`에서 구현된 권한이다. 다음 화면 맥락 리뷰 단계에서는 `REVIEWER`와 `DEVELOPER` 모두 댓글·답글을 작성하고, `DEVELOPER`가 스레드를 해결·다시 열 수 있도록 확장할 예정이다. 아직 구현되지 않은 상세 권한은 [화면 맥락 리뷰 설계](contextual-review.md)를 따른다.
+`REVIEWER`와 `DEVELOPER` 모두 페이지 댓글과 답글을 읽고 쓸 수 있지만 project·revision을 Tunnel에 연결하고 스레드를 해결·다시 여는 작업은 Tunnel 소유 `DEVELOPER`만 할 수 있다. 해결된 스레드는 다시 열기 전까지 답글을 받지 않는다. `ADMIN` 역할만으로는 리뷰 접근 권한을 얻지 않으며 필요한 역할을 함께 부여해야 한다.
 
 ## 최초 설치 흐름
 
