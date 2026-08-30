@@ -9,5 +9,6 @@
     "@review-tunnel/operations": "0.1.0",
     "@review-tunnel/storage-postgres": "0.1.0",
     "pg": "^8.23.0"
-  }
+  },
+  "license": "MIT"
 }

@@ -2,129 +2,96 @@
 
 English | [한국어](README.ko.md)
 
-Share a local web application with authenticated reviewers and collect feedback in the context of the page being reviewed.
+Share a web application running on your computer with authenticated reviewers through a server and domain you operate. Reviewers use their browsers; developers keep working locally and can show changes through Vite HMR or Next.js Fast Refresh.
 
-Review Tunnel is moving from a general-purpose tunnel toward a focused review workflow: a developer shares a local preview, reviewers open it without installing a client, and page or region comments stay attached to the relevant review revision.
+**Status: `0.1.0` alpha.** HTTP, streaming, WebSocket, account management, and temporary sharing are implemented. Page comments, region pins, and project-specific access controls are planned. See the [validation report](docs/validation/public-https-2026-09-06.md) for what has actually been tested.
 
-> [!IMPORTANT]
-> Version `0.1.0` implements the secure sharing foundation. The contextual comment overlay described below is the next product phase and is not implemented yet. DNS, TLS, Ingress, secrets, backup/restore, and operational acceptance must still be completed in each production environment.
+## How it works
 
-## Product direction
-
-The intended workflow is deliberately narrower than a generic public tunnel:
-
-1. A developer runs a local web application and starts an authenticated share.
-2. A reviewer opens the generated URL in a browser and signs in.
-3. The reviewer leaves a page comment or places a numbered pin on a region.
-4. The developer replies, updates the page, and resolves the thread.
-5. Feedback remains associated with a stable project and review revision rather than an ephemeral tunnel ID.
-
-The short product promise is: **share a local web app securely and review it directly on the page.**
-
-See [Contextual review design](docs/contextual-review.md) for the proposed experience, scope, data model, security boundaries, and delivery plan.
-
-## Deployment model
-
-Review Tunnel requires a Linux server, PostgreSQL, DNS, and TLS. It uses two DNS names under one base domain:
-
-```text
-control.tunnel.example.com             login, administration, Client connection
-*.preview.tunnel.example.com           shared applications
-```
-
-The operator chooses the base domain. If it shares a parent domain with another service, review that service's `Domain` cookies because the browser may include them in requests to preview hosts.
-
-## Current and planned scope
-
-### Available in `0.1.0`
-
-- HTTP, streaming request/response bodies, SSE, and WebSocket relay
-- Temporary hosted subdomain URL for each share
-- Administrator-issued `ADMIN`, `DEVELOPER`, and `REVIEWER` accounts with no public sign-up
-- Short-lived, single-use Carrier credentials
-- Same-URL recovery during a two-minute reconnect window
-- PostgreSQL-backed audit, deployment admission, and global kill switch
-- Vite 8 and Next.js 16 compatibility checks
-
-### Planned review workflow
-
-- Comments attached to a page route
-- Click-to-place numbered region pins
-- Comment threads with open and resolved states
-- Stable project and review revision association
-- An isolated overlay that does not interfere with the reviewed application
-
-The first review release will not promise automatic pixel-perfect element tracking, screenshots, mentions, or pull-request integration. Those remain follow-up candidates after the page and region workflow is validated.
-
-## Authenticated Gateway architecture
+1. An operator deploys a Gateway with PostgreSQL, DNS, and HTTPS, then issues developer and reviewer accounts.
+2. A developer runs a local web app and starts the Review Tunnel Client.
+3. The Client prints a temporary HTTPS URL. A reviewer opens it and signs in.
+4. The reviewer interacts with the app while the developer makes changes. Feedback currently happens through your existing communication tools.
+5. The developer stops the Client with `Ctrl+C` to end the share.
 
 ```mermaid
 flowchart LR
-    Reviewer[Reviewer browser] -->|HTTPS| Ingress[TLS / Ingress]
-    Admin[Admin browser] -->|HTTPS| Ingress
-    Ingress --> Gateway[Gateway]
-    Gateway --> PostgreSQL[(PostgreSQL)]
-    Gateway <-->|outbound WSS Carrier| Client[Developer Client]
-    Client -->|HTTP| Origin[Local development server]
+    Reviewer[Reviewer browser] -->|HTTPS| Proxy[TLS reverse proxy]
+    Proxy --> Gateway[Your Gateway]
+    Gateway --> Database[(PostgreSQL)]
+    Gateway <-->|outbound WSS connection| Client[Developer Client]
+    Client --> App[Local web app]
 ```
 
-Hosted review URLs use `*.preview.tunnel.example.com`; login, administration, and the Carrier use `control.tunnel.example.com`. Authentication cookies are host-only, mutations require the exact control `Origin`, and Gateway-reserved cookies are never forwarded to the local app.
+This repository provides self-hosted software. It does not include a hosted Gateway, a public sign-up service, or a domain supplied by the maintainers. Each operator chooses their own infrastructure. A reviewer needs only a browser and an account; developers using an existing Gateway do not need to buy a domain.
 
-## Authenticated use
+## Start sharing with an existing Gateway
 
-| Role | What the user does |
+Prerequisites: Node.js 24+, a checkout of this repository, a running local web app, and a `DEVELOPER` account whose initial password has been changed. Commands below run from the repository root. Keep the web app running in another terminal.
+
+```sh
+npm ci
+npm run share -- http://127.0.0.1:3000 \
+  --gateway wss://control.tunnel.example.com/_review-tunnel/carrier \
+  --username developer1
+```
+
+Replace the Gateway hostname with the one provided by your operator and `3000` with your app's port. Enter your password at the prompt. Send the generated URL to a user with the `REVIEWER` role. Content URLs have the shape `https://<generated-id>.preview.tunnel.example.com/`.
+
+The repository and its workspace packages are currently marked `private` in npm metadata. Use the source checkout or build the documented Docker targets; no globally installable npm command is documented for this alpha.
+
+## Set up your own Gateway
+
+You need a Linux server, PostgreSQL 15+, control and wildcard DNS records, TLS certificates covering both names, and a reverse proxy that supports request streaming, SSE, and WebSocket upgrades.
+
+```text
+control.tunnel.example.com             login, administration, Client connection
+*.preview.tunnel.example.com           generated share URLs
+canary.preview.tunnel.example.com      reserved public-path check
+```
+
+These are documentation placeholders, not working endpoints. The wildcard covers new shares without a DNS change for every URL. The control hostname must remain outside the content wildcard.
+
+Follow the [English setup guide](docs/getting-started.en.md) or [한국어 시작 안내](docs/getting-started.md). The detailed [Linux deployment runbook (Korean)](docs/linux-deployment.md) covers runtime limits, Docker targets, secrets, backup/restore, and rollback. [.env.example](.env.example) is a configuration reference; the application does not automatically load `.env` files.
+
+New shares remain closed until the public-path canary passes and an administrator separately approves the exact deployment ID and configuration digest.
+
+## Features and current limits
+
+| Available | Current boundary |
 | --- | --- |
-| `ADMIN` | Creates accounts and controls admission or the kill switch |
-| `DEVELOPER` | Runs the Client and shares a local project |
-| `REVIEWER` | Signs in and opens the generated URL |
+| HTTP, request/response streaming, SSE, WebSocket | One loopback HTTP origin per Client; the complete origin is shared |
+| Administrator-issued accounts and host-only login cookies | `REVIEWER` access is deployment-wide; no per-project invitations or access lists |
+| Temporary share URLs and authenticated reconnect | Maximum lifetime 8 hours; idle timeout 30 minutes when no streams remain; reconnect grace 2 minutes |
+| Account revocation and a global kill switch | Role checks propagate periodically; session revocation permits a later fresh login unless the account is disabled or its role removed |
+| PostgreSQL-backed accounts and operational state | Active tunnels live in Gateway memory and end on Gateway restart |
+| Vite and Next.js browser verification | Tested versions and environments are recorded in the validation report; other combinations need verification |
 
-The first administrator is created from the server-side Admin CLI:
+Developers who also open shared URLs need the `REVIEWER` role in addition to `DEVELOPER`. Plan deployments around a single Gateway instance; PostgreSQL persistence alone does not provide shared tunnel routing across replicas.
 
-```bash
-npm run admin -- migrate
-npm run admin -- bootstrap --username admin --display-name "Operations Admin"
-npm run admin -- change-password --username admin
-```
+The application on the shared origin keeps its own authorization and data behavior. Use data appropriate for reviewers. See [security boundaries and reporting](SECURITY.md).
 
-A developer connects to the deployed Gateway with:
+## Development and contributions
 
-```bash
-GATEWAY_URL=wss://control.tunnel.example.com/_review-tunnel/carrier \
-CONTROL_URL=https://control.tunnel.example.com \
-npm run share -- http://127.0.0.1:3000 --username developer1
-```
-
-The Client prompts for the password and prints the review URL after activation. A reviewer opens that URL and signs in with an account that has the `REVIEWER` role.
-
-See [Administrator-issued account operations](docs/internal-account-operations.md) for account creation, roles, password reset, and revocation.
-
-## Production deployment
-
-Production requires PostgreSQL 15+, TLS-terminating Ingress, control and wildcard DNS names under one base domain, a reserved canary host, and secret management. The `Dockerfile` provides `gateway`, `admin-cli`, `client`, `canary-check`, `db-backup`, and `db-restore` targets.
-
-New shares remain closed until the public-path canary succeeds and an administrator separately approves the exact deployment ID and configuration digest. The kill switch, canary result, and approval are stored in PostgreSQL.
-
-Follow the [Linux deployment runbook](docs/linux-deployment.md) for environment variables, Docker commands, canary approval, backup/restore, and rollback. [.env.example](.env.example) is a reference only; the application does not automatically load `.env` files.
-
-See the Korean [first-time user guide](docs/getting-started.md) for prerequisites and the complete setup flow.
-
-## Development
-
-```bash
+```sh
+npm ci
 npm run check
-npm run check:mvp
 ```
 
-The PostgreSQL integration-test procedure is documented in the [deployment runbook](docs/linux-deployment.md#배포-전-자동-검증). Never use a production database as `TEST_DATABASE_URL`.
+For the full suite, including a disposable PostgreSQL database and Chrome, follow [CONTRIBUTING.md](CONTRIBUTING.md). Without `TEST_DATABASE_URL`, PostgreSQL integration tests are explicitly skipped. To verify a deployed Gateway, use the [public HTTPS testing guide](docs/public-path-testing.md).
 
-## Documentation
+Bug reports and pull requests should include a minimal reproduction and relevant test results. See [contribution guidelines](CONTRIBUTING.md), [security reporting](SECURITY.md), and the [changelog](CHANGELOG.md).
 
-- [Korean README](README.ko.md)
-- [Contextual review product and technical design (Korean)](docs/contextual-review.md)
-- [First-time user guide (Korean)](docs/getting-started.md)
-- [Architecture plan](docs/review-tunnel-plan.md)
-- [Security MVP status](docs/poc-status.md)
-- [Account operations](docs/internal-account-operations.md)
-- [Deployment runbook](docs/linux-deployment.md)
+## Roadmap and documentation
 
-Detailed operational documents are currently maintained in Korean.
+Page comments, numbered region pins, replies, resolution state, and stable project/review revisions are **not implemented yet**. The proposed scope is in the [contextual review design (Korean)](docs/contextual-review.md).
+
+- [Account operations (Korean)](docs/internal-account-operations.md)
+- [Implementation status (Korean)](docs/poc-status.md)
+- [Code review findings (Korean)](docs/code-review-2026-09-06.md)
+- [Architecture plan (Korean)](docs/review-tunnel-plan.md)
+- [Release procedure](docs/releasing.md)
+
+## License
+
+[MIT](LICENSE). Third-party dependencies remain under their respective licenses.

@@ -1,0 +1,67 @@
+{
+  "date": "2026-09-06",
+  "environment": {
+    "dnsMode": "DNS only; no CDN proxy in the request path",
+    "client": "macOS, Node.js 24.12.0, Chrome",
+    "gateway": "Ubuntu x86_64, production Docker image, Nginx Proxy Manager 2.15.0",
+    "database": "PostgreSQL 17.6",
+    "frameworks": {
+      "vite": "8.2.2",
+      "next": "16.3.2",
+      "react": "19.2.8"
+    }
+  },
+  "publicPathCanary": {
+    "passed": true,
+    "checks": [
+      "unauthenticated rejection",
+      "authorized request",
+      "request streaming before upload END",
+      "SSE delivery",
+      "WebSocket binary echo"
+    ]
+  },
+  "gatewayRestart": {
+    "readyAfterRestart": true,
+    "frameworksRerunAfterRestart": true
+  },
+  "frameworks": [
+    {
+      "framework": "vite",
+      "tunnelClosedAfterTest": true,
+      "steps": [
+        "Developer API login and WSS tunnel activation",
+        "Unauthenticated browser redirected to control-host login",
+        "Browser login with isolated Secure and HttpOnly cookies",
+        "Page interaction and HMR over public HTTPS",
+        "WSS disconnect and authenticated resume preserve the share URL",
+        "Administrator revocation closes HMR and rejects subsequent requests"
+      ],
+      "passedAt": "2026-09-06T13:19:34.411Z"
+    },
+    {
+      "framework": "next",
+      "tunnelClosedAfterTest": true,
+      "steps": [
+        "Developer API login and WSS tunnel activation",
+        "Unauthenticated browser redirected to control-host login",
+        "Browser login with isolated Secure and HttpOnly cookies",
+        "RSC, API route, Server Action, state-preserving Fast Refresh and navigation",
+        "Administrator revocation closes HMR and rejects subsequent requests"
+      ],
+      "passedAt": "2026-09-06T13:19:43.292Z"
+    }
+  ],
+  "localFrameworkRegression": {
+    "passed": 2,
+    "failed": 0
+  },
+  "limitations": [
+    "No long-running or concurrent load test",
+    "No external backup and restore drill",
+    "No full host reboot",
+    "No CDN proxy traversal",
+    "No full production Docker target matrix"
+  ],
+  "privacy": "Deployment endpoints, account identities, private paths and artifact identities omitted from this public summary."
+}

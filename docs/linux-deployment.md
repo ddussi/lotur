@@ -2,6 +2,8 @@
 
 Review Tunnel Gateway는 화면 없는 Linux 서버에서 단일 컨테이너로 실행한다. 관리자는 자신의 PC 브라우저로 `https://<CONTROL_HOST>/admin/users`와 `/admin/operations`에 접속한다.
 
+이 문서의 도메인·레지스트리·환경 파일 경로는 설치자가 바꿔야 하는 예시다. 프로젝트가 제공하는 공용 서버나 도메인은 없다. 처음 설치한다면 [시작 안내](getting-started.md), 실제 HTTPS 경로를 검증하려면 [외부 경로 검사](public-path-testing.md)를 함께 읽는다. Gateway의 살아 있는 공유 경로는 메모리에 있으므로 이 절차는 단일 Gateway 인스턴스를 기준으로 한다.
+
 ## 필수 외부 구성
 
 - Node.js 24 실행 이미지 또는 이 저장소의 `Dockerfile`
@@ -102,12 +104,12 @@ Node 24에서 다음을 실행한다.
 
 ```bash
 npm ci
-npx playwright install --with-deps chromium
+npx playwright install --with-deps chrome
 TEST_DATABASE_URL=<isolated-test-database-url> npm run check:mvp
 npm audit --omit=dev
 ```
 
-`check:mvp`는 typecheck·build·architecture·script·단위·실제 PostgreSQL·프레임워크 검증을 한 번에 실행한다. `test:frameworks`는 설치된 Chromium에서 Vite 8.2.2와 Next.js 16.3.2·React 19.2.8 fixture를 실제 Tunnel에 연결한다. 저장소의 CI workflow도 같은 완료 게이트를 실행하고 PostgreSQL 테스트를 skip하지 않으며, 여섯 production target을 실제 build한 뒤 각 entrypoint가 예상한 설정 오류로 fail-closed하는지 smoke 검증한다.
+`check:mvp`는 typecheck·build·architecture·script·단위·실제 PostgreSQL·프레임워크 검증을 한 번에 실행한다. `test:frameworks`는 Playwright의 `channel: "chrome"`에 맞춰 설치한 Google Chrome에서 Vite 8.2.2와 Next.js 16.3.2·React 19.2.8 fixture를 실제 Tunnel에 연결한다. 저장소의 CI workflow도 같은 완료 게이트를 실행하고 PostgreSQL 테스트를 skip하지 않으며, 여섯 production target을 실제 build한 뒤 각 entrypoint가 예상한 설정 오류로 fail-closed하는지 smoke 검증한다.
 
 역할별 image는 같은 소스 revision에서 명시적으로 빌드한다. target을 생략한 기본 image도 Gateway지만 배포 파이프라인에서는 target 이름을 고정한다.
 

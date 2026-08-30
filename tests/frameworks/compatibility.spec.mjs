@@ -1,9 +1,13 @@
 import { expect, test } from "@playwright/test";
 import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { AuthService, InMemoryAuthRepository, Argon2idPasswordHasher } from "../../packages/auth/src/index.ts";
+import { createCarrierAuthentication } from "../../apps/client/src/control-client.ts";
 
 import { connectTunnelClient } from "../../apps/client/src/client.ts";
 import { createGatewayServer } from "../../apps/gateway/src/server.ts";
@@ -11,10 +15,10 @@ import { createGatewayServer } from "../../apps/gateway/src/server.ts";
 const repositoryRoot = fileURLToPath(new URL("../..", import.meta.url));
 const fixtureRoot = join(repositoryRoot, "tests", "frameworks", "fixtures");
 
-test("Vite 8 serves the app and applies HMR through Review Tunnel", async ({ page }) => {
+test("Vite 8 supports login, HMR and revocation through an authenticated Gateway", async ({ page }) => {
   const runtime = await startRuntime("vite");
   try {
-    await page.goto(runtime.shareUrl);
+    await loginReviewer(page, runtime);
     await expect(page.getByRole("heading", { name: "Vite through Review Tunnel" })).toBeVisible();
     await expect(page.getByTestId("hmr-marker")).toHaveText("vite-hmr-v1");
     await page.getByTestId("counter").click();
@@ -24,16 +28,17 @@ test("Vite 8 serves the app and applies HMR through Review Tunnel", async ({ pag
     const source = await readFile(sourcePath, "utf8");
     await writeFile(sourcePath, source.replace("vite-hmr-v1", "vite-hmr-v2"));
     await expect(page.getByTestId("hmr-marker")).toHaveText("vite-hmr-v2");
+    await verifyReviewerRevocation(page, runtime);
   } finally {
     await page.close();
     await runtime.close();
   }
 });
 
-test("Next.js 16 preserves RSC, Route Handler, Server Action, navigation and Fast Refresh", async ({ page }) => {
+test("Next.js 16 supports authenticated RSC, Server Actions, navigation, Fast Refresh and revocation", async ({ page }) => {
   const runtime = await startRuntime("next");
   try {
-    await page.goto(runtime.shareUrl);
+    await loginReviewer(page, runtime);
     await expect(page.getByRole("heading", { name: "Next.js through Review Tunnel" })).toBeVisible();
     await expect(page.getByTestId("rsc-stream")).toHaveText("next-rsc-stream-ready");
 
@@ -59,6 +64,7 @@ test("Next.js 16 preserves RSC, Route Handler, Server Action, navigation and Fas
 
     await page.getByTestId("details-link").click();
     await expect(page.getByTestId("details")).toHaveText("next-client-navigation-ok");
+    await verifyReviewerRevocation(page, runtime);
   } finally {
     await page.close();
     await runtime.close();
@@ -66,27 +72,51 @@ test("Next.js 16 preserves RSC, Route Handler, Server Action, navigation and Fas
 });
 
 async function startRuntime(kind) {
+  const accounts = await prepareAccounts(kind === "next");
+  const gatewayPort = await reservePort();
+  const originPort = await reservePort();
+  const controlUrl = `http://control.localhost:${gatewayPort}`;
+  const gateway = createGatewayServer({
+    port: gatewayPort,
+    contentDomain: "preview.localhost",
+    controlHost: `control.localhost:${gatewayPort}`,
+    secureCookies: false,
+    authService: accounts.service,
+    authorizationCheckIntervalMs: 100,
+  });
   const fixtureDirectory = await mkdtemp(
     join(repositoryRoot, "tests", "frameworks", `.runtime-${kind}-`),
   );
-  await cp(join(fixtureRoot, kind), fixtureDirectory, { recursive: true });
-  const originPort = await reservePort();
-  const framework = startFramework(kind, fixtureDirectory, originPort);
-  const gateway = createGatewayServer();
+  let framework;
   let client;
+  let authentication;
   try {
+    await cp(join(fixtureRoot, kind), fixtureDirectory, { recursive: true });
+    framework = startFramework(kind, fixtureDirectory, originPort);
     await waitForHttp(`http://127.0.0.1:${originPort}/`, framework);
-    const gatewayPort = await gateway.listen();
-    const tunnelId = `${kind}-${process.pid}`;
+    await gateway.listen();
+    authentication = await createCarrierAuthentication({
+      controlUrl,
+      username: "developer",
+      password: accounts.password,
+    });
     client = connectTunnelClient({
-      gatewayUrl: `ws://127.0.0.1:${gatewayPort}/_review-tunnel/carrier`,
-      tunnelId,
+      gatewayUrl: `ws://control.localhost:${gatewayPort}/_review-tunnel/carrier`,
+      tunnelId: authentication.tunnelId,
+      carrierCredential: authentication.carrierCredential,
       localOrigin: `http://127.0.0.1:${originPort}`,
     });
     const active = await client.ready;
     return {
       fixtureDirectory,
       shareUrl: active.shareUrl,
+      controlUrl,
+      reviewerPassword: accounts.reviewerPassword,
+      passwordAfterChange: accounts.password,
+      reviewerNeedsPasswordChange: kind === "next",
+      async revokeReviewer() {
+        await accounts.service.revokeSessions(accounts.administrator, accounts.reviewer.accountId);
+      },
       async close() {
         const gracefulClose = client.close().catch(() => undefined);
         const closedGracefully = await Promise.race([
@@ -95,6 +125,7 @@ async function startRuntime(kind) {
         ]);
         if (!closedGracefully) await client.disconnect().catch(() => undefined);
         await gracefulClose;
+        await authentication.close();
         await gateway.close();
         await stopProcess(framework);
         await rm(fixtureDirectory, { recursive: true, force: true });
@@ -102,11 +133,92 @@ async function startRuntime(kind) {
     };
   } catch (error) {
     await client?.close().catch(() => undefined);
+    await authentication?.close().catch(() => undefined);
     await gateway.close().catch(() => undefined);
-    await stopProcess(framework);
+    if (framework !== undefined) await stopProcess(framework);
     await rm(fixtureDirectory, { recursive: true, force: true });
     throw error;
   }
+}
+
+async function prepareAccounts(reviewerNeedsPasswordChange) {
+  const hasher = new Argon2idPasswordHasher();
+  const service = new AuthService({
+    repository: new InMemoryAuthRepository(),
+    passwordHasher: hasher,
+    sessionHmacKey: randomBytes(32),
+    dummyPasswordHash: await hasher.hash("framework-test-dummy-password"),
+    authenticationEventSink: { write() {}, reportFailure() {} },
+  });
+  const password = "framework-test-password-2026";
+  async function activateAccount(created) {
+    const temporary = await service.authenticate({
+      username: created.account.username, password: created.temporaryPassword, remoteAddress: "127.0.0.1",
+    });
+    await service.changeOwnPassword(temporary.principal, {
+      currentPassword: created.temporaryPassword, newPassword: password,
+    });
+    return (await service.authenticate({
+      username: created.account.username, password, remoteAddress: "127.0.0.1",
+    })).principal;
+  }
+  const administrator = await activateAccount(await service.bootstrapAdministrator({
+    username: "administrator", displayName: "Administrator",
+  }));
+  await activateAccount(await service.createAccount(administrator, {
+    username: "developer", displayName: "Developer", roles: ["DEVELOPER"],
+  }));
+  const createdReviewer = await service.createAccount(administrator, {
+    username: "reviewer", displayName: "Reviewer", roles: ["REVIEWER"],
+  });
+  const reviewer = reviewerNeedsPasswordChange
+    ? { accountId: createdReviewer.account.id }
+    : await activateAccount(createdReviewer);
+  return {
+    service, password, administrator, reviewer,
+    reviewerPassword: reviewerNeedsPasswordChange ? createdReviewer.temporaryPassword : password,
+  };
+}
+
+async function loginReviewer(page, runtime) {
+  const sockets = new Set();
+  page.on("websocket", (socket) => {
+    sockets.add(socket);
+    socket.on("close", () => sockets.delete(socket));
+  });
+  runtime.openBrowserSockets = sockets;
+  await page.goto(runtime.shareUrl);
+  await expect(page).toHaveURL(new RegExp(`^${runtime.controlUrl.replaceAll(".", "\\.")}/login\\?intent=`));
+  await page.getByLabel("아이디", { exact: true }).fill("reviewer");
+  await page.getByLabel("비밀번호", { exact: true }).fill(runtime.reviewerPassword);
+  await page.getByRole("button", { name: "로그인", exact: true }).click();
+  if (runtime.reviewerNeedsPasswordChange) {
+    await expect(page.getByRole("heading", { name: "비밀번호 변경", exact: true })).toBeVisible();
+    await page.getByLabel("현재 비밀번호", { exact: true }).fill(runtime.reviewerPassword);
+    await page.getByLabel("새 비밀번호", { exact: true }).fill(runtime.passwordAfterChange);
+    await page.getByLabel("새 비밀번호 확인", { exact: true }).fill(runtime.passwordAfterChange);
+    await page.getByRole("button", { name: "변경", exact: true }).click();
+  }
+  await expect(page).toHaveURL(runtime.shareUrl);
+  const cookies = await page.context().cookies();
+  const contentSession = cookies.find((cookie) => cookie.name === "rt_session_dev");
+  const controlSession = cookies.find((cookie) => cookie.name === "rt_control_dev");
+  expect(contentSession?.domain).toBe(new URL(runtime.shareUrl).hostname);
+  expect(controlSession?.domain).toBe("control.localhost");
+  expect(contentSession?.httpOnly).toBe(true);
+  expect(controlSession?.httpOnly).toBe(true);
+}
+
+async function verifyReviewerRevocation(page, runtime) {
+  expect(runtime.openBrowserSockets.size).toBeGreaterThan(0);
+  await runtime.revokeReviewer();
+  await expect.poll(() => runtime.openBrowserSockets.size).toBe(0);
+  const status = await page.evaluate(async () => (await fetch("/?revocation-check", {
+    cache: "no-store", headers: { accept: "application/json" },
+  })).status);
+  expect(status).toBe(401);
+  await page.goto(runtime.shareUrl);
+  await expect(page.getByRole("heading", { name: "Review Tunnel 로그인" })).toBeVisible();
 }
 
 function startFramework(kind, fixtureDirectory, port) {
@@ -140,6 +252,7 @@ async function waitForHttp(url, child) {
     }
     try {
       const response = await fetch(url);
+      await response.body?.cancel();
       if (response.status < 500) return;
     } catch (error) {
       lastError = error;

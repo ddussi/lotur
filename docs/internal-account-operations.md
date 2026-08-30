@@ -12,6 +12,8 @@ Review Tunnel의 인증형 Gateway는 외부 IdP 대신 관리자가 직접 발�
 
 한 계정은 여러 역할을 가질 수 있다. 마지막 활성 `ADMIN`은 비활성화하거나 관리자 권한을 제거할 수 없다.
 
+역할은 독립적이다. `ADMIN`이나 `DEVELOPER`만 가진 계정은 공유 화면을 볼 수 없으며 `REVIEWER`를 함께 부여해야 한다. 현재 `REVIEWER` 권한은 배포 전체에 적용된다. 프로젝트별 접근 목록이 없어 다른 활성 공유 주소를 아는 검토자도 접근할 수 있다.
+
 위 표는 `0.1.0`에서 구현된 권한이다. 다음 화면 맥락 리뷰 단계에서는 `REVIEWER`와 `DEVELOPER` 모두 댓글·답글을 작성하고, `DEVELOPER`가 스레드를 해결·다시 열 수 있도록 확장할 예정이다. 아직 구현되지 않은 상세 권한은 [화면 맥락 리뷰 설계](contextual-review.md)를 따른다.
 
 ## 최초 설치 흐름
@@ -64,6 +66,8 @@ Review Tunnel의 인증형 Gateway는 외부 IdP 대신 관리자가 직접 발�
 ## 회수와 kill switch
 
 일반 계정 회수는 `/admin/users`에서 수행한다. 계정 정지, 역할 변경, 비밀번호 초기화와 세션 회수는 `auth_version`을 바꾸고 기본 5초 확인 주기 안에 관련 새 요청과 장기 Stream에 적용된다. 개발자 권한 회수는 소유 Tunnel의 Carrier·모든 Stream·resume을 끝내며, 검토자 회수는 그 검토자의 content session과 Stream만 끝낸다.
+
+`세션 종료`는 현재 로그인 상태를 폐기한다. 해당 사용자가 비밀번호로 새로 로그인하는 것까지 막지는 않는다. 접근을 계속 차단하려면 계정을 정지하거나 해당 역할을 제거한다.
 
 전체 공유를 즉시 중지해야 하면 control host의 `/admin/operations`에서 kill switch를 켠다. 이 동작은 관리자 비밀번호를 다시 확인하고 다음을 수행한다.
 

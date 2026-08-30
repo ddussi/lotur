@@ -21,10 +21,11 @@
     "check:boundaries": "node scripts/check-boundaries.mjs",
     "check": "npm run typecheck && npm run check:boundaries && npm run build && npm run test:scripts && npm test",
     "check:mvp": "npm run check && npm run test:frameworks",
-    "test:postgres": "node --experimental-strip-types --test packages/storage-postgres/src/postgres-auth-repository.integration.test.ts",
+    "test:postgres": "node --experimental-strip-types --test packages/storage-postgres/src/postgres-auth-repository.integration.test.ts apps/gateway/src/database-runtime.integration.test.ts",
     "test:docker-contract": "node --test scripts/docker-contract.test.mjs",
     "test:scripts": "node --test scripts/*.test.mjs",
     "test:frameworks": "node --experimental-strip-types ./node_modules/@playwright/test/cli.js test --config tests/frameworks/playwright.config.mjs",
+    "test:frameworks:public": "node --experimental-strip-types tests/frameworks/public-compatibility.mjs",
     "canary:origin": "node scripts/canary-origin.mjs",
     "verify:public-path": "node scripts/verify-public-path.mjs",
     "backup:postgres": "node scripts/postgres-backup.mjs",
@@ -45,5 +46,6 @@
     "argon2": "^0.45.1",
     "pg": "^8.23.0",
     "ws": "^8.21.3"
-  }
+  },
+  "license": "MIT"
 }

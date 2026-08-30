@@ -1,0 +1,69 @@
+# Contributing
+
+Bug reports, documentation improvements, and focused pull requests are welcome. English and Korean are both accepted. The current alpha implements authenticated sharing; comments, pins, and project-specific authorization remain planned work.
+
+## Get a development environment
+
+Use Node.js 24+, npm, and a source checkout. Run commands from the repository root. For browser tests, install **Google Chrome**, matching `channel: "chrome"` in the Playwright configuration. On Linux, installation of browser system dependencies may require administrator privileges.
+
+```sh
+npm ci
+npx playwright install --with-deps chrome
+```
+
+Local unit/script checks without an external database:
+
+```sh
+npm run check
+```
+
+This runs type checking, architecture boundaries, build, script tests, and unit/integration tests. PostgreSQL integration tests explicitly skip when `TEST_DATABASE_URL` is absent; this is not the full validation gate.
+
+## Run the full suite
+
+Use Docker Compose to start the isolated PostgreSQL 17.6 fixture. It uses a temporary filesystem and the following credentials are **test-only defaults**. Do not point these tests at a database whose data you need to retain.
+
+```sh
+docker compose -f compose.test.yml up -d --wait
+TEST_DATABASE_URL=postgres://review_tunnel_test:local-test-only@127.0.0.1:54329/review_tunnel_test npm run check:mvp
+docker compose -f compose.test.yml down
+```
+
+Always stop the fixture after testing, including after a failed run. `check:mvp` adds Vite and Next.js browser tests to `check`. Tests create disposable fixture copies; do not edit a running `.runtime-*` directory as a source change.
+
+| Command | Use |
+| --- | --- |
+| `npm run typecheck` | TypeScript types |
+| `npm run check:boundaries` | Package dependency boundaries |
+| `npm run test:scripts` | Deployment, backup, canary, and other script behavior |
+| `npm test` | Application and package tests |
+| `npm run test:postgres` | Real database tests; requires an isolated `TEST_DATABASE_URL` |
+| `npm run test:frameworks` | Local authenticated Vite/Next.js browser tests |
+| `npm run test:frameworks:public` | Opt-in tests against your own deployed HTTPS Gateway |
+
+The public suite creates shares and revokes a reviewer's sessions. Configure dedicated accounts using the [public-path testing guide](docs/public-path-testing.md); it is not part of the default CI run.
+
+CI runs the full database-backed gate, audits production dependencies, and builds/smoke-checks the six production Docker targets. A local source check does not substitute for those image checks.
+
+## Propose a change
+
+Open an issue first for a protocol change, new authentication model, or substantial product feature so its scope can be discussed. Small bug fixes and documentation corrections can go directly to a pull request.
+
+- Describe the user-visible problem and the final behavior.
+- Keep a pull request focused and follow existing TypeScript and package boundaries.
+- Add a regression test for a behavior bug, especially authentication, reconnection, streaming, or shutdown ordering.
+- Update English and Korean README descriptions together when behavior or setup changes. Mark proposed features as planned.
+- Record which relevant checks passed, failed, or were not run. For documentation-only changes, check links and commands instead of rerunning unrelated suites.
+- Use reserved example domains and synthetic data. Do not commit real endpoints, credentials, account exports, private logs, browser traces, or local machine paths.
+
+Use [SECURITY.md](SECURITY.md) for vulnerabilities. Ordinary bug reports should include the tested commit/version, OS, Node/browser/framework versions, a minimal reproduction, and sanitized output. Do not test installations you do not operate or have permission to assess.
+
+## License
+
+Contributions are made under this project's [MIT license](LICENSE). Include code and assets you have the right to contribute, and preserve required third-party notices. Dependencies retain their own licenses.
+
+## 한국어 안내
+
+버그 제보·문서 수정·기능 개선은 한국어로 작성해도 됩니다. 위 명령은 저장소 루트에서 Node.js 24 이상으로 실행합니다. 전체 검사에는 임시 PostgreSQL과 Chrome이 필요합니다. DB 없이 통과한 결과를 전체 검사 통과로 적지 말아 주세요.
+
+PR에는 문제, 수정 후 동작, 재현 방법, 실행한 검사를 적습니다. 실제 도메인·계정·비밀번호·개인 서버 정보는 예시로 사용하지 않습니다. 취약점의 상세 내용은 공개 이슈에 올리지 말고 [보안 제보 절차](SECURITY.md)를 따릅니다.

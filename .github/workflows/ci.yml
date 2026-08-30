@@ -35,7 +35,7 @@ jobs:
           cache: npm
           package-manager-cache: false
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install --with-deps chrome
       - run: npm audit --omit=dev
       - run: npm run check:mvp
       - name: Build every production runtime image

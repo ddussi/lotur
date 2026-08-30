@@ -1,7 +1,7 @@
 # Review Tunnel 보안 MVP 구현 상태
 
-- 상태: Phase 2 애플리케이션 구현 완료, 환경별 운영 인수 대기
-- 기준일: 2026-08-25
+- 상태: Phase 2 애플리케이션 구현 완료, 실제 HTTPS 파일럿 검증 완료, 정식 운영 인수 대기
+- 기준일: 2026-09-06
 - 제품 방향 갱신: 2026-08-31
 - 런타임: TypeScript 5.9, Node.js 24
 - Carrier profile: `review-tunnel.v1`
@@ -33,19 +33,28 @@
 - Gateway·Admin CLI·Client·canary-check 역할별 non-root Docker target
 - CI의 실제 PostgreSQL·framework 완료 게이트와 여섯 production Docker target build·entrypoint smoke
 - 하나의 기준 도메인 아래에서 control host와 콘텐츠 wildcard를 분리하는 인증형 Gateway 구성
+- 잘못된 Upgrade 주소의 400 응답, 모든 연결 단계의 kill switch 정리, HTTP·WebSocket의 전송 대기와 종료 순서 보장
+- DB idle 연결 오류의 프로세스 종료 방지와 저장된 admission 상태를 따르는 복구
+- 브라우저의 정확한 Origin 검사·폼 CSP를 유지하는 로그인·비밀번호 변경 후 공유 화면 복귀
 
 ## 자동 검증 결과
 
-2026-08-25 기준 자동 검증 항목은 다음과 같다. 정확한 테스트 수는 현재 `npm run check:mvp` 출력으로 확인한다.
+2026-09-06에 Node.js 24.12.0·macOS·Chrome에서 `npm run check:mvp`를 통과했다. 이번 리뷰와 개선 범위는 [전체 코드 리뷰 보고서](code-review-2026-09-06.md)에 기록했다.
 
-- `npm test`: 전체 단위·통합 테스트 통과. PostgreSQL 실연동 항목은 `TEST_DATABASE_URL`이 없을 때만 명시적으로 건너뛰며 CI 완료 게이트에서는 실제 DB로 모두 실행
+- `npm test`: 285개 통과, 실패·건너뜀 0개. 격리된 PostgreSQL 15에 연결해 실행했다. PostgreSQL 실연동 항목은 `TEST_DATABASE_URL`이 없을 때만 명시적으로 건너뛴다.
+- `npm run test:scripts`: 48개 통과
 - `npm run test:frameworks`: 2개 통과
-  - Vite 8.2.2 인증형 Gateway: 초기 화면, 정적 모듈, 상호작용과 HMR
-  - Next.js 16.3.2·React 19.2.8: RSC, Route Handler, Server Action, client navigation, 상태 보존 Fast Refresh
+  - 공통: 개발자 API 로그인·Carrier 발급, 검토자 브라우저 로그인, 호스트별 HttpOnly 쿠키, 권한 회수에 따른 WebSocket 종료·새 요청 거부
+  - Vite 8.2.2: 초기 화면, 정적 모듈, 상호작용과 HMR
+  - Next.js 16.3.2·React 19.2.8: 임시 비밀번호 변경, RSC, Route Handler, Server Action, client navigation, 상태 보존 Fast Refresh
 - `npm run typecheck`, 아키텍처 경계 검사와 `npm run build` 통과
-- npm audit: 알려진 취약점 0개
+- 이전 npm audit 기록(2026-08-25): 알려진 취약점 0개. 이번 변경 검증에서는 재실행하지 않았다.
 
 PostgreSQL 검증은 [`compose.test.yml`](../compose.test.yml)의 PostgreSQL 17.6과 `npm run test:postgres`로 재현한다. 2026-08-24에 실제 컨테이너에서 계정·opaque Session, 계정 변경과 artifact 발급 경합, 인증 artifact 동시 admission 상한, legacy migration, canary→승인 순서, 재시작 후 admission·kill switch 유지와 실패 시 승인 해제를 통과했다. 실행 순서는 [`linux-deployment.md`](linux-deployment.md)에 고정했다.
+
+2026-09-06에는 CI와 같은 digest로 고정된 PostgreSQL 17.6 컨테이너에서도 `npm run test:postgres` 8개를 모두 통과했다. 새 테스트는 실제 Gateway 프로세스를 실행한 뒤 유휴 DB 연결을 강제로 끊고, 서버 생존·admission 차단·복구·저장된 닫힘 상태 반영을 검사한다. 위 브라우저 테스트는 로컬 HTTP·개발용 쿠키 기준이다.
+
+같은 날 후속 작업으로 Ubuntu·PostgreSQL 17.6·Nginx Proxy Manager·실제 DNS·HTTPS 경로도 검증했다. Gateway 운영 이미지 빌드, public-path canary, canary 기록과 별도 admission 승인, 호스트별 Secure 쿠키, Vite·Next.js 기능, 권한 회수와 Gateway 재시작 뒤 저장 상태 유지가 통과했다. `npm run test:frameworks:public`으로 재실행할 수 있다. 검증한 레코드는 DNS only이며 CDN 프록시는 통과하지 않는다. 공개 기록에서 배포별 식별 정보를 제거했으며 결과와 남은 인수 범위는 [익명 검증 보고서](validation/public-https-2026-09-06.md)에 정리했다.
 
 ## 실제 환경에서 남은 인수 작업
 
