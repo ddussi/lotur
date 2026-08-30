@@ -543,9 +543,14 @@ test("administrator-issued accounts gate HTTP, admin UI and Carrier, then revoke
         intent,
       }).toString(),
     });
-    assert.equal(browserLogin.status, 303);
-    assert.match(browserLogin.location ?? "", /\/_review-tunnel\/session\?code=/);
-    const exchangeLocation = new URL(browserLogin.location ?? "http://invalid");
+    assert.equal(browserLogin.status, 200);
+    assert.equal(browserLogin.headers["referrer-policy"], "no-referrer");
+    const loginPolicy = browserLogin.headers["content-security-policy"];
+    assert.equal(typeof loginPolicy, "string");
+    assert.match(String(loginPolicy), /form-action 'self'/);
+    const exchangeLink = /href="([^"]+\/_review-tunnel\/session\?code=[^"]+)"/.exec(browserLogin.body)?.[1];
+    assert.ok(exchangeLink !== undefined);
+    const exchangeLocation = new URL(exchangeLink);
     const browserExchange = await get(
       gatewayPort,
       securedHost,

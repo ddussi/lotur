@@ -4,8 +4,17 @@ import type {
   Principal,
 } from "../../../packages/auth/src/index.ts";
 
-function page(title: string, content: string): string {
-  return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title><style>body{font:16px system-ui;max-width:960px;margin:48px auto;padding:0 20px;color:#18202a}form{display:grid;gap:12px;max-width:520px}input,button{font:inherit;padding:10px}fieldset{border:1px solid #ccd3da}table{border-collapse:collapse;width:100%}th,td{padding:10px;border-bottom:1px solid #ddd;text-align:left}.error{color:#a40000}.notice{padding:14px;background:#fff4c2;overflow-wrap:anywhere}.actions{display:flex;gap:6px;flex-wrap:wrap}.actions form{display:block}</style></head><body><h1>${escapeHtml(title)}</h1>${content}</body></html>`;
+function page(title: string, content: string, head = ""): string {
+  return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title>${head}<style>body{font:16px system-ui;max-width:960px;margin:48px auto;padding:0 20px;color:#18202a}form{display:grid;gap:12px;max-width:520px}input,button{font:inherit;padding:10px}fieldset{border:1px solid #ccd3da}table{border-collapse:collapse;width:100%}th,td{padding:10px;border-bottom:1px solid #ddd;text-align:left}.error{color:#a40000}.notice{padding:14px;background:#fff4c2;overflow-wrap:anywhere}.actions{display:flex;gap:6px;flex-wrap:wrap}.actions form{display:block}</style></head><body><h1>${escapeHtml(title)}</h1>${content}</body></html>`;
+}
+
+export function sessionExchangePage(location: string): string {
+  const escaped = escapeHtml(location);
+  return page(
+    "공유 페이지로 이동",
+    `<p>로그인되었습니다. 공유 페이지로 이동합니다.</p><p><a href="${escaped}" rel="noreferrer">자동으로 이동하지 않으면 여기를 누르세요.</a></p>`,
+    `<meta http-equiv="refresh" content="0;url=${escaped}">`,
+  );
 }
 
 export function operationsPage(killSwitchEnabled: boolean): string {

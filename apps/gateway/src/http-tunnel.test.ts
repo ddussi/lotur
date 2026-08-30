@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { createServer, request, type Server } from "node:http";
-import { connect as connectTcp } from "node:net";
+import { createServer, request, ServerResponse, type Server } from "node:http";
+import { connect as connectTcp, Socket } from "node:net";
 import test from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 import { WebSocket, WebSocketServer } from "ws";
@@ -45,6 +45,33 @@ test("generic CONNECT와 WebSocket 이외 Upgrade를 명시적으로 거부한�
   );
   assert.match(upgradeResponse, /^HTTP\/1\.1 501 /);
   assert.match(upgradeResponse, /UNSUPPORTED_UPGRADE/);
+});
+
+test("malformed Upgrade targets return 400 without disrupting an active Tunnel", { timeout: 10_000 }, async (context) => {
+  const origin = createServer((_request, response) => response.end("still available"));
+  const originPort = await listen(origin);
+  context.after(() => close(origin));
+  const gateway = createGatewayServer();
+  const port = await gateway.listen();
+  context.after(() => gateway.close());
+  const client = connectTunnelClient({
+    gatewayUrl: `ws://127.0.0.1:${port}/_review-tunnel/carrier`,
+    tunnelId: "malformed-upgrade",
+    localOrigin: `http://127.0.0.1:${originPort}`,
+  });
+  context.after(() => client.disconnect());
+  await client.ready;
+  for (const target of ["//", "http://[invalid"]) {
+    const rejected = await rawHttp(port,
+      `GET ${target} HTTP/1.1\r\nHost: control.localhost\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n`);
+    assert.match(rejected, /^HTTP\/1\.1 400 /);
+    assert.match(rejected, /INVALID_REQUEST_TARGET/);
+  }
+  const response = await sendRequest({
+    port, host: "malformed-upgrade.localhost", method: "GET", path: "/", chunks: [],
+  });
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.body.toString(), "still available");
 });
 
 test("Carrier는 정확한 review-tunnel subprotocol이 없으면 upgrade 전에 거부한다", async (context) => {
@@ -1660,6 +1687,65 @@ test("운영 kill switch가 route·열린 Stream·resume을 함께 폐기한다"
   assert.match(gateway.metrics(), /review_tunnel_active_tunnels 0/);
 });
 
+test("kill switch immediately disposes activation, disconnected Sessions and resume candidates", { timeout: 15_000 }, async (context) => {
+  for (const phase of ["CREATING", "RECONNECTING", "RESUMING"] as const) {
+    await context.test(phase, async (subcontext) => {
+      const origin = createServer((_request, response) => response.end("new session"));
+      const originPort = await listen(origin);
+      subcontext.after(() => close(origin));
+      const disconnected = Promise.withResolvers<void>();
+      const gateway = createGatewayServer({
+        maxActiveTunnels: 1,
+        logger(event) {
+          if (event.event === "tunnel.reconnecting") disconnected.resolve();
+        },
+      });
+      const port = await gateway.listen();
+      subcontext.after(() => gateway.close());
+      const gatewayUrl = `ws://127.0.0.1:${port}/_review-tunnel/carrier`;
+      const localOrigin = `http://127.0.0.1:${originPort}`;
+      let activation: Readonly<{ tunnelId: string; resumeSecret: string }>;
+      if (phase === "CREATING") {
+        const creating = new WebSocket(gatewayUrl, CARRIER_PROFILE);
+        subcontext.after(() => creating.terminate());
+        await onceEvent(creating, "open");
+        const provisioned = nextCarrierEnvelope(creating, FrameType.SessionProvisioned);
+        creating.send(encodeEnvelope({
+          type: FrameType.Hello, flags: 0, generation: 0, streamId: 0,
+          payload: encodeMetadata({
+            mode: "create", tunnelId: "kill-reconnect",
+            localOriginFingerprint: "A".repeat(43), originProjection: "local-view",
+          }),
+        }));
+        activation = decodeSessionProvisionedMetadata((await provisioned).payload);
+      } else {
+        const initial = connectTunnelClient({ gatewayUrl, localOrigin, tunnelId: "kill-reconnect" });
+        subcontext.after(() => initial.disconnect());
+        activation = await initial.ready;
+        await initial.disconnect();
+        await disconnected.promise;
+      }
+      if (phase === "RESUMING") {
+        const candidate = await startManualResumeCandidate(gatewayUrl, activation, localOrigin);
+        subcontext.after(() => candidate.socket.terminate());
+      }
+      gateway.setKillSwitch(true);
+      gateway.setKillSwitch(false);
+      assert.match(gateway.metrics(), /review_tunnel_reconnecting_tunnels 0/);
+      const rejected = connectTunnelClient({
+        gatewayUrl, localOrigin, tunnelId: activation.tunnelId, resumeSecret: activation.resumeSecret,
+      });
+      subcontext.after(() => rejected.disconnect());
+      await assert.rejects(rejected.ready, (error: unknown) =>
+        error instanceof TunnelConnectionError && error.code === "RESUME_REJECTED");
+      const replacement = connectTunnelClient({ gatewayUrl, localOrigin, tunnelId: "after-kill" });
+      subcontext.after(() => replacement.disconnect());
+      await replacement.ready;
+      assert.match(gateway.metrics(), /review_tunnel_active_tunnels 1/);
+    });
+  }
+});
+
 test("metrics endpoint는 별도 bearer token으로만 읽을 수 있다", async (context) => {
   const metricsToken = "metrics-token-".padEnd(40, "x");
   const gateway = createGatewayServer({
@@ -1724,6 +1810,97 @@ test("POST body와 origin response를 Carrier로 streaming 중계한다", async 
   assert.equal(result.statusCode, 201);
   assert.equal(result.headers["content-type"], "application/octet-stream");
   assert.deepEqual(result.body, Buffer.from([0, 1, 2, 253, 254, 255]));
+});
+
+test("early chunked responses finish after upload END while downstream is waiting for drain", { timeout: 10_000 }, async (context) => {
+  for (const action of ["drain", "cancel"] as const) {
+    await context.test(action, async () => {
+      const uploadEnded = Promise.withResolvers<void>();
+      const origin = createServer((incoming, response) => {
+        incoming.resume();
+        incoming.once("end", () => uploadEnded.resolve());
+        response.write("early-");
+        response.end("response");
+      });
+      const originPort = await listen(origin);
+      const gateway = createGatewayServer();
+      const port = await gateway.listen();
+      const client = connectTunnelClient({
+        gatewayUrl: `ws://127.0.0.1:${port}/_review-tunnel/carrier`,
+        tunnelId: "early-response", localOrigin: `http://127.0.0.1:${originPort}`,
+      });
+      const blocked = Promise.withResolvers<ServerResponse>();
+      const remoteEnd = Promise.withResolvers<void>();
+      const originalWrite = ServerResponse.prototype.write;
+      const originalSend = WebSocket.prototype.send;
+      // Hold one downstream write after sending the bytes. Only an explicit drain
+      // releases the queue, independent of OS socket buffer sizes or test load.
+      ServerResponse.prototype.write = function (this: ServerResponse, ...args: Parameters<ServerResponse["write"]>) {
+        const result = originalWrite.apply(this, args);
+        if (this.req.headers.host === "early-response.localhost") {
+          blocked.resolve(this);
+          return false;
+        }
+        return result;
+      } as ServerResponse["write"];
+      WebSocket.prototype.send = function (this: WebSocket, data: never, ...args: never[]) {
+        const result = Reflect.apply(originalSend, this, [data, ...args]);
+        try {
+          const envelope = decodeEnvelope(Buffer.from(data));
+          if (envelope.type === FrameType.EndStream && envelope.streamId === 3) {
+            remoteEnd.resolve();
+          }
+        } catch { /* Only protocol frames matter here. */ }
+        return result;
+      } as WebSocket["send"];
+      const outgoing = request({
+        host: "127.0.0.1", port, method: "POST", path: "/",
+        headers: { host: "early-response.localhost", "transfer-encoding": "chunked" },
+      });
+      outgoing.on("error", () => undefined);
+      const received = onceEvent<[import("node:http").IncomingMessage]>(outgoing, "response");
+      try {
+        await client.ready;
+        outgoing.write("first");
+        const downstream = await blocked.promise;
+        const [response] = await received;
+        const collected = collect(response);
+        void collected.catch(() => undefined);
+        await remoteEnd.promise;
+        await sendRequest({
+          port, host: "early-response.localhost", method: "HEAD", path: "/before-end", chunks: [],
+        });
+        outgoing.end("last");
+        await uploadEnded.promise;
+        // A Carrier round trip ensures upload END has completed at the Gateway.
+        const barrier = await sendRequest({
+          port, host: "early-response.localhost", method: "HEAD", path: "/barrier", chunks: [],
+        });
+        assert.equal(barrier.statusCode, 200);
+        assert.equal(downstream.writableEnded, false);
+        assert.match(gateway.metrics(), /review_tunnel_active_streams 1/);
+        if (action === "drain") {
+          downstream.emit("drain");
+          assert.equal((await collected).toString(), "early-response");
+          assert.equal(downstream.writableEnded, true);
+        } else {
+          const closed = onceEvent(downstream, "close");
+          response.destroy();
+          await closed;
+          await assert.rejects(collected);
+        }
+        assert.match(gateway.metrics(), /review_tunnel_active_streams 0/);
+      } finally {
+        ServerResponse.prototype.write = originalWrite;
+        WebSocket.prototype.send = originalSend;
+        outgoing.destroy();
+        await client.disconnect();
+        await gateway.close();
+        origin.closeAllConnections();
+        await close(origin);
+      }
+    });
+  }
 });
 
 test("terminal·Carrier loss·kill switch는 끝나지 않은 HTTP upload input도 즉시 닫는다", async () => {
@@ -2000,6 +2177,67 @@ test("WebSocket 101 이후 binary frame과 정상 close를 raw 중계한다", as
   const [code, reason] = await closed;
   assert.equal(code, 1000);
   assert.equal(reason.toString(), "done");
+});
+
+test("WebSocket half-close keeps queued response END until downstream drains", { timeout: 10_000 }, async (context) => {
+  const gateway = createGatewayServer();
+  const port = await gateway.listen();
+  context.after(() => gateway.close());
+  const carrier = new WebSocket(`ws://127.0.0.1:${port}/_review-tunnel/carrier`, CARRIER_PROFILE);
+  context.after(() => carrier.terminate());
+  await onceEvent(carrier, "open");
+  const { generation } = await activateManualCarrier(carrier, "websocket-drain");
+  const sendFrame = (
+    type: Parameters<typeof encodeEnvelope>[0]["type"],
+    streamId: number,
+    payload: Uint8Array = new Uint8Array(),
+  ) =>
+    carrier.send(encodeEnvelope({ type, flags: 0, generation, streamId, payload }));
+  const browser = connectTcp({ host: "127.0.0.1", port, allowHalfOpen: true });
+  context.after(() => browser.destroy());
+  const browserEnded = onceEvent(browser, "end");
+  let received = Buffer.alloc(0);
+  browser.on("data", (chunk: Buffer) => { received = Buffer.concat([received, chunk]); });
+  const opened = nextCarrierEnvelope(carrier, FrameType.OpenHttp);
+  browser.write("GET /socket HTTP/1.1\r\nHost: websocket-drain.localhost\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n");
+  const streamId = (await opened).streamId;
+  sendFrame(FrameType.ResponseHeaders, streamId, encodeMetadata({
+    statusCode: 101, statusMessage: "Switching Protocols",
+    headers: [["connection", "Upgrade"], ["upgrade", "websocket"]],
+  }));
+  const payload = Buffer.from("queued-websocket-response");
+  const blocked = Promise.withResolvers<Socket>();
+  const originalWrite = Socket.prototype.write;
+  Socket.prototype.write = function (this: Socket, chunk: unknown, ...args: unknown[]) {
+    const result = Reflect.apply(originalWrite, this, [chunk, ...args]);
+    if (Buffer.isBuffer(chunk) && chunk.equals(payload)) {
+      blocked.resolve(this);
+      return false;
+    }
+    return result;
+  } as Socket["write"];
+  try {
+    sendFrame(FrameType.Data, streamId, payload);
+    const downstream = await blocked.promise;
+    sendFrame(FrameType.EndStream, streamId);
+    const pong = nextCarrierEnvelope(carrier, FrameType.Pong);
+    sendFrame(FrameType.Ping, 0);
+    await pong;
+    const uploadEnded = nextCarrierEnvelope(carrier, FrameType.EndStream);
+    browser.end();
+    await uploadEnded;
+    const settled = nextCarrierEnvelope(carrier, FrameType.Pong);
+    sendFrame(FrameType.Ping, 0);
+    await settled;
+    assert.match(gateway.metrics(), /review_tunnel_active_streams 1/);
+    assert.equal(downstream.writableEnded, false);
+    downstream.emit("drain");
+    await browserEnded;
+    assert.ok(received.subarray(-payload.byteLength).equals(payload));
+    assert.match(gateway.metrics(), /review_tunnel_active_streams 0/);
+  } finally {
+    Socket.prototype.write = originalWrite;
+  }
 });
 
 test("WebSocket pending head 전송 중 browser cancel은 Carrier protocol error로 승격하지 않는다", async () => {

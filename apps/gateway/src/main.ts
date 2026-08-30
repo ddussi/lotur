@@ -37,6 +37,10 @@ if (
     lock_timeout: databaseQueryTimeoutMs,
     idle_in_transaction_session_timeout: databaseQueryTimeoutMs,
   });
+  databasePool.on("error", () => {
+    operationalState?.markUnavailable();
+    console.error(JSON.stringify({ event: "database_pool_connection_failed" }));
+  });
   const auditEventLimits = {
     global: config.maxAuditEvents ?? DEFAULT_AUDIT_EVENT_LIMITS.global,
     operationalReserve: config.auditOperationalReserve ??

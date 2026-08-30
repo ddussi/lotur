@@ -17,6 +17,7 @@ import {
   messagePage,
   operationsPage,
   passwordChangePage,
+  sessionExchangePage,
   temporaryPasswordSuccessPage,
   usersPage,
 } from "./web-auth-pages.ts";
@@ -397,7 +398,7 @@ export function createWebAuthHandler(options: WebAuthOptions): WebAuthHandler {
           } else if (exchange !== undefined) {
             response.setHeader("Cache-Control", "no-store");
             response.setHeader("Referrer-Policy", "no-referrer");
-            redirect(
+            completeFormExchange(
               response,
               `${scheme}://${exchange.targetHost}/_review-tunnel/session?code=${encodeURIComponent(exchange.code)}`,
             );
@@ -444,7 +445,7 @@ export function createWebAuthHandler(options: WebAuthOptions): WebAuthHandler {
           if (exchange !== undefined) {
             response.setHeader("Cache-Control", "no-store");
             response.setHeader("Referrer-Policy", "no-referrer");
-            redirect(
+            completeFormExchange(
               response,
               `${scheme}://${exchange.targetHost}/_review-tunnel/session?code=${encodeURIComponent(exchange.code)}`,
             );
@@ -741,6 +742,12 @@ async function redirectToExchange(
   );
 }
 
+function completeFormExchange(response: ServerResponse, location: string): void {
+  // Finish the same-origin form navigation before crossing to the content host.
+  // A 303 directly across hosts is blocked by the form's CSP form-action 'self'.
+  writeHtml(response, 200, sessionExchangePage(location));
+}
+
 async function readForm(request: IncomingMessage): Promise<URLSearchParams> {
   if (request.headers["content-type"]?.split(";", 1)[0] !== "application/x-www-form-urlencoded") {
     throw new AuthError("INVALID_ACCOUNT_INPUT", "지원하지 않는 요청 형식입니다.");
@@ -863,7 +870,9 @@ function applySecurityHeaders(response: ServerResponse): void {
   response.setHeader("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'");
   response.setHeader("X-Content-Type-Options", "nosniff");
   response.setHeader("X-Frame-Options", "DENY");
-  response.setHeader("Referrer-Policy", "no-referrer");
+  // Browser form POSTs need their same-origin Origin for CSRF validation.
+  // Cross-origin session exchanges override this with no-referrer below.
+  response.setHeader("Referrer-Policy", "same-origin");
   response.setHeader("Cache-Control", "no-store");
 }
 

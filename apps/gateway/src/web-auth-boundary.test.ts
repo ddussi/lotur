@@ -112,7 +112,7 @@ test("web auth has one end-to-end deadline and retains admission until stalled w
   }
 });
 
-test("the authorization deadline is not reset between sequential database steps", async () => {
+test("the authorization deadline is not reset between sequential database steps", { timeout: 10_000 }, async (context) => {
   const authService = createAuthService();
   const administrator: Principal = {
     accountId: "administrator-id",
@@ -163,19 +163,18 @@ test("the authorization deadline is not reset between sequential database steps"
   const port = await gateway.listen();
 
   try {
-    const checkedAt = Date.now();
+    context.mock.timers.enable({ apis: ["Date", "setTimeout"] });
     const responsePromise = send(port, "control.localhost", "/admin/users", {
       cookie: "rt_control_dev=administrator-session",
     });
     await firstReadStarted;
-    await delay(75);
+    context.mock.timers.tick(75);
     releaseFirstRead();
     await secondReadStarted;
+    // Only the 25ms remaining from the original request budget may be used.
+    context.mock.timers.tick(25);
     const response = await responsePromise;
-    const elapsed = Date.now() - checkedAt;
     assert.equal(response.status, 503);
-    assert.ok(elapsed >= 75, `deadline fired too soon after ${elapsed}ms`);
-    assert.ok(elapsed < 150, `deadline appears to have reset between steps (${elapsed}ms)`);
 
     assert.equal((await send(port, "control.localhost", "/account", {
       cookie: "rt_control_dev=competing-session",
@@ -183,6 +182,7 @@ test("the authorization deadline is not reset between sequential database steps"
   } finally {
     releaseFirstRead();
     releaseSecondRead();
+    context.mock.timers.reset();
     await delay(5);
     await gateway.close();
   }
@@ -1024,7 +1024,7 @@ test("content authentication creates login intents only for top-level GET naviga
   }
 });
 
-test("one-domain deployment rejects control mutations from a sibling preview origin", async () => {
+test("control mutations reject sibling, opaque and missing origins while forms keep their origin", async () => {
   const gateway = createGatewayServer({
     host: "127.0.0.1",
     port: 0,
@@ -1036,18 +1036,23 @@ test("one-domain deployment rejects control mutations from a sibling preview ori
   const port = await gateway.listen();
 
   try {
-    const response = await send(
-      port,
-      "control.example.com",
-      "/login",
-      {
-        origin: "http://attacker.preview.example.com",
-        "content-type": "application/x-www-form-urlencoded",
-      },
-      new URLSearchParams({ username: "user", password: "password" }).toString(),
-      "POST",
-    );
-    assert.equal(response.status, 403);
+    const form = await send(port, "control.example.com", "/login", {});
+    assert.equal(form.status, 200);
+    assert.equal(form.headers["referrer-policy"], "same-origin");
+    for (const origin of ["http://attacker.preview.example.com", "null", undefined]) {
+      const response = await send(
+        port,
+        "control.example.com",
+        "/login",
+        {
+          ...(origin === undefined ? {} : { origin }),
+          "content-type": "application/x-www-form-urlencoded",
+        },
+        new URLSearchParams({ username: "user", password: "password" }).toString(),
+        "POST",
+      );
+      assert.equal(response.status, 403);
+    }
   } finally {
     await gateway.close();
   }
