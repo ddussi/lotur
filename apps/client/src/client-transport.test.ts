@@ -240,11 +240,12 @@ function openHttpPayload(input: Readonly<{
   });
 }
 
-test("response header deadline은 느린 request upload가 끝난 뒤 시작하고 stream ID는 재사용할 수 없다", async () => {
+test("response header deadline은 느린 request upload가 끝난 뒤 시작하고 stream ID는 재사용할 수 없다", { timeout: 10_000 }, async (context) => {
   const harness = await startActivatedHarness((request, response) => {
     request.resume();
     request.once("end", () => response.end("ok"));
   }, { responseHeaderTimeoutMs: 30 });
+  context.mock.timers.enable({ apis: ["Date", "setTimeout"] });
   try {
     harness.send(FrameType.OpenHttp, 3, openHttpPayload({
       path: "/upload",
@@ -254,7 +255,7 @@ test("response header deadline은 느린 request upload가 끝난 뒤 시작하�
     await harness.frames.next(
       (frame) => frame.type === FrameType.WindowUpdate && frame.streamId === 3,
     );
-    await delay(60);
+    context.mock.timers.tick(60);
     harness.send(FrameType.EndStream, 3);
     await harness.frames.next(
       (frame) => frame.type === FrameType.ResponseHeaders && frame.streamId === 3,
@@ -263,12 +264,14 @@ test("response header deadline은 느린 request upload가 끝난 뒤 시작하�
       (frame) => frame.type === FrameType.EndStream && frame.streamId === 3,
     );
 
+    context.mock.timers.reset();
     harness.send(FrameType.OpenHttp, 3, openHttpPayload({
       path: "/reused",
       requestBodyEnded: true,
     }));
     assert.equal((await harness.client.closed).reason, "failed");
   } finally {
+    context.mock.timers.reset();
     await harness.close();
   }
 });

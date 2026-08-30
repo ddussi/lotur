@@ -1,7 +1,4 @@
-import { createHash } from "node:crypto";
-import { lookup } from "node:dns/promises";
 import { request, type ClientRequest, type IncomingMessage } from "node:http";
-import { connect as connectTcp, isIP } from "node:net";
 import type { Duplex } from "node:stream";
 import { setTimeout as delay } from "node:timers/promises";
 import { WebSocket, type RawData } from "ws";
@@ -43,6 +40,15 @@ import { InboundFlowWindow } from "./inbound-flow.ts";
 import { ApplicationOperationBudget } from "./application-operation-budget.ts";
 import { RemoteStreamLifecycle } from "./remote-stream-lifecycle.ts";
 import { waitForWritableDrain } from "./writable-drain.ts";
+import {
+  fingerprintLocalOrigin,
+  parseLoopbackOrigin,
+  probePinnedLocalOrigin,
+  resolveAndProbeLocalOrigin,
+} from "./local-origin.ts";
+import { hasValidWebSocketUpgrade } from "./websocket-upgrade.ts";
+
+export { hasValidWebSocketUpgrade };
 
 const ENVELOPE_HEADER_BYTES = 16;
 const MAX_PENDING_ACTIVATION_FRAMES = 64;
@@ -1436,169 +1442,6 @@ async function sendReset(
   });
 }
 
-function parseLoopbackOrigin(value: string): URL {
-  let origin: URL;
-  try {
-    origin = new URL(value);
-  } catch {
-    throw new TypeError("local origin must be a valid URL");
-  }
-  if (origin.username !== "" || origin.password !== "") {
-    throw new TypeError("local origin must not include username or password credentials");
-  }
-  if (origin.protocol !== "http:") {
-    throw new TypeError("Phase 1 local origin must use http");
-  }
-  if (!isLoopbackHost(origin.hostname)) {
-    throw new TypeError("local origin must be loopback");
-  }
-  if (origin.pathname !== "/" || origin.search !== "" || origin.hash !== "") {
-    throw new TypeError("local origin must not include path, query, or fragment");
-  }
-  return origin;
-}
-
-function fingerprintLocalOrigin(origin: URL): string {
-  return createHash("sha256")
-    .update("review-tunnel.v1.local-origin\0", "utf8")
-    .update(origin.origin, "utf8")
-    .digest("base64url");
-}
-
-async function resolveAndProbeLocalOrigin(origin: URL): Promise<string> {
-  const hostname = origin.hostname.replace(/^\[|\]$/g, "");
-  const addresses = isIP(hostname) === 0
-    ? (await lookup(hostname, { all: true, verbatim: true })).map(({ address }) => address)
-    : [hostname];
-  if (addresses.length === 0 || addresses.some((address) => !isLoopbackAddress(address))) {
-    throw new Error("local origin DNS must resolve exclusively to loopback addresses");
-  }
-  let lastError: unknown;
-  for (const address of [...new Set(addresses)]) {
-    try {
-      await probeLocalOrigin(origin, address);
-      return address;
-    } catch (error) {
-      lastError = error;
-    }
-  }
-  throw lastError instanceof Error ? lastError : new Error("local origin is unavailable");
-}
-
-async function probePinnedLocalOrigin(origin: URL, address: string): Promise<string> {
-  if (!isLoopbackAddress(address)) throw new Error("pinned local origin is not loopback");
-  await probeLocalOrigin(origin, address);
-  return address;
-}
-
-async function probeLocalOrigin(origin: URL, address: string): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    const socket = connectTcp({
-      host: address,
-      port: Number(origin.port || "80"),
-    });
-    const timeout = setTimeout(() => {
-      socket.destroy(new Error("local origin probe timed out"));
-    }, 1_500);
-    timeout.unref();
-    const cleanup = () => clearTimeout(timeout);
-    socket.once("connect", () => {
-      cleanup();
-      socket.destroy();
-      resolve();
-    });
-    socket.once("error", (error) => {
-      cleanup();
-      reject(error);
-    });
-  });
-}
-
-function isLoopbackAddress(address: string): boolean {
-  if (address === "::1") return true;
-  if (isIP(address) !== 4) return false;
-  const firstOctet = Number(address.split(".", 1)[0]);
-  return firstOctet === 127;
-}
-
-export function hasValidWebSocketUpgrade(
-  requestHeaders: readonly HeaderPair[],
-  response: IncomingMessage,
-): boolean {
-  const keys = requestHeaders
-    .filter(([name]) => name.toLowerCase() === "sec-websocket-key")
-    .map(([, value]) => value.trim());
-  const accepts = responseHeaderValues(response, "sec-websocket-accept");
-  if (
-    response.statusCode !== 101 ||
-    keys.length !== 1 ||
-    accepts.length !== 1 ||
-    !headerHasToken(responseHeaderValues(response, "connection"), "upgrade") ||
-    !headerIsSingleToken(responseHeaderValues(response, "upgrade"), "websocket")
-  ) {
-    return false;
-  }
-  const expected = createHash("sha1")
-    .update(`${keys[0]}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`, "ascii")
-    .digest("base64");
-  if (accepts[0]?.trim() !== expected) return false;
-
-  const offeredProtocols = commaSeparatedHeaderTokens(requestHeaders, "sec-websocket-protocol");
-  const selectedProtocols = commaSeparatedValues(
-    responseHeaderValues(response, "sec-websocket-protocol"),
-  );
-  if (
-    selectedProtocols.length > 1 ||
-    selectedProtocols.some((protocol) =>
-      !isHttpToken(protocol) || !offeredProtocols.includes(protocol)
-    )
-  ) {
-    return false;
-  }
-
-  return responseHeaderValues(response, "sec-websocket-extensions").length === 0;
-}
-
-function responseHeaderValues(response: IncomingMessage, name: string): string[] {
-  const values: string[] = [];
-  for (let index = 0; index < response.rawHeaders.length; index += 2) {
-    if (response.rawHeaders[index]?.toLowerCase() === name) {
-      const value = response.rawHeaders[index + 1];
-      if (value !== undefined) values.push(value);
-    }
-  }
-  return values;
-}
-
-function headerHasToken(values: readonly string[], expected: string): boolean {
-  return commaSeparatedValues(values).some((value) => value.toLowerCase() === expected);
-}
-
-function headerIsSingleToken(values: readonly string[], expected: string): boolean {
-  const tokens = commaSeparatedValues(values);
-  return tokens.length === 1 && tokens[0]?.toLowerCase() === expected;
-}
-
-function commaSeparatedHeaderTokens(
-  headers: readonly HeaderPair[],
-  name: string,
-): string[] {
-  return commaSeparatedValues(
-    headers
-      .filter(([headerName]) => headerName.toLowerCase() === name)
-      .map(([, value]) => value),
-  ).filter(isHttpToken);
-}
-
-function commaSeparatedValues(values: readonly string[]): string[] {
-  return values.flatMap((value) => value.split(",").map((part) => part.trim()))
-    .filter((value) => value !== "");
-}
-
-function isHttpToken(value: string): boolean {
-  return /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(value);
-}
-
 function requireOutboundFlow(
   flow: OutboundFlowWindow | undefined,
 ): OutboundFlowWindow {
@@ -1611,15 +1454,6 @@ function requireInboundFlow(
 ): InboundFlowWindow {
   if (flow === undefined) throw new Error("Session inbound flow is unavailable");
   return flow;
-}
-
-function isLoopbackHost(hostname: string): boolean {
-  return (
-    hostname === "localhost" ||
-    hostname === "127.0.0.1" ||
-    hostname === "[::1]" ||
-    hostname === "::1"
-  );
 }
 
 function toLocalHeaders(
