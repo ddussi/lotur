@@ -1,5 +1,7 @@
 # Test your deployed HTTPS Gateway
 
+This suite validates deployed sharing, authentication, and framework behavior. It does not currently exercise review binding, comments, notifications, or review SSE over public HTTPS; the local overlay suite covers those separately.
+
 [한국어 요약](#한국어-요약) · [Setup guide](getting-started.en.md) · [Example results](validation/public-https-2026-09-06.md)
 
 Local tests do not exercise your DNS, certificate, or reverse proxy. Run the following checks through the same public path reviewers use. All example domains and usernames are placeholders; use an installation you operate and dedicated test accounts.
@@ -19,9 +21,10 @@ On success, record the result with `admin record-canary` and separately run `adm
 
 ## 2. Verify authenticated browser behavior
 
-Use a Gateway that has passed the canary and whose admission is approved. Install Chrome to match the tests:
+Use a Gateway that has passed the canary and whose admission is approved. Build the fixture integration packages, then install Chrome to match the tests:
 
 ```sh
+npm run build
 npx playwright install --with-deps chrome
 ```
 

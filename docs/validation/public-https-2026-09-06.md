@@ -2,6 +2,8 @@
 
 An operator-controlled deployment was tested through real DNS and valid HTTPS, using a production Gateway Docker image. This public report deliberately omits deployment endpoints, account names, private server paths, network addresses, certificate identifiers, and image/configuration identities. It is evidence of one tested environment, not a hosted service offer or production certification.
 
+This report covers the sharing foundation before the contextual-review integration. It does not establish public HTTPS validation of review comments, the overlay, or review SSE in the integrated source tree.
+
 ## Environment
 
 | Component | Tested configuration |

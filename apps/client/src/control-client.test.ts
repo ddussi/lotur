@@ -93,3 +93,56 @@ test("CLI 세션 close는 동시 호출에도 logout을 한 번만 전송한다"
 
   assert.equal(logoutCalls, 1);
 });
+
+test("review binding은 기존 CLI 세션으로 정확한 Tunnel에 PUT한다", async () => {
+  const requests: Array<Readonly<{
+    path: string;
+    method: string;
+    authorization?: string;
+    body: string;
+  }>> = [];
+  const fetchImplementation: FetchImplementation = async (url, init) => {
+    const path = new URL(String(url)).pathname;
+    requests.push({
+      path,
+      method: init?.method ?? "GET",
+      ...(new Headers(init?.headers).get("authorization") === null
+        ? {}
+        : { authorization: new Headers(init?.headers).get("authorization")! }),
+      body: String(init?.body ?? ""),
+    });
+    if (path === "/api/client/login") {
+      return Response.json({ sessionToken: "session-token-value-1234567890" });
+    }
+    if (path === "/api/carrier-credentials") {
+      return Response.json({
+        credential: "carrier-credential-value",
+        tunnelId: "issued-tunnel",
+      }, { status: 201 });
+    }
+    if (path.startsWith("/api/client/review-bindings/")) {
+      return Response.json({ project: { slug: "storefront" }, revision: { key: "commit-a" } });
+    }
+    return new Response(null, { status: 204 });
+  };
+  const authentication = await createCarrierAuthentication({
+    controlUrl: "https://control.example",
+    username: "developer",
+    password: "not-a-real-secret",
+    fetchImplementation,
+  });
+
+  await authentication.bindReview({
+    tunnelId: "issued-tunnel",
+    projectSlug: "storefront",
+    revisionKey: "commit-a",
+  });
+  await authentication.close();
+
+  assert.deepEqual(requests[2], {
+    path: "/api/client/review-bindings/issued-tunnel",
+    method: "PUT",
+    authorization: "Bearer session-token-value-1234567890",
+    body: "projectSlug=storefront&revisionKey=commit-a",
+  });
+});

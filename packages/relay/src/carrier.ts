@@ -3,7 +3,7 @@ import {
   FrameType,
   type FrameTypeValue,
 } from "../../protocol/src/envelope.ts";
-import { OutboundFlowWindow } from "./flow-window.ts";
+import type { OutboundFlowWindow } from "./flow-window.ts";
 
 export const MAX_DATA_CHUNK_BYTES = 32 * 1024;
 export const MAX_CARRIER_BUFFERED_BYTES = 1024 * 1024;

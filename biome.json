@@ -1,0 +1,46 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "includes": [
+      "**",
+      "!!**/node_modules",
+      "!!**/dist",
+      "!!**/.next",
+      "!!test-results",
+      "!!coverage",
+      "!!tests/frameworks/.runtime-*"
+    ],
+    "ignoreUnknown": true
+  },
+  "formatter": {
+    "enabled": false
+  },
+  "assist": {
+    "enabled": false
+  },
+  "linter": {
+    "enabled": true,
+    "includes": [
+      "**/*.cjs",
+      "**/*.js",
+      "**/*.jsx",
+      "**/*.mjs",
+      "**/*.ts",
+      "**/*.tsx"
+    ],
+    "rules": {
+      "preset": "recommended",
+      "complexity": {
+        "useOptionalChain": "off"
+      },
+      "style": {
+        "noNonNullAssertion": "off"
+      }
+    }
+  }
+}

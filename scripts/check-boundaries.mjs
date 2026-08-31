@@ -1,5 +1,5 @@
 import { readFile, readdir } from "node:fs/promises";
-import { dirname, join, normalize, relative, resolve, sep } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   collectModuleSpecifiers,
@@ -79,13 +79,22 @@ function enforceBoundary(source, target) {
   }
 
   if (
+    sourcePath.startsWith("packages/review/") &&
+    targetPath.startsWith("packages/") &&
+    !targetPath.startsWith("packages/review/")
+  ) {
+    violations.push(`${sourcePath} review core must not depend on ${targetPath}`);
+  }
+
+  if (
     sourcePath.startsWith("packages/storage-postgres/") &&
     targetPath.startsWith("packages/") &&
     !targetPath.startsWith("packages/storage-postgres/") &&
     !targetPath.startsWith("packages/auth/") &&
-    !targetPath.startsWith("packages/operations/")
+    !targetPath.startsWith("packages/operations/") &&
+    !targetPath.startsWith("packages/review/")
   ) {
-    violations.push(`${sourcePath} PostgreSQL adapter must only depend on auth core`);
+    violations.push(`${sourcePath} PostgreSQL adapter must only depend on domain cores`);
   }
 
   if (

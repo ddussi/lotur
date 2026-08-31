@@ -131,7 +131,7 @@ export function transitionSession(
   }
 
   switch (event.type) {
-    case "START_RESUME":
+    case "START_RESUME": {
       if (state.candidateAttemptId !== undefined) {
         throw new SessionTransitionError(
           "RESUME_IN_PROGRESS",
@@ -145,6 +145,7 @@ export function transitionSession(
         candidateGeneration,
         lastIssuedGeneration: candidateGeneration,
       };
+    }
     case "RESUME_FAILED":
       if (state.candidateAttemptId !== event.attemptId) {
         throw new SessionTransitionError(

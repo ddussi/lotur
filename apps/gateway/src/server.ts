@@ -60,6 +60,7 @@ import {
   sendCarrierFrame,
   sendFlowControlledData,
 } from "../../../packages/relay/src/index.ts";
+import type { ReviewService } from "../../../packages/review/src/index.ts";
 import { createWebAuthHandler, WebAuthBoundaryError } from "./web-auth.ts";
 import { GatewayStreamIds } from "./gateway-stream-ids.ts";
 import { GatewayInboundFlow } from "./inbound-flow.ts";
@@ -75,11 +76,15 @@ import {
 } from "./canary-echo.ts";
 import { resumeOwnerAuthorizationMatches } from "./resume-authorization.ts";
 import { retainAdmissionUntilSettled } from "./retained-operation.ts";
+import {
+  createReviewHttpHandler,
+  type ReviewEventStreamPolicy,
+  type ReviewTunnelTarget,
+} from "./review-http.ts";
 
 const CARRIER_PATH = "/_review-tunnel/carrier";
 const CARRIER_ENVELOPE_HEADER_BYTES = 16;
 const CARRIER_MAX_MESSAGE_BYTES = CARRIER_ENVELOPE_HEADER_BYTES + MAX_ENVELOPE_PAYLOAD_BYTES;
-const CONFIG_ACK_RETRY_MS = DEFAULT_ACTIVATION_TIMEOUT_MS / 2;
 const DEFAULT_MAX_PENDING_TUNNELS = 64;
 const DEFAULT_MAX_ACTIVE_TUNNELS = 1_024;
 const DEFAULT_MAX_TUNNELS_PER_ACCOUNT = 8;
@@ -289,6 +294,8 @@ export type GatewayServerOptions = Readonly<{
   publicContentOrigin?: string;
   controlHost?: string;
   authService?: AuthService;
+  reviewService?: ReviewService;
+  reviewEventStreamPolicy?: ReviewEventStreamPolicy;
   secureCookies?: boolean;
   authorizationCheckIntervalMs?: number;
   activationTimeoutMs?: number;
@@ -387,6 +394,41 @@ export function createGatewayServer(
     );
   }
   const sessions = new Map<string, GatewaySession>();
+  const pendingReviewCleanup = new Set<Promise<void>>();
+  if (options.reviewService !== undefined && options.authService === undefined) {
+    throw new Error("review service requires authenticated Gateway mode");
+  }
+  const resolveReviewTunnel = (tunnelId: string): ReviewTunnelTarget | undefined => {
+    const session = sessions.get(tunnelId);
+    if (
+      session?.ownerAccountId === undefined ||
+      (session.lifecycle.status !== "ACTIVE" && session.lifecycle.status !== "RECONNECTING")
+    ) return undefined;
+    return {
+      tunnelId: session.tunnelId,
+      sessionId: session.sessionId,
+      ownerAccountId: session.ownerAccountId,
+      publicOrigin: new URL(session.shareUrl).origin,
+      active: session.lifecycle.status === "ACTIVE" && session.socket.readyState === WebSocket.OPEN,
+      expiresAt: new Date(session.lifecycle.activatedAt + session.policy.maxTtlMs),
+    };
+  };
+  const reviewHttp = options.reviewService === undefined
+    ? undefined
+    : createReviewHttpHandler({
+        service: options.reviewService,
+        resolveTunnel: resolveReviewTunnel,
+        ...(options.reviewEventStreamPolicy === undefined
+          ? {}
+          : { eventStreamPolicy: options.reviewEventStreamPolicy }),
+        reportFailure(operation) {
+          options.logger?.({
+            timestamp: new Date(now()).toISOString(),
+            event: `review.${operation}_failed`,
+            reason: "unavailable",
+          });
+        },
+      });
   const credentialReservations = new Map<string, Readonly<{
     accountId: string;
     purpose: "create" | "resume";
@@ -436,6 +478,9 @@ export function createGatewayServer(
     getKillSwitch() {
       return killSwitchEnabled;
     },
+    ...(reviewHttp === undefined
+      ? {}
+      : { clientControlExtension: reviewHttp.clientControlExtension }),
     reserveCarrierCredential(principal, purpose, tunnelId) {
       cleanupCredentialReservations();
       if (!hasPendingTunnelCapacity()) return undefined;
@@ -529,12 +574,17 @@ export function createGatewayServer(
     });
   };
   let healthCheckInFlight: Promise<void> | undefined;
-  const sharedAuthHealthCheck = (): Promise<void> => {
-    if (options.authService === undefined) return Promise.resolve();
+  const sharedHealthCheck = (): Promise<void> => {
+    if (options.authService === undefined && options.reviewService === undefined) {
+      return Promise.resolve();
+    }
     if (healthCheckInFlight !== undefined) return healthCheckInFlight;
     let running: Promise<void>;
     try {
-      running = options.authService.checkHealth();
+      running = Promise.all([
+        options.authService?.checkHealth(),
+        options.reviewService?.checkHealth(),
+      ]).then(() => undefined);
     } catch (error) {
       return Promise.reject(error);
     }
@@ -563,11 +613,11 @@ export function createGatewayServer(
         }
         if (hostnameOf(request.headers.host) === controlHostname && requestPath === "/health/ready") {
           try {
-            if (options.authService !== undefined) {
+            if (options.authService !== undefined || options.reviewService !== undefined) {
               await withPromiseDeadline(
-                sharedAuthHealthCheck(),
+                sharedHealthCheck(),
                 authorizationQueryTimeoutMs,
-                "authentication health query timed out",
+                "Gateway dependency health query timed out",
               );
             }
             writeHealth(response, 200);
@@ -632,6 +682,20 @@ export function createGatewayServer(
             request.socket.off("close", markConnectionClosed);
           }
           if (reviewer === undefined || connectionAbort.signal.aborted) return;
+        }
+        if (reviewHttp?.matchesContentPath(requestPath) === true) {
+          const tunnel = tunnelId === undefined ? undefined : resolveReviewTunnel(tunnelId);
+          if (tunnel === undefined || reviewer === undefined) {
+            writeGatewayError(response, 404, "NOT_FOUND");
+            return;
+          }
+          await reviewHttp.handleContent({
+            request,
+            response,
+            principal: reviewer,
+            tunnel,
+          });
+          return;
         }
         if (requestPath.startsWith("/_review-tunnel/")) {
           writeGatewayError(response, 404, "NOT_FOUND");
@@ -1422,6 +1486,7 @@ export function createGatewayServer(
       if (current.terminal) {
         metrics.increment("tunnel_closed");
         emit("tunnel.closed", current);
+        disposeReviewBinding(current);
         sessions.delete(current.tunnelId);
         return;
       }
@@ -1791,6 +1856,7 @@ export function createGatewayServer(
       for (const session of sessions.values()) {
         disposeGatewaySession(session, "TUNNEL_OFFLINE");
       }
+      reviewHttp?.close();
       credentialReservations.clear();
       for (const socket of carriers.clients) socket.terminate();
       for (const socket of canaryWebSockets.clients) socket.terminate();
@@ -1798,6 +1864,7 @@ export function createGatewayServer(
       await closeHttpServer(server);
       await new Promise<void>((resolve) => carriers.close(() => resolve()));
       await new Promise<void>((resolve) => canaryWebSockets.close(() => resolve()));
+      await Promise.all(pendingReviewCleanup);
     },
     setKillSwitch(enabled) {
       updateKillSwitch(enabled);
@@ -1863,8 +1930,20 @@ export function createGatewayServer(
     }
     session.streams.clear();
     session.outboundFlow.close();
+    disposeReviewBinding(session);
     sessions.delete(session.tunnelId);
     return true;
+  }
+
+  function disposeReviewBinding(session: GatewaySession): void {
+    if (reviewHttp === undefined) return;
+    const cleanup = reviewHttp.disposeBinding({
+      tunnelId: session.tunnelId,
+      sessionId: session.sessionId,
+    }).finally(() => {
+      pendingReviewCleanup.delete(cleanup);
+    });
+    pendingReviewCleanup.add(cleanup);
   }
 
   function applySessionTransition(

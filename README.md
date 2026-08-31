@@ -4,14 +4,14 @@ English | [한국어](README.ko.md)
 
 Share a web application running on your computer with authenticated reviewers through a server and domain you operate. Reviewers use their browsers; developers keep working locally and can show changes through Vite HMR or Next.js Fast Refresh.
 
-**Status: `0.1.0` alpha.** HTTP, streaming, WebSocket, account management, and temporary sharing are implemented. Page comments, region pins, and project-specific access controls are planned. See the [validation report](docs/validation/public-https-2026-09-06.md) for what has actually been tested.
+**Status: `0.1.0` alpha.** HTTP, streaming, WebSocket, account management, and temporary sharing are implemented. Page and region comments, replies, resolution, live updates, and internal notifications are implemented. Per-project access lists remain unimplemented. See the [implementation status](docs/poc-status.md) and the earlier [public HTTPS sharing report](docs/validation/public-https-2026-09-06.md) for their respective validation scopes.
 
 ## How it works
 
 1. An operator deploys a Gateway with PostgreSQL, DNS, and HTTPS, then issues developer and reviewer accounts.
 2. A developer runs a local web app and starts the Review Tunnel Client.
 3. The Client prints a temporary HTTPS URL. A reviewer opens it and signs in.
-4. The reviewer interacts with the app while the developer makes changes. Feedback currently happens through your existing communication tools.
+4. The reviewer interacts with the app while the developer makes changes. With review mode enabled, they can leave comments and region pins, reply, and resolve threads directly on the page.
 5. The developer stops the Client with `Ctrl+C` to end the share.
 
 ```mermaid
@@ -38,7 +38,21 @@ npm run share -- http://127.0.0.1:3000 \
 
 Replace the Gateway hostname with the one provided by your operator and `3000` with your app's port. Enter your password at the prompt. Send the generated URL to a user with the `REVIEWER` role. Content URLs have the shape `https://<generated-id>.preview.tunnel.example.com/`.
 
-The repository and its workspace packages are currently marked `private` in npm metadata. Use the source checkout or build the documented Docker targets; no globally installable npm command is documented for this alpha.
+The root, Gateway, and Client packages are marked `private` in npm metadata. Use the source checkout or build the documented Docker targets. The optional `@review-tunnel/vite` and `@review-tunnel/next` packages can be built as local tarballs; this documentation does not assume an npm registry release.
+
+## Review directly on the page
+
+Enable the development integration in your app (or explicitly add the bootstrap script), then start a share with both a stable project name and a revision key:
+
+```sh
+npm run share -- http://127.0.0.1:3000 \
+  --gateway wss://control.tunnel.example.com/_review-tunnel/carrier \
+  --username developer1 --review-project storefront --review-revision 4a1b2c3d
+```
+
+The URL is printed only after the tunnel and review binding both succeed. Page comments, numbered region pins, replies, resolution, author edits, deletion markers, participant mentions, and recipient-only internal notifications live in a sidebar. PostgreSQL preserves feedback for the same owner, project, and revision when a new share is opened. Live updates use a separate review SSE connection.
+
+Follow the [review setup instructions](docs/getting-started.en.md#enable-page-and-region-reviews) for local package installation, Vite/Next configuration, and CSP nonce handling.
 
 ## Set up your own Gateway
 
@@ -61,13 +75,13 @@ New shares remain closed until the public-path canary passes and an administrato
 | Available | Current boundary |
 | --- | --- |
 | HTTP, request/response streaming, SSE, WebSocket | One loopback HTTP origin per Client; the complete origin is shared |
-| Administrator-issued accounts and host-only login cookies | `REVIEWER` access is deployment-wide; no per-project invitations or access lists |
+| Administrator-issued accounts and host-only login cookies | `DEVELOPER` and `REVIEWER` content access is deployment-wide; no per-project invitations or access lists |
 | Temporary share URLs and authenticated reconnect | Maximum lifetime 8 hours; idle timeout 30 minutes when no streams remain; reconnect grace 2 minutes |
 | Account revocation and a global kill switch | Role checks propagate periodically; session revocation permits a later fresh login unless the account is disabled or its role removed |
-| PostgreSQL-backed accounts and operational state | Active tunnels live in Gateway memory and end on Gateway restart |
+| PostgreSQL-backed accounts, reviews, and operational state | Active tunnels live in Gateway memory and end on Gateway restart |
 | Vite and Next.js browser verification | Tested versions and environments are recorded in the validation report; other combinations need verification |
 
-Developers who also open shared URLs need the `REVIEWER` role in addition to `DEVELOPER`. Plan deployments around a single Gateway instance; PostgreSQL persistence alone does not provide shared tunnel routing across replicas.
+Either `DEVELOPER` or `REVIEWER` grants content access; `ADMIN` alone does not. Plan deployments around a single Gateway instance; PostgreSQL persistence alone does not provide shared tunnel routing across replicas.
 
 The application on the shared origin keeps its own authorization and data behavior. Use data appropriate for reviewers. See [security boundaries and reporting](SECURITY.md).
 
@@ -84,7 +98,7 @@ Bug reports and pull requests should include a minimal reproduction and relevant
 
 ## Roadmap and documentation
 
-Page comments, numbered region pins, replies, resolution state, and stable project/review revisions are **not implemented yet**. The proposed scope is in the [contextual review design (Korean)](docs/contextual-review.md).
+Per-project access lists, screenshots, external email/Slack/push notifications, automatic comment carry-over between revisions, and complete edit history remain outside the current scope. The [contextual review design (Korean)](docs/contextual-review.md) describes implemented review behavior and deferred work.
 
 - [Account operations (Korean)](docs/internal-account-operations.md)
 - [Implementation status (Korean)](docs/poc-status.md)

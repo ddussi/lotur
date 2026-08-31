@@ -19,12 +19,88 @@ npm run share -- http://127.0.0.1:3000 \
 
 3. Replace the port and Gateway hostname, enter your password when prompted, and send the printed URL to a reviewer.
 4. The reviewer opens the URL and signs in with a `REVIEWER` account. They need no Client installation, SSH access, or domain of their own.
-5. Make changes locally and review them through your framework's supported live update mechanism. Feedback currently uses your existing communication tools; comments and region pins are not implemented.
+5. Make changes locally and review them through your framework's supported live update mechanism. Enable review mode below to exchange comments, region pins, and replies directly on the page.
 6. Press `Ctrl+C` in the sharing terminal to stop. Your computer, local app, and Client must remain running during the share.
 
-One Client shares an entire loopback HTTP origin. Browser requests to another `localhost` port refer to the reviewer's machine; configure the app to proxy its API under the shared origin if necessary. Developers who also view a share need both `DEVELOPER` and `REVIEWER` roles.
+One Client shares an entire loopback HTTP origin. Browser requests to another `localhost` port refer to the reviewer's machine; configure the app to proxy its API under the shared origin if necessary. Either `DEVELOPER` or `REVIEWER` grants content access; `ADMIN` alone does not.
 
-Reviewers have deployment-wide access to known share URLs. There are no per-project access lists. A share lasts at most 8 hours, expires after 30 idle minutes when no streams remain, and can resume at the same URL within a 2-minute reconnect window. Gateway restart ends active shares; a new share gets a new URL.
+Developers and reviewers have deployment-wide access to known share URLs. There are no per-project access lists. A share lasts at most 8 hours, expires after 30 idle minutes when no streams remain, and can resume at the same URL within a 2-minute reconnect window. Gateway restart ends active shares; a new share gets a new URL.
+
+## Enable page and region reviews
+
+Reviews are optional. Enable a development integration in the app being shared, then bind the share to a stable project slug and an immutable revision key. Both CLI options are required together:
+
+```sh
+npm run share -- http://127.0.0.1:3000 \
+  --gateway wss://control.tunnel.example.com/_review-tunnel/carrier \
+  --username developer1 --review-project storefront --review-revision 4a1b2c3d
+```
+
+The Client prints the URL only after activation and review binding succeed. If binding fails, it closes that new tunnel. With the same owner, project, and revision, a later tunnel can retrieve persisted feedback. A new revision has its own feedback.
+
+Build local integration tarballs from the **Review Tunnel repository root**:
+
+```sh
+npm pack ./apps/vite-integration
+npm pack ./apps/next-integration
+```
+
+In the **web app's project directory**, install only the integration you use. Replace the example filesystem path with your checkout path. These commands use local tarballs and do not assume a published npm release:
+
+```sh
+# Vite app
+npm install --save-dev /path/to/review-tunnel/review-tunnel-vite-0.1.0.tgz
+# Next.js app
+npm install --save-dev /path/to/review-tunnel/review-tunnel-next-0.1.0.tgz
+```
+
+For Vite, add the plugin to `vite.config.ts`:
+
+```ts
+import { defineConfig } from "vite";
+import { reviewTunnel } from "@review-tunnel/vite";
+
+export default defineConfig({ plugins: [reviewTunnel()] });
+```
+
+For Next.js App Router, configure the controlled preview origins in `next.config.mjs`:
+
+```js
+import { withReviewTunnel } from "@review-tunnel/next";
+
+export default withReviewTunnel({}, {
+  allowedDevOrigins: ["*.preview.tunnel.example.com"],
+});
+```
+
+Add the development script in `app/layout.jsx`:
+
+```jsx
+import Script from "next/script";
+import { reviewTunnelScriptProps } from "@review-tunnel/next";
+
+export default function RootLayout({ children }) {
+  const scriptProps = reviewTunnelScriptProps();
+  return <html><body>
+    {children}
+    {scriptProps === undefined ? null : <Script {...scriptProps} />}
+  </body></html>;
+}
+```
+
+The Vite plugin applies only during development. The Next helpers are disabled by default when `NODE_ENV=production`, and the browser suite checks that the production HTML omits the bootstrap. Integrations add the script; they do not start a hidden Client. Keep the explicit sharing process running.
+
+For another framework, add this to a review-only HTML entry. The Gateway does not rewrite app HTML:
+
+```html
+<script type="module" src="/_review-tunnel/review/bootstrap.js"></script>
+```
+
+If your app uses a nonce-based CSP, pass the same per-response nonce to `reviewTunnel({ nonce })` or `reviewTunnelScriptProps(undefined, nonce)`, or set it on the explicit script tag. The overlay carries it into its styles. Keep the app's CSP intact.
+
+The sidebar supports page comments, click pins, drag-selected regions, and replies for both content roles. Authors can edit their own live text. Authors or developers can delete it, removing the text and leaving a deletion marker. Developers can resolve or reopen threads; resolved threads reject replies and edits until reopened. Concurrent updates use version/status checks and report a conflict instead of silently overwriting.
+
+Mentions notify only the project owner or existing participants in that revision. Notifications are visible only to the recipient and stay inside Review Tunnel. Review changes arrive through a separate SSE connection. Page navigation reloads feedback for the current path. Per-project membership, screenshots, external alerts, automatic revision carry-over, and complete edit history are outside this alpha.
 
 ## Install a Gateway: prerequisites
 
@@ -67,7 +143,7 @@ METRICS_BEARER_TOKEN=<another random token of at least 32 characters>
 
 Replace every placeholder. Restrict `TRUSTED_PROXY_CIDRS` to the actual proxy peers when using `X-Forwarded-For`; it is unset by default. Keep Gateway and database listeners reachable only by the intended peers. Use the same operational limits and HMAC configuration for the Gateway and administrative jobs.
 
-Run migrations with a dedicated DDL database role:
+Run migrations with a dedicated DDL database role. This initializes authentication, operational state, and review tables, including an upgrade from a sharing-only database:
 
 ```sh
 npm run admin -- migrate
@@ -120,7 +196,7 @@ Sign in as administrator at the control host `/admin/users`, create developer an
 | Symptom | Check |
 | --- | --- |
 | Client requires a password change | Complete the initial change in the control-host browser UI |
-| Shared page returns 403 | The viewing account needs the `REVIEWER` role |
+| Shared page returns 403 | The viewing account needs `DEVELOPER` or `REVIEWER` |
 | No new share can activate | Database availability, matching canary/approval identity, kill switch, and capacity limits |
 | Page loads but streaming or HMR fails | Request/response buffering and WebSocket forwarding at the reverse proxy |
 | Browser tests cannot find an executable | Install Chrome as described in [CONTRIBUTING.md](../CONTRIBUTING.md) |

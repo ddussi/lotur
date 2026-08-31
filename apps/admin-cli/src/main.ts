@@ -20,6 +20,7 @@ import {
 import {
   PostgresAuthRepository,
   PostgresOperationalStateRepository,
+  PostgresReviewRepository,
 } from "../../../packages/storage-postgres/src/index.ts";
 import { readSecrets } from "../../../packages/cli-utils/src/secret-input.ts";
 import { parseAdminCommand, usage, type AdminCommand } from "./arguments.ts";
@@ -78,6 +79,7 @@ async function runAdmin(arguments_: readonly string[]): Promise<void> {
     });
     if (command.kind === "migrate") {
       await repository.migrate();
+      await new PostgresReviewRepository(pool).migrate();
       console.log("Database migration complete.");
     } else {
       const hmacKeyText = process.env.AUTH_SESSION_HMAC_KEY;

@@ -5,7 +5,7 @@ Review Tunnel은 개발 중인 웹사이트를 다른 사람이 브라우저에�
 이 문서의 `tunnel.example.com`은 설명용 주소다. 설치자가 선택한 도메인으로 바꿔 사용하며 유지보수자의 서버나 계정을 이용하지 않는다. 소스 저장소를 내려받은 뒤 모든 `npm` 명령은 저장소 루트에서 실행한다. Node.js 24 이상에서 먼저 `npm ci`로 의존성을 설치한다.
 
 > [!NOTE]
-> 이 문서는 현재 `0.1.0`에서 구현된 안전한 공유 기능의 설치·사용 방법이다. 화면 댓글 오버레이는 아직 구현되지 않았으며 다음 단계의 설계는 [화면 맥락 리뷰 문서](contextual-review.md)에 있다.
+> 이 문서는 안전한 공유 기반과 현재 소스 트리의 화면 맥락 리뷰 MVP 사용 방법을 설명한다. 페이지·영역 댓글, 답글, 버전 기반 수정·삭제, 해결·다시 열기, Review SSE, 참여자 멘션·내부 알림과 Vite·Next.js integration을 제공한다.
 
 ## 이미 서버가 있는 경우: 화면을 공유하고 검토받기
 
@@ -22,12 +22,12 @@ npm run share -- http://127.0.0.1:3000 \
 ```
 
 4. 비밀번호를 입력한 뒤 출력된 공유 주소를 동료에게 보낸다. 동료는 `REVIEWER` 계정으로 로그인한다. 검토자에게는 프로그램 설치·SSH·별도 도메인이 필요 없다.
-5. 동료가 메뉴·버튼·입력창을 사용하고 피드백을 전달한다. 개발자가 코드를 수정하면 지원되는 개발 서버의 자동 갱신으로 변경 내용을 볼 수 있다. 댓글·영역 핀은 아직 없으므로 피드백은 기존 메신저나 통화 등으로 전달한다.
+5. 동료가 메뉴·버튼·입력창을 사용하고 피드백을 전달한다. 개발자가 코드를 수정하면 지원되는 개발 서버의 자동 갱신으로 변경 내용을 볼 수 있다. 아래 리뷰 모드를 설정하면 화면 안에서 댓글·영역 핀·답글을 주고받는다.
 6. 공유를 끝낼 때 공유 터미널에서 `Ctrl+C`를 누른다. 공유 중에는 개발자 컴퓨터, 웹앱, Client가 모두 실행 중이어야 한다.
 
 `3000`은 실제 포트로 바꾼다. Client가 공유하는 것은 해당 HTTP origin 전체다. 웹앱이 브라우저에서 다른 `localhost` 포트로 API를 직접 호출하면 검토자의 컴퓨터를 가리키므로, 개발 서버에서 API를 같은 origin 아래로 프록시하는 등의 앱 설정이 필요하다.
 
-`REVIEWER`는 서버 전체에 적용되는 역할이다. 프로젝트별 접근 목록은 아직 없어 다른 공유 주소를 아는 검토자도 접근할 수 있다. 개발자가 공유 화면도 확인하려면 두 역할을 함께 부여한다.
+`DEVELOPER`와 `REVIEWER`의 공유 화면 접근 권한은 서버 전체에 적용된다. 프로젝트별 접근 목록은 아직 없어 다른 공유 주소를 아는 개발자·검토자도 접근할 수 있다. `ADMIN`만으로는 공유 화면을 볼 수 없다.
 
 ## 주소와 연결 수명
 
@@ -139,6 +139,97 @@ npm run share -- http://127.0.0.1:3000 --username developer1
 
 Client가 출력한 `https://임시이름.preview.tunnel.example.com` 주소를 검토자에게 보낸다. 검토자는 자신의 `REVIEWER` 계정으로 로그인한다.
 
+### 페이지·영역 댓글 review 모드
+
+현재 review mode는 앱 HTML을 자동 변환하지 않는다. 검토할 앱의 review 전용 entry에 다음 bootstrap을 명시적으로 넣는다. 이 예약 경로는 Gateway가 직접 처리하며 로컬 앱으로 전달하지 않는다.
+
+```html
+<script type="module" src="/_review-tunnel/review/bootstrap.js"></script>
+```
+
+개발자는 같은 소유자 안에서 안정적으로 유지할 project slug와, 검토 기준을 바꾸지 않는 revision key를 함께 지정한다.
+
+```bash
+GATEWAY_URL=wss://control.tunnel.example.com/_review-tunnel/carrier \
+CONTROL_URL=https://control.tunnel.example.com \
+npm run share -- http://127.0.0.1:3000 --username developer1 \
+  --review-project storefront --review-revision 4a1b2c3d
+```
+
+두 옵션은 반드시 함께 사용해야 하며 인증된 `DEVELOPER` 계정이 필요하다. Client는 중계 Tunnel이 활성화된 뒤 review binding을 만들고, 둘 다 성공해야 공유 URL을 출력한다. binding이 실패하면 새 Tunnel을 닫고 실패 원인을 표시한다.
+
+로그인한 `DEVELOPER`와 `REVIEWER`는 sidebar에서 현재 `location.pathname`의 페이지 댓글과 답글을 조회·작성할 수 있다. `영역 선택`을 켜고 지점을 클릭하면 핀을, 드래그하면 사각 영역을 남긴다. 핀과 목록은 서로 강조되며 `Esc`로 선택을 취소한다.
+
+작성자는 열린 스레드의 자기 댓글·답글을 수정할 수 있다. 작성자 또는 `DEVELOPER`는 확인 뒤 콘텐츠를 삭제할 수 있으며, 삭제는 관계를 보존하는 tombstone으로 남고 본문은 제거된다. 수정·삭제는 화면이 가진 `expectedVersion`을 비교하므로 다른 화면에서 먼저 변경되면 `409` 충돌로 표시된다. `DEVELOPER`는 스레드를 해결하거나 다시 열 수 있고, 해결된 스레드는 다시 열기 전까지 답글과 콘텐츠 수정을 받지 않는다.
+
+본문의 `@username`은 같은 프로젝트·revision에 참여한 프로젝트 소유자 또는 기존 작성자만 멘션한다. 자기 자신, 중복 및 알 수 없는 사용자는 알림 대상에서 제외된다. 알림은 Review Tunnel 내부에만 저장되고 sidebar에서 읽음·안 읽음을 바꿀 수 있으며 이메일·Slack·push는 보내지 않는다. 댓글·답글·상태·수정·삭제·알림 변경은 Review 전용 SSE로 현재 project·revision·path에 실시간 반영된다.
+
+`pushState`, `replaceState`, 뒤로/앞으로 가기로 path가 바뀌면 목록을 다시 읽는다. 같은 project와 revision으로 새 Tunnel을 열면 PostgreSQL에 저장된 댓글·답글·해결 상태를 다시 볼 수 있다.
+
+bootstrap을 넣지 않으면 review binding만 생성되고 sidebar는 나타나지 않는다. 일반 공유 명령과 중계 동작은 기존과 같다.
+
+### Vite와 Next.js integration
+
+먼저 Review Tunnel 저장소 루트에서 패키지를 만든다. `npm pack`은 npm 저장소로 업로드하지 않고 로컬 `.tgz` 파일을 만든다.
+
+```sh
+npm pack ./apps/vite-integration
+npm pack ./apps/next-integration
+```
+
+검토할 **웹앱 프로젝트 폴더**에서 필요한 패키지 하나를 설치한다. 아래 경로는 내려받은 Review Tunnel 저장소의 실제 경로로 바꾼다.
+
+```sh
+# Vite 앱
+npm install --save-dev /path/to/review-tunnel/review-tunnel-vite-0.1.0.tgz
+# Next.js 앱
+npm install --save-dev /path/to/review-tunnel/review-tunnel-next-0.1.0.tgz
+```
+
+Vite에서는 개발 서버 전용 plugin이 공식 HTML transform으로 bootstrap을 주입한다.
+
+```ts
+import { defineConfig } from "vite";
+import { reviewTunnel } from "@review-tunnel/vite";
+
+export default defineConfig({
+  plugins: [reviewTunnel()],
+});
+```
+
+`reviewTunnel()`은 bootstrap 주입만 담당한다. 인증, review binding과 Tunnel 프로세스 수명주기는 위의 `npm run share ... --review-project ... --review-revision ...` 흐름이 담당한다. 패키지가 별도 Client를 숨겨서 실행하지 않으므로 개발 서버 재시작과 Tunnel 종료 순서가 명시적이다.
+
+앱이 nonce 기반 CSP를 사용한다면 같은 nonce를 `reviewTunnel({ nonce })`에 넘긴다. 플러그인은 그 값을 bootstrap `<script>`에 붙이고, 오버레이는 그 nonce를 Shadow DOM의 `<style>`에도 이어서 사용한다. 위치가 바뀌는 핀과 선택 영역은 inline style 대신 SVG 속성을 사용하므로 `style-src-attr 'unsafe-inline'`을 추가할 필요가 없다.
+
+Next.js App Router에서는 통제하는 preview origin만 개발 origin에 병합하고 root layout에 bootstrap을 명시한다.
+
+```js
+// next.config.mjs
+import { withReviewTunnel } from "@review-tunnel/next";
+
+export default withReviewTunnel({}, {
+  allowedDevOrigins: ["*.preview.tunnel.example.com"],
+});
+```
+
+```jsx
+// app/layout.jsx
+import Script from "next/script";
+import { reviewTunnelScriptProps } from "@review-tunnel/next";
+
+export default function RootLayout({ children }) {
+  const scriptProps = reviewTunnelScriptProps();
+  return <html><body>
+    {children}
+    {scriptProps === undefined ? null : <Script {...scriptProps} />}
+  </body></html>;
+}
+```
+
+`withReviewTunnel()`과 `reviewTunnelScriptProps()`는 기본적으로 `NODE_ENV=production`에서 비활성화된다. 따라서 실제 Next production build의 HTML에는 bootstrap 경로가 들어가지 않는다. Vite plugin도 `apply: "serve"`라 build에는 적용되지 않는다. 두 연동 패키지는 비공개 workspace 의존성 없이 컴파일된 JavaScript·선언 파일·MIT 라이선스를 포함하며, 외부 임시 프로젝트의 tarball 설치·import 검사를 완료 게이트에 포함한다.
+
+위 `nonce`는 앱이 해당 응답의 CSP 헤더에 넣은 것과 같은 요청별 값이어야 한다. CSP를 끄거나 `unsafe-inline`로 약화하는 대신 이 값을 명시적으로 전달한다.
+
 ## 어떤 준비가 누구 책임인가
 
 | 역할 | 책임 |
@@ -155,7 +246,7 @@ Review Tunnel은 특정 DNS 업체나 클라우드 계정을 대신 만들지 �
 | 증상 | 확인할 것 |
 | --- | --- |
 | 공유 명령에서 비밀번호 변경 요구 | control host의 `/login`에서 초기 비밀번호를 먼저 변경 |
-| 개발자 로그인은 되지만 공유 화면에서 403 | 화면을 보는 계정에 `REVIEWER` 권한이 있는지 확인 |
+| 개발자 로그인은 되지만 공유 화면에서 403 | 화면을 보는 계정에 `DEVELOPER` 또는 `REVIEWER` 권한이 있는지 확인 |
 | 새로운 공유가 활성화되지 않음 | canary 기록·별도 admission 승인·kill switch·DB 연결 확인 |
 | 화면은 열리지만 갱신·스트리밍 실패 | Ingress의 WebSocket Upgrade와 요청·응답 버퍼링 설정을 canary로 검사 |
 | Chrome을 찾지 못해 브라우저 검사 실패 | 테스트는 `channel: "chrome"` 사용. [기여 안내](../CONTRIBUTING.md)의 Chrome 설치 명령 실행 |

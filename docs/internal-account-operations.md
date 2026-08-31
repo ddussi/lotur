@@ -7,19 +7,19 @@ Review Tunnel의 인증형 Gateway는 외부 IdP 대신 관리자가 직접 발�
 | 역할 | 허용 작업 |
 | --- | --- |
 | `ADMIN` | 계정 생성, 권한 변경, 비활성화, 비밀번호 초기화, 세션 회수 |
-| `DEVELOPER` | Tunnel 생성·재연결·종료 |
-| `REVIEWER` | 공유 URL의 로컬 앱 접근 |
+| `DEVELOPER` | Tunnel 생성·재연결·종료, review project·revision binding, 공유 URL 접근, 댓글·답글 작성과 해결·다시 열기 |
+| `REVIEWER` | 공유 URL의 로컬 앱 접근과 댓글·답글 작성 |
 
 한 계정은 여러 역할을 가질 수 있다. 마지막 활성 `ADMIN`은 비활성화하거나 관리자 권한을 제거할 수 없다.
 
-역할은 독립적이다. `ADMIN`이나 `DEVELOPER`만 가진 계정은 공유 화면을 볼 수 없으며 `REVIEWER`를 함께 부여해야 한다. 현재 `REVIEWER` 권한은 배포 전체에 적용된다. 프로젝트별 접근 목록이 없어 다른 활성 공유 주소를 아는 검토자도 접근할 수 있다.
+`REVIEWER`와 `DEVELOPER` 모두 페이지 댓글과 답글을 읽고 쓸 수 있다. Project·revision을 Tunnel에 연결하는 작업은 Tunnel 소유 `DEVELOPER`만 할 수 있다. 접근 가능한 스레드의 해결·다시 열기와 타인 글 삭제는 `DEVELOPER` 역할에 허용된다. 해결된 스레드는 다시 열기 전까지 답글을 받지 않는다. `ADMIN` 역할만으로는 리뷰 접근 권한을 얻지 않으며 필요한 역할을 함께 부여해야 한다.
 
-위 표는 `0.1.0`에서 구현된 권한이다. 다음 화면 맥락 리뷰 단계에서는 `REVIEWER`와 `DEVELOPER` 모두 댓글·답글을 작성하고, `DEVELOPER`가 스레드를 해결·다시 열 수 있도록 확장할 예정이다. 아직 구현되지 않은 상세 권한은 [화면 맥락 리뷰 설계](contextual-review.md)를 따른다.
+공유 화면 접근 권한은 배포 전체에 적용된다. 프로젝트·리뷰 버전·경로별 데이터 구분은 사람별 접근 목록이 아니다. 다른 활성 공유 주소를 아는 개발자·검토자도 접근할 수 있다.
 
 ## 최초 설치 흐름
 
 1. PostgreSQL을 준비하고 `DATABASE_URL`을 secret으로 주입한다.
-2. DDL 전용 DB role로 `npm run admin -- migrate`를 실행해 스키마를 적용한다. 이 명령에는 `AUTH_SESSION_HMAC_KEY`가 필요하지 않다.
+2. DDL 전용 DB role로 `npm run admin -- migrate`를 실행해 인증·운영·리뷰 스키마를 적용한다. 이 명령에는 `AUTH_SESSION_HMAC_KEY`가 필요하지 않다.
 3. 32~128바이트 난수 값을 canonical base64url로 인코딩해 일반 Admin CLI와 Gateway의 `AUTH_SESSION_HMAC_KEY`로 주입한다.
 4. DML 전용 일반 Admin CLI role로 `npm run admin -- bootstrap --username admin --display-name "운영 관리자"`를 서버에서 한 번 실행한다. 일반 명령은 migration을 자동 실행하지 않는다.
 5. 한 번만 출력되는 임시 비밀번호를 안전한 경로로 전달한다.

@@ -84,7 +84,10 @@ async function loadWorkspaces() {
       workspaces.push({
         directory,
         name: manifest.name,
-        dependencies: manifest.dependencies ?? {},
+        dependencies: {
+          ...(manifest.dependencies ?? {}),
+          ...(manifest.peerDependencies ?? {}),
+        },
       });
     }
   }

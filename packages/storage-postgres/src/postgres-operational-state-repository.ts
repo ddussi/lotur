@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Pool, PoolClient, QueryResultRow } from "pg";
+import type { Pool, QueryResultRow } from "pg";
 
 import {
   DEFAULT_AUDIT_EVENT_LIMITS,
@@ -17,8 +17,7 @@ import {
   appendBoundedAuditEvent,
   validatedAuditEventLimits,
 } from "./bounded-audit-writer.ts";
-
-type Queryable = Pick<Pool, "query"> | Pick<PoolClient, "query">;
+import { type Queryable, withTransaction } from "./postgres-transaction.ts";
 
 async function requireOperationalActor(
   database: Queryable,
@@ -66,7 +65,7 @@ export class PostgresOperationalStateRepository implements OperationalStateRepos
     actor: OperationalActor,
     now: Date,
   ): Promise<OperationalState> {
-    return this.#transaction(async (client) => {
+    return withTransaction(this.#database, async (client) => {
       await requireOperationalActor(client, actor);
       await client.query(
         `INSERT INTO rt_deployment_admissions
@@ -106,7 +105,7 @@ export class PostgresOperationalStateRepository implements OperationalStateRepos
     actor: OperationalActor,
     now: Date,
   ): Promise<OperationalState> {
-    return this.#transaction(async (client) => {
+    return withTransaction(this.#database, async (client) => {
       await requireOperationalActor(client, actor);
       const result = await client.query(
         `UPDATE rt_deployment_admissions
@@ -136,7 +135,7 @@ export class PostgresOperationalStateRepository implements OperationalStateRepos
     actor: OperationalActor,
     now: Date,
   ): Promise<OperationalState> {
-    return this.#transaction(async (client) => {
+    return withTransaction(this.#database, async (client) => {
       await requireOperationalActor(client, actor);
       await client.query(
         `INSERT INTO rt_deployment_admissions
@@ -167,7 +166,7 @@ export class PostgresOperationalStateRepository implements OperationalStateRepos
     actor: OperationalActor,
     now: Date,
   ): Promise<OperationalState> {
-    return this.#transaction(async (client) => {
+    return withTransaction(this.#database, async (client) => {
       await requireOperationalActor(client, actor);
       await client.query(
         `UPDATE rt_operational_controls
@@ -194,21 +193,6 @@ export class PostgresOperationalStateRepository implements OperationalStateRepos
       });
       return readOperationalState(client, identity);
     });
-  }
-
-  async #transaction<T>(operation: (client: PoolClient) => Promise<T>): Promise<T> {
-    const client = await this.#database.connect();
-    try {
-      await client.query("BEGIN");
-      const result = await operation(client);
-      await client.query("COMMIT");
-      return result;
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
   }
 
   async #appendOperationalAudit(

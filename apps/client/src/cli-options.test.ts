@@ -147,3 +147,29 @@ test("인증 mode는 password와 Carrier credential을 동일한 secure endpoint
   ], {});
   assert.equal(loopback.controlUrl, "http://127.0.0.1:8787");
 });
+
+test("review mode는 인증과 project·revision의 명시적인 쌍을 요구한다", () => {
+  const options = parseClientArguments([
+    "http://127.0.0.1:3000",
+    "--username", "developer",
+    "--review-project", "storefront",
+    "--review-revision", "4a1b2c3d",
+  ], {});
+  assert.deepEqual(options.review, {
+    projectSlug: "storefront",
+    revisionKey: "4a1b2c3d",
+  });
+
+  for (const arguments_ of [
+    ["http://127.0.0.1:3000", "--username", "developer", "--review-project", "storefront"],
+    ["http://127.0.0.1:3000", "--username", "developer", "--review-revision", "commit-a"],
+    ["http://127.0.0.1:3000", "--review-project", "storefront", "--review-revision", "commit-a"],
+    ["http://127.0.0.1:3000", "--username", "developer", "--review-project", "Storefront", "--review-revision", "commit-a"],
+    ["http://127.0.0.1:3000", "--username", "developer", "--review-project", "storefront", "--review-revision", "dirty tree"],
+  ]) {
+    assert.throws(
+      () => parseClientArguments(arguments_, {}),
+      /review|project slug|revision/i,
+    );
+  }
+});

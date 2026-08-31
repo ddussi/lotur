@@ -3,3 +3,9 @@ dist
 .git
 .env*
 *.log
+**/dist
+**/.next
+tests/frameworks/.runtime-*
+test-results
+coverage
+*.tgz

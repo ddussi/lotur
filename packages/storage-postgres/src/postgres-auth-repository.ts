@@ -1,4 +1,4 @@
-import type { Pool, PoolClient, QueryResultRow } from "pg";
+import type { Pool, QueryResultRow } from "pg";
 
 import type {
   Account,
@@ -26,8 +26,7 @@ import {
   LOGIN_THROTTLE_CAPACITY_LOCK_ID,
 } from "./capacity-locks.ts";
 import { AUTH_SCHEMA_SQL } from "./schema.ts";
-
-type Queryable = Pick<Pool, "query"> | Pick<PoolClient, "query">;
+import { type Queryable, withTransaction } from "./postgres-transaction.ts";
 
 export class PostgresAuthRepository implements AuthRepository {
   readonly #database: Pool;
@@ -48,9 +47,7 @@ export class PostgresAuthRepository implements AuthRepository {
   }
 
   async migrate(): Promise<void> {
-    const client = await this.#database.connect();
-    try {
-      await client.query("BEGIN");
+    await withTransaction(this.#database, async (client) => {
       await client.query("SELECT pg_advisory_xact_lock($1)", [1_467_289_112]);
       await client.query("SELECT pg_advisory_xact_lock($1)", [
         LOGIN_THROTTLE_CAPACITY_LOCK_ID,
@@ -59,13 +56,7 @@ export class PostgresAuthRepository implements AuthRepository {
         AUDIT_EVENT_CAPACITY_LOCK_ID,
       ]);
       await client.query(AUTH_SCHEMA_SQL);
-      await client.query("COMMIT");
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
+    });
   }
 
   async countAccounts(): Promise<number> {
@@ -821,24 +812,6 @@ async function decrementLoginThrottleCount(
   );
   if (adjusted.rowCount !== 1) {
     throw new Error("login throttle capacity counter is inconsistent");
-  }
-}
-
-async function withTransaction<T>(
-  database: Pool,
-  work: (client: PoolClient) => Promise<T>,
-): Promise<T> {
-  const client = await database.connect();
-  try {
-    await client.query("BEGIN");
-    const result = await work(client);
-    await client.query("COMMIT");
-    return result;
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  } finally {
-    client.release();
   }
 }
 

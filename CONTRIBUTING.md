@@ -1,6 +1,6 @@
 # Contributing
 
-Bug reports, documentation improvements, and focused pull requests are welcome. English and Korean are both accepted. The current alpha implements authenticated sharing; comments, pins, and project-specific authorization remain planned work.
+Bug reports, documentation improvements, and focused pull requests are welcome. English and Korean are both accepted. The current alpha implements authenticated sharing and contextual reviews. Per-project authorization remains planned work.
 
 ## Get a development environment
 
@@ -17,7 +17,7 @@ Local unit/script checks without an external database:
 npm run check
 ```
 
-This runs type checking, architecture boundaries, build, script tests, and unit/integration tests. PostgreSQL integration tests explicitly skip when `TEST_DATABASE_URL` is absent; this is not the full validation gate.
+This runs linting, type checking, architecture boundaries, build, script tests, and unit/integration tests. PostgreSQL integration tests explicitly skip when `TEST_DATABASE_URL` is absent; this is not the full validation gate.
 
 ## Run the full suite
 
@@ -29,17 +29,20 @@ TEST_DATABASE_URL=postgres://review_tunnel_test:local-test-only@127.0.0.1:54329/
 docker compose -f compose.test.yml down
 ```
 
-Always stop the fixture after testing, including after a failed run. `check:mvp` adds Vite and Next.js browser tests to `check`. Tests create disposable fixture copies; do not edit a running `.runtime-*` directory as a source change.
+Always stop the fixture after testing, including after a failed run. `check:mvp` adds authenticated Vite/Next.js browser tests, a Next.js production build check, and review overlay scenarios to `check`. Tests create disposable fixture copies; do not edit a running `.runtime-*` directory as a source change.
 
 | Command | Use |
 | --- | --- |
+| `npm run check:style` | JavaScript and TypeScript lint rules |
 | `npm run typecheck` | TypeScript types |
 | `npm run check:boundaries` | Package dependency boundaries |
 | `npm run test:scripts` | Deployment, backup, canary, and other script behavior |
 | `npm test` | Application and package tests |
 | `npm run test:postgres` | Real database tests; requires an isolated `TEST_DATABASE_URL` |
-| `npm run test:frameworks` | Local authenticated Vite/Next.js browser tests |
+| `npm run test:frameworks` | Authenticated Vite/Next.js, production HTML, and review overlay tests |
 | `npm run test:frameworks:public` | Opt-in tests against your own deployed HTTPS Gateway |
+
+Run `npm run build` before invoking browser suites directly; their fixtures import the compiled integration packages.
 
 The public suite creates shares and revokes a reviewer's sessions. Configure dedicated accounts using the [public-path testing guide](docs/public-path-testing.md); it is not part of the default CI run.
 

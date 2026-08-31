@@ -9,6 +9,7 @@ import {
 } from "../../../packages/operations/src/index.ts";
 import { createClientAddressResolver } from "./client-address.ts";
 import { parsePublicContentOrigin } from "./public-content-origin.ts";
+import type { ReviewEventStreamPolicy } from "./review-http.ts";
 
 export type GatewayConfig = Readonly<{
   host: string;
@@ -63,11 +64,17 @@ export type GatewayConfig = Readonly<{
   maxPendingCarrierBytes?: number;
   maxCanaryWebSockets?: number;
   canaryWebSocketIdleTimeoutMs?: number;
+  reviewEventStreamPolicy?: ReviewEventStreamPolicy;
+  reviewEventRetention?: Readonly<{
+    maxEvents?: number;
+    maxEventAgeMs?: number;
+  }>;
 }>;
 
 const MAX_NODE_TIMER_MS = 2_147_483_647;
 const MAX_SESSION_HMAC_KEY_BYTES = 128;
 const MAX_PREVIOUS_SESSION_HMAC_KEYS = 3;
+const MAX_REVIEW_EVENT_RETENTION_MS = 365 * 24 * 60 * 60_000;
 
 export function readGatewayConfig(
   environment: Readonly<Record<string, string | undefined>>,
@@ -128,6 +135,41 @@ export function readGatewayConfig(
     environment.DATABASE_QUERY_TIMEOUT_MS,
     "DATABASE_QUERY_TIMEOUT_MS",
     MAX_NODE_TIMER_MS,
+  );
+  const reviewEventPollIntervalMs = optionalBoundedPositiveInteger(
+    environment.REVIEW_EVENT_POLL_INTERVAL_MS,
+    "REVIEW_EVENT_POLL_INTERVAL_MS",
+    MAX_NODE_TIMER_MS,
+  );
+  const reviewEventHeartbeatIntervalMs = optionalBoundedPositiveInteger(
+    environment.REVIEW_EVENT_HEARTBEAT_INTERVAL_MS,
+    "REVIEW_EVENT_HEARTBEAT_INTERVAL_MS",
+    MAX_NODE_TIMER_MS,
+  );
+  const reviewEventRetryMs = optionalBoundedPositiveInteger(
+    environment.REVIEW_EVENT_RETRY_MS,
+    "REVIEW_EVENT_RETRY_MS",
+    MAX_NODE_TIMER_MS,
+  );
+  const maxReviewEventConnections = optionalBoundedPositiveInteger(
+    environment.MAX_REVIEW_EVENT_CONNECTIONS,
+    "MAX_REVIEW_EVENT_CONNECTIONS",
+    100_000,
+  );
+  const maxReviewEventConnectionsPerAccount = optionalBoundedPositiveInteger(
+    environment.MAX_REVIEW_EVENT_CONNECTIONS_PER_ACCOUNT,
+    "MAX_REVIEW_EVENT_CONNECTIONS_PER_ACCOUNT",
+    10_000,
+  );
+  const maxReviewEvents = optionalBoundedPositiveInteger(
+    environment.MAX_REVIEW_EVENTS,
+    "MAX_REVIEW_EVENTS",
+    10_000_000,
+  );
+  const reviewEventRetentionMs = optionalBoundedPositiveInteger(
+    environment.REVIEW_EVENT_RETENTION_MS,
+    "REVIEW_EVENT_RETENTION_MS",
+    MAX_REVIEW_EVENT_RETENTION_MS,
   );
   const maxPendingTunnels = optionalBoundedPositiveInteger(
     environment.MAX_PENDING_TUNNELS,
@@ -192,6 +234,17 @@ export function readGatewayConfig(
   );
   if (maxForwardedForEntries !== undefined && trustedProxyCidrs === undefined) {
     throw new TypeError("MAX_FORWARDED_FOR_ENTRIES requires TRUSTED_PROXY_CIDRS");
+  }
+  if (
+    maxReviewEventConnections !== undefined &&
+    maxReviewEventConnectionsPerAccount !== undefined
+  ) {
+    assertSubLimit(
+      maxReviewEventConnectionsPerAccount,
+      maxReviewEventConnections,
+      "MAX_REVIEW_EVENT_CONNECTIONS_PER_ACCOUNT",
+      "MAX_REVIEW_EVENT_CONNECTIONS",
+    );
   }
   const maxOutstandingCarrierCredentials = optionalBoundedPositiveInteger(
     environment.MAX_OUTSTANDING_CARRIER_CREDENTIALS,
@@ -446,6 +499,27 @@ export function readGatewayConfig(
   if (canaryBearerToken !== undefined && canaryBearerToken.length > 512) {
     throw new Error("CANARY_BEARER_TOKEN must contain at most 512 characters");
   }
+  const reviewEventStreamPolicy: ReviewEventStreamPolicy = {
+    ...(reviewEventPollIntervalMs === undefined
+      ? {}
+      : { pollIntervalMs: reviewEventPollIntervalMs }),
+    ...(reviewEventHeartbeatIntervalMs === undefined
+      ? {}
+      : { heartbeatIntervalMs: reviewEventHeartbeatIntervalMs }),
+    ...(reviewEventRetryMs === undefined ? {} : { retryMs: reviewEventRetryMs }),
+    ...(maxReviewEventConnections === undefined
+      ? {}
+      : { maxConnections: maxReviewEventConnections }),
+    ...(maxReviewEventConnectionsPerAccount === undefined
+      ? {}
+      : { maxConnectionsPerAccount: maxReviewEventConnectionsPerAccount }),
+  };
+  const reviewEventRetention = {
+    ...(maxReviewEvents === undefined ? {} : { maxEvents: maxReviewEvents }),
+    ...(reviewEventRetentionMs === undefined
+      ? {}
+      : { maxEventAgeMs: reviewEventRetentionMs }),
+  };
 
   return {
     host,
@@ -477,6 +551,10 @@ export function readGatewayConfig(
       ? {}
       : { databaseConnectionTimeoutMs }),
     ...(databaseQueryTimeoutMs === undefined ? {} : { databaseQueryTimeoutMs }),
+    ...(Object.keys(reviewEventStreamPolicy).length === 0
+      ? {}
+      : { reviewEventStreamPolicy }),
+    ...(Object.keys(reviewEventRetention).length === 0 ? {} : { reviewEventRetention }),
     ...(maxPendingTunnels === undefined ? {} : { maxPendingTunnels }),
     ...(maxActiveTunnels === undefined ? {} : { maxActiveTunnels }),
     ...(maxTunnelsPerAccount === undefined ? {} : { maxTunnelsPerAccount }),

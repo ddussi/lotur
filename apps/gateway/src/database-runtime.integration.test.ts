@@ -12,6 +12,7 @@ import { Pool } from "pg";
 import {
   PostgresAuthRepository,
   PostgresOperationalStateRepository,
+  PostgresReviewRepository,
 } from "../../../packages/storage-postgres/src/index.ts";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
@@ -32,6 +33,7 @@ test("Gateway survives idle database disconnection and restores only persisted a
   try {
     const repository = new PostgresAuthRepository(pool);
     await repository.migrate();
+    await new PostgresReviewRepository(pool).migrate();
     await pool.query(`INSERT INTO rt_accounts
       (id, username, display_name, roles, password_hash, must_change_password, auth_version, created_at, updated_at)
       VALUES ('operator', 'operator', 'Operator', ARRAY['ADMIN'], 'unused', false, 1, now(), now())`);
@@ -52,6 +54,7 @@ test("Gateway survives idle database disconnection and restores only persisted a
     const child = spawn(process.execPath, [fileURLToPath(new URL("./main.ts", import.meta.url))], {
       env: {
         PATH: process.env.PATH,
+        NODE_ENV: "test",
         DATABASE_URL: connectionUrl.href,
         GATEWAY_HOST: "127.0.0.1",
         GATEWAY_PORT: String(address.port),
@@ -86,6 +89,8 @@ test("Gateway survives idle database disconnection and restores only persisted a
       return response.body;
     };
     await eventually(async () => assert.match(await readMetrics(), /review_tunnel_gateway_admission_ready 1/));
+
+    assert.equal((await getGateway(address.port, "/health/ready")).status, 200);
 
     // Prevent a refresh from hiding the outage before it can be observed.
     const lock = await pool.connect();

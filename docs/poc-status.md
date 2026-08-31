@@ -1,13 +1,13 @@
 # Review Tunnel 보안 MVP 구현 상태
 
-- 상태: Phase 2 애플리케이션 구현 완료, 실제 HTTPS 파일럿 검증 완료, 정식 운영 인수 대기
-- 기준일: 2026-09-06
+- 상태: 공유 기반·화면 맥락 리뷰 MVP 구현, 로컬 통합 검증 완료; 정식 운영 인수 대기
+- 기준일: 2026-09-07
 - 제품 방향 갱신: 2026-08-31
 - 런타임: TypeScript 5.9, Node.js 24
 - Carrier profile: `review-tunnel.v1`
 
 > [!NOTE]
-> 이 문서는 `0.1.0`의 안전한 공유 기반 구현 상태를 기록한다. 제품은 페이지·영역 댓글과 해결 흐름을 제공하는 리뷰 도구로 확장하기로 했으며, 해당 기능은 아직 구현되지 않았다. 다음 단계의 범위는 [화면 맥락 리뷰 설계](contextual-review.md)를 따른다.
+> 이 문서는 `0.1.0` 공유 기반과 화면 맥락 리뷰 MVP의 통합 상태를 기록한다. 기존 HTTPS 파일럿 결과는 리뷰 기능 통합 전의 공유·인증 검사이며, 새 리뷰 기능의 실제 HTTPS 운영 검증을 의미하지 않는다. 기능 범위는 [화면 맥락 리뷰 설계](contextual-review.md)를 따른다.
 
 ## 완료한 애플리케이션 범위
 
@@ -37,7 +37,45 @@
 - DB idle 연결 오류의 프로세스 종료 방지와 저장된 admission 상태를 따르는 복구
 - 브라우저의 정확한 Origin 검사·폼 CSP를 유지하는 로그인·비밀번호 변경 후 공유 화면 복귀
 
-## 자동 검증 결과
+- 별도 review 도메인 패키지의 Project·Review revision·Tunnel binding·PAGE comment 규칙과 저장소 포트
+- `--review-project`·`--review-revision` opt-in, Tunnel 활성화 뒤 binding, 실패 시 보상 종료와 성공 전 URL 비공개
+- PostgreSQL review schema와 소유자별 project, project별 revision, 정확한 Tunnel session binding 및 path 댓글 격리
+- 인증 선행, 역할·exact Origin·body 제한·`no-store`·예약 path 격리를 적용한 별도 Review Control/Content HTTP adapter
+- plain text만 렌더링하는 Shadow DOM sidebar와 `pushState`·`replaceState`·`popstate` path 갱신
+- additive PostgreSQL migration으로 저장하는 plain-text 답글과 기존 Phase 1 thread row 호환성
+- `DEVELOPER`의 해결·다시 열기, `expectedStatus` transaction 비교와 409 충돌 노출
+- `PAGE` 호환 `REGION_V1` 값 객체, 클릭 핀·드래그 영역, scroll·resize 재배치와 핀·목록 상호 강조
+- PostgreSQL transaction event log, 단조 cursor replay, heartbeat·연결·배압·보존 제한과 stale authorization을 적용한 Review SSE
+- 작성자 전용 수정, 작성자·`DEVELOPER` 삭제, 본문을 제거하는 tombstone과 `expectedVersion` 경합 처리
+- project·revision 참여자로 제한한 `@username` 멘션, 자기·중복 제거와 수신자별 읽음·안 읽음 내부 알림
+- generic bootstrap을 유지하는 dev-only Vite plugin과 Next.js config·root-layout integration
+- 최신 100개를 보장하는 댓글·답글 keyset pagination, 전체 열린 댓글 수와 안정적인 영역 핀 번호
+- session 최대 수명에 맞춘 binding 만료·선별 회수와 SSE burst 단일 in-flight·dirty 후속 조회
+- 비공개 workspace 의존성이 없는 Vite·Next 컴파일 tarball과 Next production HTML bootstrap 차단
+
+## 통합 코드 검증 결과
+
+2026-09-06~07에 공유 기반 수정과 화면 맥락 리뷰 MVP를 통합한 코드로 `npm run check:mvp`를 실행했다. Node.js 24.12.0, macOS arm64, Chrome, 격리된 PostgreSQL 17.6을 사용했다.
+
+| 검사 | 결과 |
+| --- | --- |
+| Biome·TypeScript·아키텍처 경계·빌드 | 통과 |
+| 애플리케이션·패키지 테스트 | 328개 통과, 실패·건너뜀 0개 |
+| 스크립트·배포·외부 패키지 설치 검사 | 51개 통과 |
+| 실제 브라우저 시나리오 | 4개 통과 |
+| 운영 Docker 이미지 | 6종 빌드·실행 진입점·non-root·MIT 포함 확인 |
+| npm 운영 의존성 감사 | 루트 및 별도 runtime manifest 모두 알려진 취약점 0개 |
+
+브라우저는 Vite의 로그인·HMR·권한 회수, Next.js의 초기 비밀번호 변경·RSC·Server Action·탐색·Fast Refresh·권한 회수, Next production HTML의 리뷰 스크립트 제외, 리뷰 오버레이의 댓글·답글·영역 핀·실시간 갱신·수정·삭제·멘션·알림·CSP·XSS·장애 표시를 검사했다. 로컬 HTTP와 테스트 저장소를 쓰는 오버레이 시나리오이며, PostgreSQL 저장·권한 경합은 별도 실연동 테스트로 확인했다.
+
+통합 과정에서 다음 두 누락을 보완했다.
+
+- Gateway 종료 시 이미 연결이 끊긴 세션의 리뷰 binding DB 정리도 완료될 때까지 기다린다.
+- 관리자 `migrate`가 리뷰 테이블도 생성한다. 빌드한 Admin CLI Docker 이미지에서도 리뷰 테이블 9개 생성과 반복 실행을 확인했다. 수정 전에는 실제 DB에서 `rt_review_projects`가 없다는 오류를 재현했고, 수정 후에는 빈 DB와 기존 인증 DB의 업그레이드·반복 실행을 통과했다.
+
+위 결과는 실제 운영 서버를 새 코드로 교체하거나 새 리뷰 기능을 공개 HTTPS에서 검증했다는 뜻은 아니다. 기존 HTTPS 파일럿은 아래 기록처럼 공유·인증 범위에 한정한다. 프로젝트별 사람 접근 목록도 아직 없다.
+
+## 기존 공유 기반 자동 검증 결과
 
 2026-09-06에 Node.js 24.12.0·macOS·Chrome에서 `npm run check:mvp`를 통과했다. 이번 리뷰와 개선 범위는 [전체 코드 리뷰 보고서](code-review-2026-09-06.md)에 기록했다.
 
@@ -69,14 +107,21 @@ PostgreSQL 검증은 [`compose.test.yml`](../compose.test.yml)의 PostgreSQL 17.
 
 이 인수 작업이 끝나기 전 상태는 “코드 완료”이지 “운영 공개 승인”이 아니다.
 
-## 다음 제품 단계: 화면 맥락 리뷰
+## 화면 맥락 리뷰 진행 상태
 
-공유 기반 위에 다음 기능을 순서대로 추가한다.
+완료한 화면 맥락 리뷰 MVP:
 
 1. stable Project·Review revision과 Tunnel binding
 2. 페이지 path 단위 댓글과 격리된 sidebar overlay
-3. 클릭 위치 영역 핀, 답글과 해결·다시 열기
-4. 인증된 Review API와 SSE 실시간 갱신
-5. Vite·Next.js integration 호환성 및 XSS·CSRF·프로젝트 격리 검증
+3. 인증된 Review API, XSS·CSRF·프로젝트별 데이터 구분와 실 PostgreSQL 검증
+4. `REVIEWER`·`DEVELOPER` 답글과 `DEVELOPER` 해결·다시 열기
+5. 상태 전이 경합, 해결된 스레드의 답글 거부와 stale authorization 검증
+6. 클릭 핀·드래그 영역과 정규화 `REGION_V1` anchor
+7. PostgreSQL event log 기반 Review SSE와 replay·보존·연결 제한
+8. 댓글·답글 수정·삭제 tombstone과 version 경합
+9. 참여자 멘션과 수신자별 내부 알림
+10. dev-only Vite·Next.js integration과 해당 모드의 framework E2E
+11. 댓글·답글 keyset pagination, 전체 열린 댓글 수와 영속 핀 번호
+12. binding lease 만료 회수, SSE burst 병합과 production·tarball 검증
 
-이 목록은 로드맵이며 위의 “완료한 애플리케이션 범위”에 포함되지 않는다.
+외부 알림, 스크린샷 저장, revision 간 자동 댓글 승계와 전체 편집 이력은 현재 범위에 포함하지 않는다.

@@ -19,6 +19,7 @@ test("Vite 8 supports login, HMR and revocation through an authenticated Gateway
   const runtime = await startRuntime("vite");
   try {
     await loginReviewer(page, runtime);
+    await expect(page.locator('script[src="/_review-tunnel/review/bootstrap.js"]')).toHaveCount(1);
     await expect(page.getByRole("heading", { name: "Vite through Review Tunnel" })).toBeVisible();
     await expect(page.getByTestId("hmr-marker")).toHaveText("vite-hmr-v1");
     await page.getByTestId("counter").click();
@@ -39,6 +40,7 @@ test("Next.js 16 supports authenticated RSC, Server Actions, navigation, Fast Re
   const runtime = await startRuntime("next");
   try {
     await loginReviewer(page, runtime);
+    await expect(page.locator('script[src="/_review-tunnel/review/bootstrap.js"]')).toHaveCount(1);
     await expect(page.getByRole("heading", { name: "Next.js through Review Tunnel" })).toBeVisible();
     await expect(page.getByTestId("rsc-stream")).toHaveText("next-rsc-stream-ready");
 
@@ -68,6 +70,58 @@ test("Next.js 16 supports authenticated RSC, Server Actions, navigation, Fast Re
   } finally {
     await page.close();
     await runtime.close();
+  }
+});
+
+test("Next.js production HTML excludes the review bootstrap", async () => {
+  const fixtureDirectory = await mkdtemp(
+    join(repositoryRoot, "tests", "frameworks", ".runtime-next-production-"),
+  );
+  await cp(join(fixtureRoot, "next"), fixtureDirectory, { recursive: true });
+  let server;
+  try {
+    const executable = join(repositoryRoot, "node_modules", "next", "dist", "bin", "next");
+    const environment = {
+      ...process.env,
+      NODE_ENV: "production",
+      NEXT_TELEMETRY_DISABLED: "1",
+      FORCE_COLOR: "0",
+    };
+    const build = spawn(process.execPath, [executable, "build", fixtureDirectory], {
+      cwd: repositoryRoot,
+      env: environment,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    await waitForProcess(build, "Next production build");
+    const port = await reservePort();
+    server = spawn(process.execPath, [
+      executable,
+      "start",
+      fixtureDirectory,
+      "--hostname",
+      "127.0.0.1",
+      "--port",
+      String(port),
+    ], {
+      cwd: repositoryRoot,
+      env: environment,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let output = "";
+    const capture = (chunk) => {
+      output = `${output}${chunk}`.slice(-8_000);
+    };
+    server.stdout.on("data", capture);
+    server.stderr.on("data", capture);
+    server.output = () => output;
+    await waitForHttp(`http://127.0.0.1:${port}/`, server);
+    const response = await fetch(`http://127.0.0.1:${port}/`);
+    const html = await response.text();
+    expect(response.status).toBe(200);
+    expect(html).not.toContain("/_review-tunnel/review/bootstrap.js");
+  } finally {
+    if (server !== undefined) await stopProcess(server);
+    await rm(fixtureDirectory, { recursive: true, force: true });
   }
 });
 
@@ -260,6 +314,25 @@ async function waitForHttp(url, child) {
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error(`framework readiness timed out: ${lastError}\n${child.output()}`);
+}
+
+async function waitForProcess(child, label) {
+  let output = "";
+  child.stdout.on("data", (chunk) => {
+    output = `${output}${chunk}`.slice(-12_000);
+  });
+  child.stderr.on("data", (chunk) => {
+    output = `${output}${chunk}`.slice(-12_000);
+  });
+  const [code, signal] = await onceProcessExit(child);
+  if (code !== 0) throw new Error(`${label} failed (${code ?? signal})\n${output}`);
+}
+
+function onceProcessExit(child) {
+  return new Promise((resolve, reject) => {
+    child.once("error", reject);
+    child.once("exit", (code, signal) => resolve([code, signal]));
+  });
 }
 
 async function reservePort() {

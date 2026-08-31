@@ -10,6 +10,7 @@ import {
   createCarrierAuthentication,
   type CarrierAuthentication,
 } from "./control-client.ts";
+import { bindReviewOrClose } from "./review-binding.ts";
 
 const clientArguments = process.argv.slice(2);
 if (
@@ -63,7 +64,25 @@ async function runClient(arguments_: readonly string[]): Promise<void> {
   process.once("SIGTERM", shutdown);
   try {
     const activation = await client.ready;
+    await bindReviewOrClose({
+      ...(options.review === undefined ? {} : { review: options.review }),
+      tunnelId: activation.tunnelId,
+      bindReview(binding) {
+        if (authentication === undefined) {
+          throw new Error("review mode requires an authenticated Control session");
+        }
+        return authentication.bindReview(binding);
+      },
+      closeTunnel() {
+        return client.close();
+      },
+    });
     console.log(`Tunnel ready: ${activation.shareUrl}`);
+    if (options.review !== undefined) {
+      console.log(
+        `Review: project=${options.review.projectSlug} revision=${options.review.revisionKey}`,
+      );
+    }
     console.log(
       `Forwarding the complete origin ${safeLocalOriginForDisplay(options.localOrigin)}; ` +
       "press Ctrl+C to stop.",

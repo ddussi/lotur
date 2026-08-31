@@ -4,13 +4,13 @@
 
 | 항목 | 내용 |
 | --- | --- |
-| 문서 상태 | Draft v0.9 — 리뷰 중심 제품 방향과 공유 기반 범위 분리 |
+| 문서 상태 | Draft v0.12 — 공유 기반과 화면 맥락 리뷰 MVP 상태 반영 |
 | 제품명 | Review Tunnel(가칭) |
 | 대상 독자 | 제품 담당자, 개발자, 인프라·보안 검토자 |
 | 문서 목적 | `0.1.0` 공유 기반의 범위, 핵심 흐름, 시스템 경계, 보안 기준과 검증 조건을 기록한다. |
 
 > [!NOTE]
-> Review Tunnel의 제품 방향은 “로컬 웹앱을 안전하게 공유하고 화면 위에서 바로 리뷰받는 도구”다. 이 문서의 4~15장은 현재 구현된 안전한 공유 기반을 중심으로 설명한다. 다음 단계인 페이지·영역 댓글, 스레드와 리뷰 버전 설계는 [화면 맥락 리뷰 제품·기술 설계](contextual-review.md)와 [ADR-0006](adr/0006-contextual-review-overlay.md)을 기준으로 한다.
+> Review Tunnel의 제품 방향은 “로컬 웹앱을 안전하게 공유하고 화면 위에서 바로 리뷰받는 도구”다. 이 문서의 4~15장은 안전한 공유 기반을 중심으로 설명한다. 현재 소스 트리는 stable Project·revision 기반 페이지·영역 댓글, 답글, 수정·삭제 tombstone, 해결·다시 열기, Review SSE, 참여자 멘션·내부 알림과 generic·Vite·Next.js integration을 구현했다. 세부 계약은 [화면 맥락 리뷰 제품·기술 설계](contextual-review.md)와 [ADR-0006](adr/0006-contextual-review-overlay.md)을 따른다.
 
 ## 1. 배경과 목적
 
@@ -26,14 +26,16 @@ Review Tunnel은 개발자 PC에서 실행 중인 로컬 개발 서버를 별도
 
 Tunnel Client가 배포된 Gateway에 아웃바운드 연결을 만들고 유지하면, Gateway는 관리자 발급 계정으로 인증·인가된 검토자의 HTTPS 요청, streaming 응답과 브라우저 WebSocket 연결을 해당 로컬 서버로 중계한다. 개발자 PC에는 외부 listener를 열지 않는다. 하나의 기준 도메인 아래에 콘텐츠 wildcard와 그 바깥의 control host를 둔다.
 
-`0.1.0`의 공유 대상은 하나의 로컬 origin이다. Review Tunnel은 브라우저가 사용하는 HTTP, HTTP streaming(SSE 포함), WebSocket 동작의 의미를 가능한 한 그대로 보존한다. HTTP 메서드의 이름이나 데이터 변경 여부를 제품이 판단하거나 앱을 읽기 전용으로 만들지 않는다. Gateway의 중계 개입은 인증, 예약 경로·자격 증명 격리, 고정 원본 라우팅, 프로토콜 안전성, 자원 제한과 관찰 가능성에 한정한다. 다음 단계의 리뷰 기능은 별도 예약 API와 격리 오버레이로 추가해 이 중계 경계를 유지한다.
+`0.1.0`의 공유 대상은 하나의 로컬 origin이다. Review Tunnel은 브라우저가 사용하는 HTTP, HTTP streaming(SSE 포함), WebSocket 동작의 의미를 가능한 한 그대로 보존한다. HTTP 메서드의 이름이나 데이터 변경 여부를 제품이 판단하거나 앱을 읽기 전용으로 만들지 않는다. Gateway의 중계 개입은 인증, 예약 경로·자격 증명 격리, 고정 원본 라우팅, 프로토콜 안전성, 자원 제한과 관찰 가능성에 한정한다. 리뷰 기능은 별도 예약 API와 격리 오버레이로 추가해 이 중계 경계를 유지한다.
 
 여기서 투명성은 byte-for-byte 전송이나 동일한 네트워크 프로토콜을 뜻하지 않는다. 브라우저와 로컬 개발 서버가 관찰하는 요청·응답·stream·WebSocket 메시지의 의미를 보존한다는 뜻이다.
 
 ### 1.3 단계별 성공의 한 문장 정의
 
 - **공유 기반 `0.1.0`:** 개발자가 공유 명령 하나로 임시 URL을 만들고, 관리자 발급 계정으로 인증한 검토자가 화면·API·실시간 갱신을 사용할 수 있다. 개발자가 공유를 종료하면 URL과 장기 연결도 함께 종료된다.
-- **다음 리뷰 MVP:** 검토자가 별도 설치 없이 페이지 또는 영역에 댓글을 남기고, 개발자가 답글과 해결 처리를 하며, 댓글이 Tunnel 재생성 후에도 동일 프로젝트·리뷰 버전에 유지된다.
+- **리뷰 Phase 1:** 검토자가 별도 설치 없이 현재 페이지에 댓글을 남기고, 댓글이 Tunnel 재생성 후에도 동일 프로젝트·리뷰 버전에 유지된다.
+- **리뷰 Phase 2 대화 슬라이스:** 검토자와 개발자가 답글을 남기고 개발자가 스레드를 해결·다시 연다.
+- **리뷰 MVP 완성:** 영역 핀·실시간 갱신·콘텐츠 수정/삭제·멘션/내부 알림과 Vite·Next.js integration을 제공한다.
 
 ## 2. 목표와 비목표
 
@@ -75,7 +77,7 @@ Review Tunnel이 책임지는 영역:
 - HTTP·streaming·WebSocket 의미 보존
 - Tunnel과 논리 stream의 수명주기, 취소, 흐름 제어와 자원 제한
 - Gateway 소유 자격 증명 격리와 운영 상태 관찰
-- 다음 리뷰 단계에서 프로젝트·리뷰 버전별 페이지·영역 댓글, 답글과 해결 상태 관리
+- 프로젝트·리뷰 버전별 페이지·영역 댓글, 답글, 해결 상태, 수정·삭제 tombstone과 내부 알림 관리
 
 로컬 개발 서버가 책임지는 영역:
 
@@ -192,14 +194,14 @@ Tunnel은 앱의 업무 의미를 판단하거나 바꾸지 않는다. 범용 TC
 - 네트워크가 일시적으로 끊기면 CLI는 재연결 중임을, 검토자에게는 일시적인 오프라인 상태를 표시한다.
 - 연결이 복구되면 같은 URL을 계속 사용한다. 복구할 수 없으면 CLI가 이전 URL의 만료와 공유 명령을 다시 실행해야 한다는 점을 분명히 알린다. 상세 상태 규칙은 8.4절을 따른다.
 
-### 5.4 화면 맥락 리뷰를 수행한다 — 다음 제품 단계
+### 5.4 화면 맥락 리뷰를 수행한다
 
 1. 개발자는 stable Project와 Review revision을 지정해 review 모드로 공유한다.
-2. 검토자는 공유 URL에서 현재 path의 페이지 댓글과 영역 핀을 확인한다.
-3. 검토자는 페이지 전체 또는 클릭한 위치에 댓글을 남긴다.
-4. 개발자와 검토자는 같은 스레드에서 답글을 주고받는다.
-5. 개발자는 수정 후 스레드를 해결 처리한다.
-6. Tunnel ID가 바뀌어도 같은 Project와 Review revision이면 댓글이 유지된다.
+2. 검토자는 공유 URL의 sidebar에서 현재 path의 페이지·영역 댓글과 답글을 확인하고 작성한다.
+3. 참여자는 콘텐츠를 수정·삭제하고 `@username`으로 기존 참여자에게 내부 알림을 보낼 수 있다.
+4. 개발자는 스레드를 해결하거나 다시 연다.
+5. Review SSE가 같은 Project·revision·path의 변경을 실시간으로 반영한다.
+6. Tunnel ID가 바뀌어도 같은 Project와 Review revision이면 댓글·답글·상태·알림이 유지된다.
 
 이 흐름의 상세 요구사항, 데이터 모델과 인수 기준은 [화면 맥락 리뷰 설계](contextual-review.md)에서 관리한다. 아래 6장부터 15장까지의 MVP 표는 `0.1.0` 공유 기반의 완료 기준이다.
 
@@ -376,12 +378,12 @@ SSE는 별도 도메인 파이프라인이 아니라 종료가 늦는 HTTP respo
 - 계정 정지, 비밀번호 초기화와 권한 변경 때 대상 계정의 세션과 열린 Tunnel·Stream을 회수
 - 비밀번호 구현과 저장소 구현을 Relay Core 및 UI에서 분리
 
-#### Review API·Overlay — 다음 제품 단계
+#### Review API·Overlay — 리뷰 MVP 구현 완료
 
 - stable Project와 Review revision을 Tunnel Session과 별도 수명주기로 관리
-- 페이지 댓글, 영역 anchor, 답글과 해결 상태를 PostgreSQL에 저장
-- 콘텐츠 host의 `/_review-tunnel/review/*` 예약 경로에서 인증된 API와 SSE 제공
-- 개발 서버 integration이 명시적으로 활성화한 Shadow DOM 오버레이 렌더링
+- 페이지·영역 댓글, 답글, 해결 상태, 수정·삭제 tombstone, 이벤트와 내부 알림을 PostgreSQL에 저장
+- 콘텐츠 host의 `/_review-tunnel/review/*` 예약 경로에서 인증된 API와 Review SSE를 제공
+- generic script 또는 Vite·Next.js integration이 명시적으로 활성화한 Shadow DOM 오버레이를 렌더링
 - 앱 Cookie·body·DOM 전체·화면 이미지를 자동 수집하지 않는 데이터 경계 유지
 - review 모드가 꺼졌거나 오버레이 로딩이 실패해도 Relay Data Plane의 앱 중계는 그대로 유지
 
@@ -1045,19 +1047,21 @@ POC는 인증과 HTTPS가 빠질 수 있으므로 격리된 개발 환경에서�
 
 이 단계의 보안·품질 인수 기준을 통과한 뒤에만 인증형 Gateway를 공개한다.
 
-2026-08-25 기준 애플리케이션 코드와 로컬 자동 검증은 완료했다. 실제 DNS·TLS·Ingress, secret manager, PostgreSQL 복구 drill, 대상 브라우저·프로젝트와 운영 소유권은 배포 환경 인수 항목으로 남는다. 상세 증거와 실행 절차는 [`poc-status.md`](poc-status.md)와 [`linux-deployment.md`](linux-deployment.md)를 따른다.
+2026-08-31 기준 애플리케이션 코드와 로컬 자동 검증은 완료했다. 실제 DNS·TLS·Ingress, secret manager, PostgreSQL 복구 drill, 대상 브라우저·프로젝트와 운영 소유권은 배포 환경 인수 항목으로 남는다. 상세 증거와 실행 절차는 [`poc-status.md`](poc-status.md)와 [`linux-deployment.md`](linux-deployment.md)를 따른다.
 
 ### Phase 3 — 화면 맥락 리뷰 MVP
 
-- stable Project·Review revision·Tunnel binding 저장 모델
-- 예약 Review API와 기존 content session 역할 검사 결합
-- 페이지 댓글과 클릭 위치 영역 핀
-- 답글, 해결·다시 열기와 SSE 실시간 갱신
-- Shadow DOM overlay와 Vite·Next.js·generic integration
-- 댓글 입력의 XSS·CSRF·rate limit·프로젝트 격리 테스트
-- 새 Tunnel에서도 동일 Project·revision 댓글이 유지되는 E2E
+- **Review Phase 1 완료:** stable Project·Review revision·Tunnel binding 저장 모델
+- **Review Phase 1 완료:** 예약 Review API와 기존 content session 역할 검사 결합
+- **Review Phase 1 완료:** 페이지 댓글과 generic Shadow DOM overlay
+- **Review Phase 1 완료:** 댓글 입력의 XSS·CSRF·크기 제한·프로젝트 격리 테스트
+- **Review Phase 1 완료:** 새 Tunnel에서도 동일 Project·revision 댓글 유지
+- **Review Phase 2 완료:** 답글, 해결·다시 열기와 optimistic 상태 충돌 처리
+- **Review MVP 완료:** 클릭 핀·드래그 영역과 PostgreSQL event log 기반 Review SSE
+- **Review MVP 완료:** 버전 기반 댓글·답글 수정·삭제 tombstone과 참여자 멘션·내부 알림
+- **Review MVP 완료:** Vite·Next.js integration과 해당 mode의 framework E2E
 
-세부 범위와 인수 기준은 [`contextual-review.md`](contextual-review.md)를 따른다. 이 단계가 끝나기 전에는 README와 릴리스 노트에서 화면 댓글 기능을 구현 완료로 표시하지 않는다.
+세부 범위와 인수 기준은 [`contextual-review.md`](contextual-review.md)를 따른다. README와 릴리스 노트에서는 구현 범위와 외부 알림·스크린샷·revision 자동 승계·전체 편집 이력 같은 비목표를 명확히 구분한다.
 
 ### Phase 4 — 제한된 파일럿
 
@@ -1111,7 +1115,7 @@ POC는 인증과 HTTPS가 빠질 수 있으므로 격리된 개발 환경에서�
 | D-13 | Credential 정책 | **구현 완료:** 60초·1회용·purpose·audience, active/previous HMAC overlap과 메모리 Resume secret | 완료 |
 | D-14 | 회수 운영 | **구현 완료:** 기본 5초 `auth_version` 확인, DB 오류 fail-closed, authorization max-age와 PostgreSQL 영속 kill switch. 정확한 SLO·소유자는 파일럿 승인 남음 | 파일럿 전 |
 | D-15 | Ingress 변경 통제 | version·digest pinning, admission과 독립된 canary, 결과 기록 뒤 별도 PostgreSQL 승인, drain·rollback 절차와 검사 스크립트 완료. 실제 환경 훈련 남음 | 배포 전 |
-| D-16 | 화면 맥락 리뷰 | **방향 확정·구현 전:** Project·revision 기반 페이지 댓글, 영역 핀, 답글·해결 상태. 선택적 Shadow DOM overlay와 예약 Review API 사용 | Phase 3 |
+| D-16 | 화면 맥락 리뷰 | **MVP 구현 완료:** Project·revision 기반 페이지·영역 댓글, 답글, 해결 상태, 수정·삭제 tombstone, Review SSE, 참여자 멘션·내부 알림, generic·Vite·Next.js integration | 완료 |
 
 ## 16. 향후 확장 후보
 
@@ -1121,7 +1125,7 @@ POC는 인증과 HTTPS가 빠질 수 있으므로 격리된 개발 환경에서�
 - 프로젝트 목록, 연결 상태와 요청 로그 Dashboard
 - `data-review-id` 기반 안정적인 요소 anchor
 - 사용자 확인을 거치는 선택적 스크린샷
-- 댓글 멘션·알림과 Git Pull Request 연동
+- 외부 이메일·메신저 알림과 Git Pull Request 연동
 - 여러 포트와 선택적 사설망 대상 공유
 - 로컬 HTTPS origin, custom CA와 명시적 self-signed 인증서 정책
 - HTTP/2 wire semantics, native gRPC, WebTransport와 QUIC

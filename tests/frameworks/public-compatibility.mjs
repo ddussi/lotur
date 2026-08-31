@@ -17,7 +17,7 @@ const access = JSON.parse(await readFile(accessFile, 'utf8'));
 const outputDirectory = await mkdtemp(join(tmpdir(), 'lotur-public-frameworks-'));
 const kinds = process.argv.length > 2 ? process.argv.slice(2) : ['vite', 'next'];
 assert.ok(kinds.every(kind => kind === 'vite' || kind === 'next'), 'Frameworks must be vite or next');
-console.log('Test artifacts: ' + outputDirectory);
+console.log(`Test artifacts: ${outputDirectory}`);
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
 const results = [];
 try {
@@ -29,23 +29,23 @@ try {
 }
 
 async function runFramework(kind) {
-  const directory = await mkdtemp(join(root, 'tests/frameworks/.runtime-public-' + kind + '-'));
+  const directory = await mkdtemp(join(root, `tests/frameworks/.runtime-public-${kind}-`));
   const context = await browser.newContext();
   const page = await context.newPage();
   const diagnostics = [];
   page.on('console', message => { if (message.type() === 'error' || message.type() === 'warning') diagnostics.push(message.text()); });
   page.on('pageerror', error => diagnostics.push(error.message));
-  page.on('requestfailed', request => diagnostics.push(new URL(request.url()).pathname + ': ' + request.failure()?.errorText));
+  page.on('requestfailed', request => diagnostics.push(`${new URL(request.url()).pathname}: ${request.failure()?.errorText}`));
   let framework;
   let client;
   let authentication;
   const steps = [];
-  const passed = (step) => { steps.push(step); console.log('PASS ' + kind + ': ' + step); };
+  const passed = (step) => { steps.push(step); console.log(`PASS ${kind}: ${step}`); };
   try {
     await cp(join(root, 'tests/frameworks/fixtures', kind), directory, { recursive: true });
     const port = await reservePort();
     framework = startFramework(kind, directory, port);
-    await waitForHttp('http://127.0.0.1:' + port + '/', framework);
+    await waitForHttp(`http://127.0.0.1:${port}/`, framework);
     authentication = await createCarrierAuthentication({
       controlUrl: access.controlUrl,
       username: access.accounts.developer.username,
@@ -53,14 +53,14 @@ async function runFramework(kind) {
     });
     const input = {
       gatewayUrl: access.gatewayUrl,
-      localOrigin: 'http://127.0.0.1:' + port,
+      localOrigin: `http://127.0.0.1:${port}`,
       tunnelId: authentication.tunnelId,
       carrierCredential: authentication.carrierCredential,
     };
     client = connectTunnelClient(input);
     const active = await client.ready;
     passed('Developer API login and WSS tunnel activation');
-    console.log('Public test URL (' + kind + '): ' + active.shareUrl);
+    console.log(`Public test URL (${kind}): ${active.shareUrl}`);
 
     const sockets = new Set();
     page.on('websocket', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); });
@@ -116,7 +116,7 @@ async function runFramework(kind) {
     }
 
     await expect.poll(() => sockets.size, { timeout: 10000 }).toBeGreaterThan(0);
-    const screenshot = join(outputDirectory, kind + '.png');
+    const screenshot = join(outputDirectory, `${kind}.png`);
     await page.screenshot({ path: screenshot, fullPage: true });
     await revokeReviewer();
     await expect.poll(() => sockets.size, { timeout: 15000 }).toBe(0);
@@ -127,7 +127,7 @@ async function runFramework(kind) {
     passed('Administrator revocation closes HMR and rejects subsequent requests');
     results.push({ framework: kind, shareUrl: active.shareUrl, tunnelClosedAfterTest: true, steps, screenshot, passedAt: new Date().toISOString() });
   } catch (error) {
-    await page.screenshot({path: join(outputDirectory, kind + '-failure.png'), fullPage: true}).catch(() => {});
+    await page.screenshot({path: join(outputDirectory, `${kind}-failure.png`), fullPage: true}).catch(() => {});
     console.error('Browser diagnostics:', diagnostics);
     console.error('Framework diagnostics:', framework?.output());
     throw error;
@@ -149,7 +149,7 @@ async function revokeReviewer() {
   const context = await browser.newContext();
   try {
     const page = await context.newPage();
-    await page.goto(access.controlUrl + '/login');
+    await page.goto(`${access.controlUrl}/login`);
     await login(page, access.accounts.admin);
     await expect(page.getByRole('heading', { name: '계정 관리', exact: true })).toBeVisible({ timeout: 15000 });
     const row = page.getByRole('row').filter({ has: page.getByText(access.accounts.reviewer.username, { exact: true }) });
@@ -173,7 +173,7 @@ function startFramework(kind, directory, port) {
 async function waitForHttp(url, child) {
   const deadline = Date.now() + 60000;
   while (Date.now() < deadline) {
-    if (child.exitCode !== null) throw new Error('Framework exited: ' + child.output());
+    if (child.exitCode !== null) throw new Error(`Framework exited: ${child.output()}`);
     try {
       const response = await fetch(url, { signal: AbortSignal.timeout(1000) });
       await response.body?.cancel();
@@ -181,7 +181,7 @@ async function waitForHttp(url, child) {
     } catch {}
     await delay(100);
   }
-  throw new Error('Framework startup timed out: ' + child.output());
+  throw new Error(`Framework startup timed out: ${child.output()}`);
 }
 async function reservePort() {
   const server = createServer();

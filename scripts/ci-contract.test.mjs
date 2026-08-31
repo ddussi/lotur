@@ -13,7 +13,7 @@ test("CI는 실제 PostgreSQL과 framework를 포함한 완료 게이트를 실�
   assert.match(workflow, /TEST_DATABASE_URL:/);
   assert.match(workflow, /npm ci/);
   assert.match(workflow, /npm run check:mvp/);
-  assert.match(workflow, /playwright install --with-deps chromium/);
+  assert.match(workflow, /playwright install --with-deps chrome/);
   assert.match(workflow, /npm audit --omit=dev/);
   for (const target of [
     "gateway",
