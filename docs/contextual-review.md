@@ -2,7 +2,9 @@
 
 > 상태: 화면 맥락 리뷰 MVP 구현 완료, 환경별 운영 인수 대기
 >
-> 기준일: 2026-09-01
+> 기준일: 2026-09-08
+>
+> 내부 팀 개선 사용법과 배포 설정: [내부 리뷰 안내](internal-review-guide.md). Control 리뷰함·초안 보존·필터·재검토·통합 알림을 추가했다.
 >
 > 현재 소스 트리는 stable Project·Review revision·Tunnel binding, 페이지·영역 댓글, 답글, 버전 기반 수정·삭제 tombstone, Developer 해결·다시 열기, Review SSE, 참여자 멘션·내부 알림, PostgreSQL 영속화, generic Shadow DOM sidebar와 Vite·Next.js integration을 구현한다.
 
@@ -84,9 +86,9 @@ sequenceDiagram
 ### 3.2 구현된 Phase 2 대화 슬라이스
 
 - `DEVELOPER`와 `REVIEWER`의 plain-text 답글
-- `OPEN`, `RESOLVED` 상태와 `DEVELOPER`의 해결·다시 열기
+- `OPEN`, `NEEDS_REVIEW`, `RESOLVED` 상태와 `DEVELOPER`의 해결·다시 열기
 - 해결된 스레드의 새 답글 거부
-- `expectedStatus`를 이용한 상태 변경 경합 감지
+- `expectedStatus`와 `expectedWorkflowVersion`을 함께 이용한 상태 변경 경합 감지
 - 기존 Phase 1 thread row를 유지하는 additive PostgreSQL migration
 
 ### 3.3 구현된 리뷰 MVP 완성 범위
@@ -130,17 +132,24 @@ x_ratio = click_x / document_width
 y_ratio = click_y / document_height
 ```
 
-저장 시 viewport 너비·높이와 문서 너비·높이도 진단 정보로 함께 기록한다. POINT는 너비·높이 0, RECT는 양수 크기를 갖는 `REGION_V1`으로 저장한다. path 이동, scroll과 resize 뒤 현재 문서 크기를 기준으로 다시 배치하고, 핀·영역과 sidebar 항목을 서로 강조한다.
+저장 시 viewport 너비·높이와 문서 너비·높이도 CSS pixel 단위로 함께 기록한다. POINT는 너비·높이 0, RECT는 양수 크기를 갖는 `REGION_V1`으로 저장한다. 요소 정보가 없는 기존 핀과 좌표 핀은 점선과 대략적인 좌표임을 표시한다. 현재 viewport 너비 또는 문서 너비·높이가 저장 값과 2px 넘게 다르면 핀을 숨기고 목록에 레이아웃 차이를 안내한다. 크기가 같아도 콘텐츠가 바뀌면 정확성을 보장하지 않는다.
 
-### 4.3 요소 anchor 확장
+`Hide all pins`로 핀을 모두 숨겨도 댓글은 유지된다. 각 댓글의 `Show pin`·`Hide pin`으로 필요한 핀만 켜고 끌 수 있다. 전역 설정은 같은 탭의 새로고침 뒤에도 유지되고, 개별 설정은 SSE 갱신 동안 유지하되 경로 이동·새로고침 때 초기화한다. 다른 검토자의 표시 설정이나 서버 데이터에는 영향을 주지 않는다. 사각 영역의 내부는 연하게 표시하며 앱 클릭을 가로채지 않는다.
 
-영역 핀이 검증된 뒤 다음 순서로 요소 anchor를 확장한다.
+댓글의 `Pin #…` 버튼은 표시 상태와 별개로 해당 핀을 켜고 그 위치로 이동한다. 세로·가로 페이지 스크롤과 요소가 속한 스크롤 컨테이너를 함께 이동한다.
+
+### 4.3 요소 anchor
+
+새 선택 영역의 중심 아래 요소부터 조상을 탐색해, 선택 영역 전체를 포함하고 페이지 안에서 유일한 다음 식별자를 찾는다.
 
 1. 앱이 명시한 안정적인 `data-review-id`
-2. 안정적인 `id`, 역할, 이름 등 제한된 속성 fingerprint
-3. tag, 제한된 텍스트 hash, 주변 bounding box와 좌표를 조합한 fallback
+2. `id` (문서 전체를 덮는 앱 wrapper는 제외)
 
-생성 시점의 CSS selector만 저장하는 방식은 DOM 삽입과 class hash 변경에 쉽게 깨지므로 단독 anchor로 사용하지 않는다. 요소를 다시 찾지 못하면 저장된 영역 좌표로 안전하게 fallback한다.
+`REGION_V1`의 선택적 `element`에 속성 이름·값과 요소 내부의 비율 좌표를 저장한다. 속성 이름은 `data-review-id`와 `id`만 허용하고, 값은 제어 문자 없이 1–256자로 제한하며 비율 좌표도 서버에서 검증한다. 임의 selector, class, 텍스트 또는 자식 순서로 대상을 추측하지 않는다. 기존 좌표 핀을 읽을 수 있고 JSONB의 선택적 필드를 사용하므로 DB schema 변경은 없다. 새 요소 정보가 있는 핀을 쓰는 Gateway는 모두 이 필드를 지원하는 버전이어야 한다.
+
+현재 요소의 크기와 위치를 기준으로 핀을 배치하므로 화면 크기가 바뀌어 카드가 다른 줄로 이동해도 해당 카드 안의 상대 영역을 따른다. 요소가 없거나 숨겨졌거나 식별자가 중복되면 잘못된 좌표로 대체하지 않고 핀을 숨긴 뒤 목록에 이유를 표시한다. 다시 사용 가능해지면 사용자의 표시 설정에 따라 복원한다. scroll·resize·DOM 변경·이미지 로딩·CSS 전환 완료 시 위치를 갱신한다.
+
+이는 DOM 요소 내부의 상대 영역이며 React 컴포넌트나 텍스트 줄을 식별하는 기능은 아니다. 개발자가 식별자를 다른 콘텐츠에 재사용하면 잘못 연결될 수 있다. iframe·Shadow DOM 내부 탐색과 스크린샷은 지원하지 않으며, 기존 핀에는 요소 식별자가 자동으로 추가되지 않는다.
 
 ### 4.4 스레드 상태
 
@@ -215,10 +224,10 @@ GET    /_review-tunnel/review/notifications?path=/products
 PATCH  /_review-tunnel/review/notifications/:notificationId
 ```
 
-`PATCH .../status`는 `path`, `expectedStatus`, `status`를 받고 transaction 안에서 예상 상태를 비교한다. 답글과 상태 API도 현재 binding의 정확한 revision과 path에서만 thread를 찾는다.
+`PATCH .../status`는 `path`, `expectedStatus`, `expectedWorkflowVersion`, `status`를 받고 transaction 안에서 예상 상태를 비교한다. 답글과 상태 API도 현재 binding의 정확한 revision과 path에서만 thread를 찾는다.
 댓글·답글 PATCH·DELETE는 `path`와 `expectedVersion`을 받고, PATCH는 새 plain-text `body`도 받는다. 알림 PATCH는 `path`와 `read`를 받는다. 다른 project·revision·path 또는 수신자에게 속한 ID는 존재하지 않는 것처럼 응답한다.
 
-댓글 목록 응답은 현재 page에 적재한 `comments`, 전체 `openCount`, 다음 오래된 page의 불투명 `pageInfo.nextCursor`를 반환한다. 각 thread의 초기 답글에도 독립적인 `replyPageInfo`가 있다. cursor는 생성 시각과 ID의 정렬 위치만 담고 exact 형식으로 검증한다.
+댓글 목록 응답은 현재 page에 적재한 `comments`, 전체 `openCount`, 다음 오래된 page의 불투명 `pageInfo.nextCursor`를 반환한다. 각 thread의 초기 답글에도 독립적인 `replyPageInfo`가 있다. 새 cursor는 생성 시각·ID와 revision·path·상태·작성자 조건의 해시를 담고 exact 형식으로 검증한다. 다른 조건에 재사용하면 거부한다.
 
 `context`는 현재 사용자의 표시 이름과 역할, 프로젝트, 리뷰 버전 및 쓰기 가능 여부만 반환한다. 앱 Cookie, 앱 응답 본문이나 Gateway credential은 반환하지 않는다.
 
@@ -238,7 +247,7 @@ Tunnel과 리뷰 데이터의 수명주기를 분리한다.
 
 `revision_key`의 기본 후보는 Git commit SHA다. 현재 CLI는 `--review-project`와 `--review-revision`을 함께 받은 경우에만 review mode를 켜며 revision 값을 자동 생성하지 않는다. Git 정보를 사용할 수 없으면 개발자가 변경되지 않는 opaque revision ID를 명시한다. Branch 이름만으로는 시간이 지나면서 내용이 바뀌므로 단독 revision key로 사용하지 않는다.
 
-`Comment thread`는 `PAGE` 또는 `REGION_V1` anchor를 가지며 `OPEN`과 `RESOLVED`를 전이한다. Reply는 별도 테이블에 저장한다. 댓글·답글 삭제는 row를 제거하지 않고 본문을 비운 tombstone으로 보존한다. 이벤트와 알림은 콘텐츠 mutation transaction에서 함께 기록한다.
+`Comment thread`는 `PAGE` 또는 `REGION_V1` anchor를 가지며 `OPEN`·`NEEDS_REVIEW`·`RESOLVED`를 전이한다. Reply는 별도 테이블에 저장한다. 댓글·답글 삭제는 row를 제거하지 않고 본문을 비운 tombstone으로 보존한다. 이벤트와 알림은 콘텐츠 mutation transaction에서 함께 기록한다.
 
 Anchor 예시:
 
@@ -329,10 +338,10 @@ Tunnel URL을 안다는 사실만으로 댓글을 읽거나 쓸 수 없다. 기�
 - 정식 integration을 켠 상태의 프레임워크 E2E
 - 버전 기반 댓글·답글 수정·삭제 tombstone
 - 참여자 제한 멘션과 내부 알림
+- 핀 전체·개별 표시 전환과 고유한 `data-review-id`·`id` 기반 요소 anchor
 
 ### 단계 3 — 파일럿 후 확장
 
-- `data-review-id` 기반 요소 anchor
 - 선택적 스크린샷과 민감 정보 확인 흐름
 - 외부 이메일·메신저·push 알림
 - 전체 편집 이력
@@ -368,7 +377,7 @@ Tunnel URL을 안다는 사실만으로 댓글을 읽거나 쓸 수 없다. 기�
 
 ### 8.3 리뷰 MVP 완성 — 구현 완료
 
-1. 영역 핀은 같은 revision과 유사한 문서 크기에서 저장 위치에 다시 표시된다.
+1. 요소 핀은 화면 폭 변경과 DOM 이동 뒤에도 같은 식별자의 상대 영역을 가리킨다. 찾을 수 없는 대상과 크기가 달라진 좌표 핀은 이유를 표시하고 숨긴다. 전체·개별 표시 전환은 댓글과 다른 검토자 화면을 변경하지 않는다.
 2. Review SSE가 권한이 확인된 프로젝트·revision 범위 안에서 실시간 변경을 전달한다.
 3. 정식 Vite·Next.js integration을 켠 fixture의 탐색과 갱신이 정상 동작한다.
 4. 작성자 수정과 작성자·Developer 삭제가 권한·열린 상태·`expectedVersion`을 지키며 삭제 본문은 tombstone에서 제거된다.
@@ -391,3 +400,14 @@ Tunnel URL을 안다는 사실만으로 댓글을 읽거나 쓸 수 없다. 기�
 | 표시 이름 | 기존 account `display_name` | 변경 이력과 비활성 계정 표시 방식 |
 
 이 표의 결정이 바뀌어도 Tunnel relay protocol `review-tunnel.v1`에 리뷰 데이터 메시지를 추가하지 않는다. 리뷰 기능은 Gateway의 인증된 HTTP API와 저장소 경계에서 독립적으로 발전시킨다.
+
+
+### 2026-09 내부 팀 개선의 구현 선택
+
+- Control `/reviews`와 `/api/reviews/*`는 Control 쿠키와 기존 인증 제한을 사용한다. Content 쿠키는 이를 대신할 수 없다. 영속 프로젝트·revision 접근은 현재 Tunnel binding 검사와 별도이며, 서로 섞인 접근 문맥은 거부한다.
+- Control 목록은 답글을 읽지 않는 요약 조회다. 상세에서 최근 답글과 더 오래된 답글을 읽는다. SSE 재연결과 이미 로드한 오래된 콘텐츠의 재조회는 초안 DOM을 유지한다.
+- 새 JSON 요청 상한은 UTF-8 기준 64KiB다. 댓글 본문 자체의 4,000자 상한은 유지한다.
+- 모든 Review 이벤트 쓰기는 트랜잭션의 행 잠금보다 먼저 동일 advisory lock을 획득한다. 작은 내부 팀에서 이벤트 ID와 커밋 순서를 맞추기 위한 선택이며, 대규모 배포의 쓰기 처리량은 별도 검토한다.
+- 알림의 `source_key`는 원인 mutation의 콘텐츠 ID·버전 또는 재검토 버전이다. `(recipient_account_id, source_key)`가 중복을 막고 SSE 보존 삭제와 독립적이다. 새 답글의 멘션·참여 알림도 수신자별로 합친다.
+- 리뷰함은 별도 장시간 SSE 연결을 추가하지 않고 상세를 1.5초마다, 닫힌 알림 패널을 2초마다 재조회한다. 숨긴 탭에서는 멈춘다. 열린 알림 목록은 읽기 중 흔들리지 않게 자동 교체하지 않는다. 이는 기존 계정별 연결 한도를 더 점유하지 않기 위한 구현 선택이다.
+- 앱의 댓글 이동은 Content의 예약 `focus` 경로에서 현재 계정·Tunnel session·revision을 확인하고, 60초의 탭 내부 선택 정보만 남긴 뒤 정상 path로 이동한다. 오버레이는 선택 정보를 한 번 소비하고 인증된 단건 API로 재검증한다. 계획의 서버 티켓 대신 각 단계에서 기존 Content 인증을 확인하며, 이동 정보가 권한을 대신하지 않는다.

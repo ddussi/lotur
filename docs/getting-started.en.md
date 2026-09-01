@@ -102,6 +102,24 @@ The sidebar supports page comments, click pins, drag-selected regions, and repli
 
 Mentions notify only the project owner or existing participants in that revision. Notifications are visible only to the recipient and stay inside Review Tunnel. Review changes arrive through a separate SSE connection. Page navigation reloads feedback for the current path. Per-project membership, screenshots, external alerts, automatic revision carry-over, and complete edit history are outside this alpha.
 
+### Pin placement and visibility
+
+Click **Hide all pins** to hide the markers while keeping every comment in the sidebar. Click **Show pin** on a comment to display that pin, and **Hide pin** to turn it off again. **Show all pins** restores all loaded pins. The global setting survives reloads in the same browser tab; individual choices survive live comment updates but reset on navigation or reload. These controls affect your view, not other reviewers or saved comments. Region interiors remain clickable and use a light tint.
+
+Click the **Pin #…** button to reveal and jump to that pin, including when it is already enabled but outside the viewport.
+
+Give important elements a stable identity that stays the same across screen sizes:
+
+```html
+<button data-review-id="checkout-submit">Place order</button>
+```
+
+For a new click or drag selection, the overlay looks for a unique `data-review-id`, then a unique `id`, on the element under the selection's center or its ancestors. The entire selection must fit inside that element. A whole-page wrapper `id` is excluded. The pin stores its relative position inside the identified element and follows that element when responsive layout, scrolling, or DOM updates move it. This identifies a DOM element, not a React component or a particular line of text. Use small, meaningful targets and keep identities unique and stable; reusing an identity for different content can still misplace feedback.
+
+When the element is missing, hidden, or its identity is duplicated, its marker is hidden and the sidebar explains why. It reappears when the target becomes available, unless you turned that pin off. The overlay does not guess a replacement element.
+
+Selections without a suitable identity, including existing pins, keep page coordinates. They show a dashed outline, an **Approximate page coordinates** label, and the original viewport dimensions in CSS pixels. If the current viewport width or document dimensions differ by more than 2 CSS pixels, the marker is hidden with a layout notice. Matching dimensions cannot guarantee matching content, so these remain approximate. Existing pins do not gain element identities automatically; create a new pin after adding an identity when precise placement across layouts matters. Screenshots, text-range tracking, and targeting inside iframes or Shadow DOM are not provided.
+
 ## Install a Gateway: prerequisites
 
 The remaining steps are for the operator, once per deployment.

@@ -17,7 +17,7 @@ Review Tunnel의 현재 구현은 인증된 검토자에게 로컬 웹앱의 HTT
 2. 오버레이는 Shadow DOM을 사용해 검토 대상 앱의 CSS·DOM과 격리한다.
 3. Gateway는 콘텐츠 host의 `/_review-tunnel/review/*` 예약 경로에서 asset, 인증된 Review API와 실시간 이벤트를 직접 제공한다. 이 요청은 로컬 앱으로 전달하지 않는다.
 4. 댓글과 답글은 PostgreSQL에 저장하고 stable Project 및 review revision에 귀속한다. Tunnel은 현재 revision을 노출하는 임시 binding만 가진다.
-5. 첫 리뷰 MVP는 page anchor와 비율 좌표 region anchor를 지원한다. 안정적인 `data-review-id` 요소 anchor는 후속 확장으로 둔다.
+5. page anchor와 비율 좌표 region anchor를 지원한다. `REGION_V1`의 선택적 요소 정보로 고유한 `data-review-id`·`id`와 요소 내부 비율 좌표를 저장한다. 식별할 수 없는 대상은 임의 좌표로 대체하지 않고 표시를 보류한다.
 6. 리뷰 데이터는 기존 `review-tunnel.v1` Carrier 메시지에 넣지 않는다.
 7. HTML 응답 자동 rewrite와 브라우저 확장은 기본 전달 방식으로 사용하지 않는다.
 
@@ -31,7 +31,7 @@ Phase 1은 page anchor, stable Project·revision, 임시 Tunnel binding, Postgre
 - 앱 중계 계층의 의미 투명성과 리뷰 데이터 저장 수명주기를 분리할 수 있다.
 - Vite, Next.js와 generic 앱마다 얇은 integration을 유지해야 한다.
 - strict CSP를 포함한 프레임워크별 호환성 검증이 필요하다.
-- 좌표 anchor는 레이아웃이 크게 바뀌면 부정확할 수 있으므로 불확실 상태와 fallback UX가 필요하다.
+- 좌표 anchor는 레이아웃이 바뀌면 부정확할 수 있다. 좌표 핀에는 작성 크기와 대략적인 위치임을 표시하며, viewport 너비나 문서 크기가 달라지면 숨긴다. 전체·개별 핀 표시 전환은 브라우저의 표시 상태로만 관리한다.
 
 ## 재검토 조건
 

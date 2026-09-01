@@ -1,0 +1,56 @@
+**내부 팀 리뷰 개선 — 구현·검증 기록**
+
+기준: 2026-09-08. 승인 계획: [개선 계획](review-improvement-plan-2026-09-07.md). 사용법: [내부 리뷰 안내](internal-review-guide.md).
+
+계획의 0–3단계 기능을 작업 트리에 구현했다. 기존 핀 개선 10개 파일을 보존했다. HEAD는 e41541c이며 커밋·푸시·배포는 하지 않았다. 착수 전 변경 백업은 `/private/tmp/lotur-before-improvements-20260908.patch`다.
+
+- [x] 댓글·답글 초안과 편집 DOM 보존, 경로별 초안, 인라인 편집·충돌 시 입력 유지
+- [x] 이미 불러온 댓글·답글 범위를 다시 읽어 오래된 수정·삭제 갱신
+- [x] SSE 연결 복구 후 목록 재조회와 이벤트 커밋 순서 잠금
+- [x] 한국어 4,000자 입력을 수용하는 64KiB JSON 요청 제한
+- [x] 패널 접기, 모바일 하단 패널, 서버 상태·작성자 필터와 문맥별 커서
+- [x] Control 리뷰함: 영속 프로젝트·버전·전체 페이지 목록, 오프라인 상세·답글·편집
+- [x] 영구 댓글 링크, 로그인·비밀번호 변경 후 복귀, 활성 앱의 댓글로 이동
+- [x] 전체 프로젝트의 내 알림, 50개 커서 페이지, 미확인 수·읽음 필터
+- [x] 답글 참여자 알림, 멘션 중복 억제, 참여자 멘션 자동완성
+- [x] 재검토 요청·작성자 확인·보완, 회차별 알림, workflow version·영속 처리 기록
+- [x] 기능 활성화 설정·DB readiness, 공유 중지 시 리뷰함 읽기 전용
+- [x] 전체 검사, PostgreSQL 통합, 운영 이미지 빌드·실행, 모바일·리뷰함 시각 확인
+- [x] 임시 DB의 동시 목록 조회 부하 점검
+- [ ] 실제 팀의 수정 작업 2회 파일럿과 공개 HTTPS 인수: 실제 사용자·배포 환경에서 진행할 후속 확인
+
+**검증 결과**
+
+| 검사 | 결과 | 로그 |
+| --- | --- | --- |
+| `npm run check:mvp` | 스타일·타입·경계·빌드, 스크립트 51개, Node 테스트 333개, 브라우저 14개 통과 | `/private/tmp/lotur-final-check.log` |
+| `npm run test:postgres` | 실제 PostgreSQL 통합 15개 통과, 환경 미설정으로 건너뛴 항목 없음 | `/private/tmp/lotur-final-postgres.log` |
+| 선택 댓글 표시 회귀 | 같은 브라우저 시나리오 3회 통과 | `/private/tmp/lotur-focus-regression.log` |
+| 한국어 IME 조합 중 갱신 | 조합 중 입력 보존 브라우저 회귀 1개 통과 | `/private/tmp/lotur-ime-check.log` |
+| 마지막 UI 수정 검증 | 입력·처리 기록 펼침 유지·알림 수 갱신·모바일 관련 3개 통과 | `/private/tmp/lotur-final-ui-followup.log` |
+| 최종 스타일·diff 검사 | 오류 없음 | `/private/tmp/lotur-final-style.log` |
+| Docker Gateway 이미지 | 최종 빌드, 런타임 모듈 로딩·스크립트 파싱·Gateway liveness 통과 | `/private/tmp/lotur-docker-final-build.log`, `/private/tmp/lotur-docker-final-smoke.log` |
+
+마지막 UI 수정은 전체 검사 이후 발견한 details 펼침 상태·IME 조합 표시 보존과 명시적 변경 후 알림 수 재조회다. 관련 브라우저 검사를 다시 수행했고 최종 운영 이미지도 다시 빌드했다. Node 전체 테스트 333개에는 PostgreSQL 통합 검사도 포함된다. 검사 수를 모두 더해 서로 다른 테스트 수라고 해석하지 않는다.
+
+브라우저 회귀는 초안 손실, 101번째 오래된 댓글의 삭제 반영, 한국어 4,000자, 필터를 바꾼 뒤 초안 복귀, 다른 창 편집 충돌, 로그인 복귀·오프라인 답글, 원 앱에 예약 경로가 전달되지 않는 댓글 이동, 재검토·알림·멘션, 공유 중지와 외부 Origin 거부, 모바일을 다룬다. DB 검사는 이벤트 writer 순서, 다른 프로젝트/세션 접근 거부, 상태 동시 변경, 비활성 작성자, 반복 migration, SSE 이벤트 삭제 후 처리 기록 유지, 알림 수신자·회차 분리를 확인한다.
+
+**부하 점검**
+
+로컬 Docker PostgreSQL 17.6, Node 24.12.0, DB pool 10개에서 프로젝트 3개·각 revision 댓글 2,000개·큰 스레드 답글 200개·계정 8개 데이터를 준비했다. 16개 동시 목록 조회를 6회 실행하고 준비 회차를 제외한 80개를 측정했다.
+
+- 중앙값 13.5ms, p95 19.9ms, 최대 21.0ms.
+- 요약 목록 최대 응답 35,962바이트. 답글 본문을 조회하지 않는지 확인했다.
+- 대표 미해결 목록 쿼리는 `rt_review_threads_revision_created_idx`를 사용했다.
+- 서버 서비스·DB 조회 측정이다. HTTP 인증, TLS, 실제 네트워크와 렌더링 시간은 포함하지 않는다. 16개 실제 브라우저 탭의 동시 수정 후 반영 p95는 아직 측정하지 않았다.
+- 원본 결과: `/private/tmp/lotur-review-load.json`, 실행 스크립트: `/private/tmp/lotur-review-load.mjs`. 측정용 schema는 실행 후 삭제했다.
+
+**운영 시 알아둘 점**
+
+migration 18–20을 적용하고 모든 Gateway를 새 상태를 읽는 버전으로 교체한 뒤 `REVIEW_WORKFLOW_ENABLED=true`로 새 재검토 요청을 켠다. 실제 Gateway 실행의 기본값은 꺼짐이다. Content 접근은 정확한 Tunnel/session/revision을 요구하고, Control 접근은 별도로 저장된 project/revision 관계를 확인한다. DEVELOPER·REVIEWER에게 배포 전체의 리뷰가 보이는 작은 내부 팀 정책이다.
+
+계획과 달라진 구현 선택은 문서화했다. 리뷰함은 추가 SSE 대신 상세 1.5초·알림 2초 재조회를 사용하고 숨긴 탭에서는 멈춘다. 열린 알림 목록은 읽는 중 자동 교체하지 않는다. 앱 이동은 서버 티켓을 만들지 않고 예약 Content 경로와 단건 조회 양쪽에서 기존 인증·revision을 확인하며, 60초짜리 탭 선택 정보는 한 번만 소비한다. 앱 query/hash는 저장하거나 추가하지 않는다.
+
+초안은 탭 메모리에만 있다. 새로고침·탭 종료를 넘는 초안 저장, 다른 revision으로의 자동 이전, 프로젝트별 ACL·외부 초대·외부 알림은 이번 범위에 포함하지 않는다. 활성 앱 후보는 현재 Gateway가 확인하는 세션만 보여 준다.
+
+테스트용 DB 컨테이너 `lotur-improvements-db`는 검증 후 종료·삭제했다. 로컬 검토용 운영 이미지는 `lotur-review-improvements:local`이다. 실행 중인 서비스나 공개 배포를 변경하지 않았다.
