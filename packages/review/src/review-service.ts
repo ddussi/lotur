@@ -1,7 +1,8 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 import {
   ReviewError,
+  encodeReviewPageCursor,
   extractMentionUsernames,
   normalizeAuthorizationVersion,
   normalizeCommentBody,
@@ -20,6 +21,9 @@ import {
   type PageCommentThread,
   type ReviewActor,
   type ReviewBindingContext,
+  type ReviewProject,
+  type ReviewRevision,
+  type ReviewTunnelBinding,
   type ReviewReply,
   type ReviewAnchor,
   type ReviewThreadStatus,
@@ -37,25 +41,43 @@ export type ReviewService = ReturnType<typeof createReviewService>;
 export function createReviewService(input: Readonly<{
   repository: ReviewRepository;
   generateId?: () => string;
+  workflowEnabled?: boolean;
   now?: () => Date;
 }>) {
   const generateId = input.generateId ?? randomUUID;
   const now = input.now ?? (() => new Date());
 
+  type Context = { project: ReviewProject; revision: ReviewRevision; binding?: ReviewTunnelBinding };
+  const repositoryAccess = (context: Context) => context.binding === undefined
+    ? { controlProjectId: context.project.id }
+    : { tunnelId: context.binding.tunnelId, sessionId: context.binding.sessionId };
   const requireBindingContext = async (binding: Readonly<{
     actor: ReviewActor;
-    tunnelId: string;
-    sessionId: string;
-  }>): Promise<ReviewBindingContext> => {
-    if (!binding.actor.capabilities.canRead) {
-      throw new ReviewError("FORBIDDEN", "review access is not allowed");
+    tunnelId?: string;
+    sessionId?: string;
+    controlProjectId?: string;
+    controlRevisionId?: string;
+  }>): Promise<Context> => {
+    if (!binding.actor.capabilities.canRead) throw new ReviewError("FORBIDDEN", "review access is not allowed");
+    if (binding.controlProjectId !== undefined || binding.controlRevisionId !== undefined) {
+      if (binding.tunnelId !== undefined || binding.sessionId !== undefined ||
+          binding.controlProjectId === undefined || binding.controlRevisionId === undefined) {
+        throw new ReviewError("INVALID_INPUT", "review access scope is invalid");
+      }
+      const context = await input.repository.findRevisionContext(
+        normalizeOpaqueReviewId(binding.controlProjectId, "project id"),
+        normalizeOpaqueReviewId(binding.controlRevisionId, "revision id"),
+      );
+      if (context === undefined) throw new ReviewError("NOT_FOUND", "review revision was not found");
+      return context;
+    }
+    if (binding.tunnelId === undefined || binding.sessionId === undefined) {
+      throw new ReviewError("INVALID_INPUT", "review tunnel scope is required");
     }
     const tunnelId = normalizeOpaqueReviewId(binding.tunnelId, "tunnel id");
     const sessionId = normalizeOpaqueReviewId(binding.sessionId, "session id");
     const context = await input.repository.findBindingContext({ tunnelId, sessionId });
-    if (context === undefined) {
-      throw new ReviewError("NOT_FOUND", "review binding was not found");
-    }
+    if (context === undefined) throw new ReviewError("NOT_FOUND", "review binding was not found");
     if (context.binding.expiresAt.getTime() <= now().getTime()) {
       await input.repository.removeTunnelBinding({ tunnelId, sessionId });
       throw new ReviewError("NOT_FOUND", "review binding has expired");
@@ -65,8 +87,10 @@ export function createReviewService(input: Readonly<{
 
   const createComment = async (command: Readonly<{
     actor: ReviewActor;
-    tunnelId: string;
-    sessionId: string;
+    tunnelId?: string;
+    sessionId?: string;
+    controlProjectId?: string;
+    controlRevisionId?: string;
     routePath: string;
     body: string;
   }>, anchor: ReviewAnchor): Promise<PageCommentThread> => {
@@ -98,8 +122,7 @@ export function createReviewService(input: Readonly<{
       actorAuthorizationVersion: normalizeAuthorizationVersion(
         command.actor.authorizationVersion,
       ),
-      tunnelId: context.binding.tunnelId,
-      sessionId: context.binding.sessionId,
+      ...repositoryAccess(context),
     });
     if (result.status === "STALE_AUTHORIZATION") {
       throw new ReviewError("FORBIDDEN", "review authorization is stale");
@@ -112,8 +135,10 @@ export function createReviewService(input: Readonly<{
 
   const mutationContext = async (command: Readonly<{
     actor: ReviewActor;
-    tunnelId: string;
-    sessionId: string;
+    tunnelId?: string;
+    sessionId?: string;
+    controlProjectId?: string;
+    controlRevisionId?: string;
   }>) => {
     const context = await requireBindingContext(command);
     return {
@@ -144,8 +169,62 @@ export function createReviewService(input: Readonly<{
   };
 
   return {
+    getFeatures() { return { workflowVersion: 1, canRequestReview: input.workflowEnabled ?? true }; },
+
     checkHealth(): Promise<void> {
       return input.repository.checkHealth();
+    },
+
+    async listInbox(actor: ReviewActor, query: { before?: string; unreadOnly?: boolean } = {}) {
+      if (!actor.capabilities.canRead) throw new ReviewError("FORBIDDEN", "review access is not allowed");
+      return input.repository.listInbox({ actorAccountId: actor.accountId, unreadOnly: query.unreadOnly ?? false,
+        ...(query.before === undefined ? {} : { before: normalizeReviewNotificationId(query.before) }) });
+    },
+
+    async setInboxRead(actor: ReviewActor, id: string, read: boolean, threadId?: string) {
+      if (!actor.capabilities.canRead) throw new ReviewError("FORBIDDEN", "review access is not allowed");
+      const notification = await input.repository.findNotificationForAccount(normalizeReviewNotificationId(id), actor.accountId);
+      if (notification === undefined || (threadId !== undefined && notification.threadId !== threadId)) throw new ReviewError("NOT_FOUND", "notification was not found");
+      const context = await input.repository.findRevisionContext(undefined, notification.revisionId);
+      if (context === undefined) throw new ReviewError("NOT_FOUND", "review revision was not found");
+      const result = await input.repository.setNotificationRead({ notificationId: id, revisionId: notification.revisionId,
+        routePath: notification.routePath, controlProjectId: context.project.id, read,
+        actor: { accountId: actor.accountId, displayName: actor.displayName }, actorAuthorizationVersion: actor.authorizationVersion, changedAt: now() });
+      if (result.status !== "UPDATED") throw new ReviewError(result.status === "STALE_AUTHORIZATION" ? "FORBIDDEN" : "NOT_FOUND", "notification update failed");
+      return result.notification;
+    },
+
+    async listMentionCandidates(query: Parameters<typeof requireBindingContext>[0] & { prefix: string }) {
+      const context = await requireBindingContext(query);
+      if (!/^[a-z0-9._-]{0,63}$/.test(query.prefix)) throw new ReviewError("INVALID_INPUT", "mention prefix is invalid");
+      return input.repository.listMentionCandidates(context.revision.id, query.prefix);
+    },
+
+    async listProjects(actor: ReviewActor) {
+      if (!actor.capabilities.canRead) throw new ReviewError("FORBIDDEN", "review access is not allowed");
+      return input.repository.listProjects();
+    },
+
+    async listRevisions(actor: ReviewActor, projectId: string) {
+      if (!actor.capabilities.canRead) throw new ReviewError("FORBIDDEN", "review access is not allowed");
+      return input.repository.listRevisions(normalizeOpaqueReviewId(projectId, "project id"));
+    },
+
+    async getThreadForControl(actor: ReviewActor, threadId: string) {
+      if (!actor.capabilities.canRead) throw new ReviewError("FORBIDDEN", "review access is not allowed");
+      const thread = await input.repository.findThread(normalizeOpaqueReviewId(threadId, "thread id"));
+      if (thread === undefined) throw new ReviewError("NOT_FOUND", "review thread was not found");
+      const context = await input.repository.findRevisionContext(undefined, thread.revisionId);
+      if (context !== undefined) return { ...context, thread };
+      throw new ReviewError("NOT_FOUND", "review revision was not found");
+    },
+
+    async getThread(query: Parameters<typeof requireBindingContext>[0] & { commentId: string; routePath?: string }) {
+      const context = await requireBindingContext(query);
+      const thread = await input.repository.findThread(normalizeOpaqueReviewId(query.commentId, "comment id"));
+      if (thread === undefined || thread.revisionId !== context.revision.id ||
+        (query.routePath !== undefined && thread.routePath !== normalizeRoutePath(query.routePath))) throw new ReviewError("NOT_FOUND", "review thread was not found");
+      return thread;
     },
 
     async bindTunnel(command: Readonly<{
@@ -218,17 +297,22 @@ export function createReviewService(input: Readonly<{
 
     async getContext(query: Readonly<{
       actor: ReviewActor;
-      tunnelId: string;
-      sessionId: string;
+      tunnelId?: string;
+      sessionId?: string;
+      controlProjectId?: string;
+      controlRevisionId?: string;
     }>) {
       const context = await requireBindingContext(query);
       return {
         project: {
+          id: context.project.id,
           slug: context.project.slug,
           displayName: context.project.displayName,
         },
-        revision: { key: context.revision.key },
+        revision: { id: context.revision.id, key: context.revision.key },
+        features: { workflowVersion: 1, canRequestReview: input.workflowEnabled ?? true },
         principal: {
+          accountId: query.actor.accountId,
           username: query.actor.username,
           displayName: query.actor.displayName,
           canComment: query.actor.capabilities.canComment,
@@ -239,8 +323,10 @@ export function createReviewService(input: Readonly<{
 
     async createPageComment(command: Readonly<{
       actor: ReviewActor;
-      tunnelId: string;
-      sessionId: string;
+      tunnelId?: string;
+      sessionId?: string;
+      controlProjectId?: string;
+      controlRevisionId?: string;
       routePath: string;
       body: string;
     }>): Promise<PageCommentThread> {
@@ -249,8 +335,10 @@ export function createReviewService(input: Readonly<{
 
     async createRegionComment(command: Readonly<{
       actor: ReviewActor;
-      tunnelId: string;
-      sessionId: string;
+      tunnelId?: string;
+      sessionId?: string;
+      controlProjectId?: string;
+      controlRevisionId?: string;
       routePath: string;
       body: string;
       anchor: unknown;
@@ -260,8 +348,10 @@ export function createReviewService(input: Readonly<{
 
     async createReply(command: Readonly<{
       actor: ReviewActor;
-      tunnelId: string;
-      sessionId: string;
+      tunnelId?: string;
+      sessionId?: string;
+      controlProjectId?: string;
+      controlRevisionId?: string;
       commentId: string;
       routePath: string;
       body: string;
@@ -293,8 +383,7 @@ export function createReviewService(input: Readonly<{
         actorAuthorizationVersion: normalizeAuthorizationVersion(
           command.actor.authorizationVersion,
         ),
-        tunnelId: context.binding.tunnelId,
-        sessionId: context.binding.sessionId,
+        ...repositoryAccess(context),
       });
       if (result.status === "STALE_AUTHORIZATION") {
         throw new ReviewError("FORBIDDEN", "review authorization is stale");
@@ -310,16 +399,20 @@ export function createReviewService(input: Readonly<{
 
     async changePageCommentStatus(command: Readonly<{
       actor: ReviewActor;
-      tunnelId: string;
-      sessionId: string;
+      tunnelId?: string;
+      sessionId?: string;
+      controlProjectId?: string;
+      controlRevisionId?: string;
       commentId: string;
       routePath: string;
       expectedStatus: ReviewThreadStatus;
+      expectedWorkflowVersion?: number;
       status: ReviewThreadStatus;
     }>): Promise<PageCommentThread> {
-      if (!command.actor.capabilities.canManageProject) {
+      if (!command.actor.capabilities.canComment) {
         throw new ReviewError("FORBIDDEN", "thread status management is not allowed");
       }
+      if (command.status === "NEEDS_REVIEW" && input.workflowEnabled === false) throw new ReviewError("FORBIDDEN", "review requests are not enabled yet");
       const context = await requireBindingContext(command);
       const transition = normalizeThreadStatusTransition(
         command.expectedStatus,
@@ -330,6 +423,8 @@ export function createReviewService(input: Readonly<{
         revisionId: context.revision.id,
         routePath: normalizeRoutePath(command.routePath),
         ...transition,
+        expectedWorkflowVersion: normalizeContentVersion(command.expectedWorkflowVersion ?? 1),
+        actorCanManageProject: command.actor.capabilities.canManageProject,
         actor: {
           accountId: normalizeOpaqueReviewId(command.actor.accountId, "account id"),
           displayName: command.actor.displayName,
@@ -337,10 +432,10 @@ export function createReviewService(input: Readonly<{
         actorAuthorizationVersion: normalizeAuthorizationVersion(
           command.actor.authorizationVersion,
         ),
-        tunnelId: context.binding.tunnelId,
-        sessionId: context.binding.sessionId,
+        ...repositoryAccess(context),
         changedAt: now(),
       });
+      if (result.status === "REVIEWER_UNAVAILABLE") throw new ReviewError("REVIEWER_UNAVAILABLE", "the original reviewer is disabled or has no review access");
       if (result.status === "STALE_AUTHORIZATION") {
         throw new ReviewError("FORBIDDEN", "review authorization is stale");
       }
@@ -355,27 +450,59 @@ export function createReviewService(input: Readonly<{
 
     async listPageCommentPage(query: Readonly<{
       actor: ReviewActor;
-      tunnelId: string;
-      sessionId: string;
-      routePath: string;
+      tunnelId?: string;
+      sessionId?: string;
+      controlProjectId?: string;
+      controlRevisionId?: string;
+      routePath?: string;
       before?: string;
+      status?: "OPEN" | "RESOLVED" | "ALL";
+      author?: "me";
     }>) {
       const context = await requireBindingContext(query);
-      return input.repository.listPageCommentPage({
+      const routePath = query.routePath === undefined && query.controlProjectId !== undefined
+        ? undefined : normalizeRoutePath(query.routePath ?? "");
+      if (query.status !== undefined && !["OPEN", "RESOLVED", "ALL"].includes(query.status)) {
+        throw new ReviewError("INVALID_INPUT", "review status filter is invalid");
+      }
+      if (query.author !== undefined && query.author !== "me") {
+        throw new ReviewError("INVALID_INPUT", "review author filter is invalid");
+      }
+      const status = query.status === "ALL" ? undefined : query.status;
+      const authorAccountId = query.author === "me" ? query.actor.accountId : undefined;
+      const scope = createHash("sha256").update(JSON.stringify([
+        context.revision.id, routePath, status ?? "ALL", authorAccountId ?? null,
+      ])).digest("hex");
+      const before = normalizeReviewPageCursor(query.before);
+      if (before !== undefined && before.scope !== scope &&
+          (before.scope !== undefined || status !== undefined || authorAccountId !== undefined)) {
+        throw new ReviewError("INVALID_INPUT", "review cursor does not match its filters");
+      }
+      const page = await input.repository.listPageCommentPage({
         revisionId: context.revision.id,
-        routePath: normalizeRoutePath(query.routePath),
-        ...(query.before === undefined
-          ? {}
-          : { before: normalizeReviewPageCursor(query.before)! }),
+        ...(routePath === undefined ? {} : { routePath }),
+        ...(before === undefined ? {} : { before }),
+        ...(status === undefined ? {} : { status }),
+        ...(authorAccountId === undefined ? {} : { authorAccountId }),
         limit: DEFAULT_PAGE_COMMENT_LIMIT,
+        summaryOnly: query.controlProjectId !== undefined,
         replyLimit: DEFAULT_REPLY_LIMIT_PER_THREAD,
       });
+      const next = normalizeReviewPageCursor(page.pageInfo.nextCursor);
+      return {
+        ...page,
+        pageInfo: next === undefined ? page.pageInfo : {
+          ...page.pageInfo, nextCursor: encodeReviewPageCursor({ ...next, scope }),
+        },
+      };
     },
 
     async listReplyPage(query: Readonly<{
       actor: ReviewActor;
-      tunnelId: string;
-      sessionId: string;
+      tunnelId?: string;
+      sessionId?: string;
+      controlProjectId?: string;
+      controlRevisionId?: string;
       commentId: string;
       routePath: string;
       before?: string;
@@ -398,8 +525,10 @@ export function createReviewService(input: Readonly<{
 
     async listEvents(query: Readonly<{
       actor: ReviewActor;
-      tunnelId: string;
-      sessionId: string;
+      tunnelId?: string;
+      sessionId?: string;
+      controlProjectId?: string;
+      controlRevisionId?: string;
       routePath: string;
       afterId?: string;
     }>) {
@@ -413,8 +542,7 @@ export function createReviewService(input: Readonly<{
         actorAuthorizationVersion: normalizeAuthorizationVersion(
           query.actor.authorizationVersion,
         ),
-        tunnelId: context.binding.tunnelId,
-        sessionId: context.binding.sessionId,
+        ...repositoryAccess(context),
       });
       if (result.status === "STALE_AUTHORIZATION") {
         throw new ReviewError("FORBIDDEN", "review authorization is stale");
@@ -427,8 +555,10 @@ export function createReviewService(input: Readonly<{
 
     async listNotifications(query: Readonly<{
       actor: ReviewActor;
-      tunnelId: string;
-      sessionId: string;
+      tunnelId?: string;
+      sessionId?: string;
+      controlProjectId?: string;
+      controlRevisionId?: string;
       routePath: string;
     }>) {
       const context = await requireBindingContext(query);
@@ -438,8 +568,7 @@ export function createReviewService(input: Readonly<{
         limit: DEFAULT_REVIEW_NOTIFICATION_LIMIT,
         actorAccountId: normalizeOpaqueReviewId(query.actor.accountId, "account id"),
         actorAuthorizationVersion: normalizeAuthorizationVersion(query.actor.authorizationVersion),
-        tunnelId: context.binding.tunnelId,
-        sessionId: context.binding.sessionId,
+        ...repositoryAccess(context),
       });
       if (result.status === "STALE_AUTHORIZATION") {
         throw new ReviewError("FORBIDDEN", "review authorization is stale");
@@ -452,8 +581,10 @@ export function createReviewService(input: Readonly<{
 
     async setNotificationRead(command: Readonly<{
       actor: ReviewActor;
-      tunnelId: string;
-      sessionId: string;
+      tunnelId?: string;
+      sessionId?: string;
+      controlProjectId?: string;
+      controlRevisionId?: string;
       notificationId: string;
       routePath: string;
       read: boolean;
@@ -469,8 +600,7 @@ export function createReviewService(input: Readonly<{
           displayName: command.actor.displayName,
         },
         actorAuthorizationVersion: normalizeAuthorizationVersion(command.actor.authorizationVersion),
-        tunnelId: context.binding.tunnelId,
-        sessionId: context.binding.sessionId,
+        ...repositoryAccess(context),
         changedAt: now(),
       });
       if (result.status === "STALE_AUTHORIZATION") {
@@ -484,8 +614,10 @@ export function createReviewService(input: Readonly<{
 
     async updateComment(command: Readonly<{
       actor: ReviewActor;
-      tunnelId: string;
-      sessionId: string;
+      tunnelId?: string;
+      sessionId?: string;
+      controlProjectId?: string;
+      controlRevisionId?: string;
       commentId: string;
       routePath: string;
       expectedVersion: number;
@@ -506,8 +638,7 @@ export function createReviewService(input: Readonly<{
         mentionUsernames: extractMentionUsernames(normalizedBody),
         actor: mutation.actor,
         actorAuthorizationVersion: mutation.actorAuthorizationVersion,
-        tunnelId: mutation.context.binding.tunnelId,
-        sessionId: mutation.context.binding.sessionId,
+        ...repositoryAccess(mutation.context),
         changedAt: now(),
       });
       if (result.status === "UPDATED") return result.thread;
@@ -516,8 +647,10 @@ export function createReviewService(input: Readonly<{
 
     async deleteComment(command: Readonly<{
       actor: ReviewActor;
-      tunnelId: string;
-      sessionId: string;
+      tunnelId?: string;
+      sessionId?: string;
+      controlProjectId?: string;
+      controlRevisionId?: string;
       commentId: string;
       routePath: string;
       expectedVersion: number;
@@ -534,8 +667,7 @@ export function createReviewService(input: Readonly<{
         actor: mutation.actor,
         actorCanManageProject: mutation.actorCanManageProject,
         actorAuthorizationVersion: mutation.actorAuthorizationVersion,
-        tunnelId: mutation.context.binding.tunnelId,
-        sessionId: mutation.context.binding.sessionId,
+        ...repositoryAccess(mutation.context),
         changedAt: now(),
       });
       if (result.status === "UPDATED") return result.thread;
@@ -544,8 +676,10 @@ export function createReviewService(input: Readonly<{
 
     async updateReply(command: Readonly<{
       actor: ReviewActor;
-      tunnelId: string;
-      sessionId: string;
+      tunnelId?: string;
+      sessionId?: string;
+      controlProjectId?: string;
+      controlRevisionId?: string;
       commentId: string;
       replyId: string;
       routePath: string;
@@ -568,8 +702,7 @@ export function createReviewService(input: Readonly<{
         mentionUsernames: extractMentionUsernames(normalizedBody),
         actor: mutation.actor,
         actorAuthorizationVersion: mutation.actorAuthorizationVersion,
-        tunnelId: mutation.context.binding.tunnelId,
-        sessionId: mutation.context.binding.sessionId,
+        ...repositoryAccess(mutation.context),
         changedAt: now(),
       });
       if (result.status === "UPDATED") return result.reply;
@@ -578,8 +711,10 @@ export function createReviewService(input: Readonly<{
 
     async deleteReply(command: Readonly<{
       actor: ReviewActor;
-      tunnelId: string;
-      sessionId: string;
+      tunnelId?: string;
+      sessionId?: string;
+      controlProjectId?: string;
+      controlRevisionId?: string;
       commentId: string;
       replyId: string;
       routePath: string;
@@ -598,8 +733,7 @@ export function createReviewService(input: Readonly<{
         actor: mutation.actor,
         actorCanManageProject: mutation.actorCanManageProject,
         actorAuthorizationVersion: mutation.actorAuthorizationVersion,
-        tunnelId: mutation.context.binding.tunnelId,
-        sessionId: mutation.context.binding.sessionId,
+        ...repositoryAccess(mutation.context),
         changedAt: now(),
       });
       if (result.status === "UPDATED") return result.reply;

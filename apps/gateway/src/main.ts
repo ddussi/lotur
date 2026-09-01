@@ -56,7 +56,7 @@ if (
     config.reviewEventRetention,
   );
   if (config.autoMigrate) await reviewRepository.migrate();
-  reviewService = createReviewService({ repository: reviewRepository });
+  reviewService = createReviewService({ repository: reviewRepository, workflowEnabled: config.reviewWorkflowEnabled ?? false });
   if (deploymentIdentity === undefined) {
     throw new Error("authenticated Gateway has no deployment identity");
   }

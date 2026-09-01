@@ -45,6 +45,71 @@ const otherDeveloper: ReviewActor = {
   displayName: "Other Developer",
 };
 
+test("PostgreSQL offline workflow survives migration and keeps notifications recipient scoped", {
+  skip: databaseUrl === undefined ? "TEST_DATABASE_URL is not configured" : false,
+}, async () => {
+  const schema = `rt_review_${randomBytes(8).toString("hex")}`;
+  const admin = new Pool({ connectionString: databaseUrl, max: 1 });
+  await admin.query(`CREATE SCHEMA ${schema}`);
+  const pool = new Pool({ connectionString: databaseUrl, max: 8, options: `-c search_path=${schema}` });
+  try {
+    await new PostgresAuthRepository(pool).migrate();
+    const repository = new PostgresReviewRepository(pool);
+    await repository.migrate();
+    await insertAccount(pool, developer, ["DEVELOPER"]);
+    await insertAccount(pool, reviewer, ["REVIEWER"]);
+    await insertAccount(pool, otherDeveloper, ["REVIEWER"]);
+    const service = createReviewService({ repository });
+    const tunnel = { tunnelId: "offline", sessionId: "offline-session" };
+    const binding = await service.bindTunnel({ ...tunnel, actor: developer, tunnelOwnerAccountId: developer.accountId, projectSlug: "offline", revisionKey: "v1" });
+    const thread = await service.createPageComment({ ...tunnel, actor: reviewer, routePath: "/hidden-page", body: "Please check" });
+    await service.removeTunnelBinding(tunnel);
+    const control = { controlProjectId: binding.project.id, controlRevisionId: binding.revision.id };
+    const base = { ...control, commentId: thread.id, routePath: thread.routePath };
+    await assert.rejects(service.getThread({ ...tunnel, actor: reviewer, commentId: thread.id }), { code: "NOT_FOUND" });
+    await assert.rejects(service.createReply({ ...base, controlProjectId: "another-project", actor: reviewer, body: "Wrong scope" }), { code: "NOT_FOUND" });
+    await service.createReply({ ...base, actor: developer, body: "Fixed @review-reviewer" });
+    const inbox = await service.listInbox(reviewer);
+    assert.equal(inbox.notifications.length, 1);
+    assert.equal(inbox.unreadCount, 1);
+    await assert.rejects(service.setInboxRead(developer, inbox.notifications[0]!.id, true), { code: "NOT_FOUND" });
+    await service.setInboxRead(reviewer, inbox.notifications[0]!.id, true);
+    assert.equal((await service.listInbox(reviewer)).unreadCount, 0);
+    assert.equal((await service.listMentionCandidates({ ...control, actor: reviewer, prefix: "review-d" }))[0]?.username, developer.username);
+    await pool.query("UPDATE rt_accounts SET enabled = false WHERE id = $1", [reviewer.accountId]);
+    await assert.rejects(service.changePageCommentStatus({ ...base, actor: developer, expectedStatus: "OPEN", status: "NEEDS_REVIEW", expectedWorkflowVersion: 1 }), { code: "REVIEWER_UNAVAILABLE" });
+    await pool.query("UPDATE rt_accounts SET enabled = true WHERE id = $1", [reviewer.accountId]);
+    await service.changePageCommentStatus({ ...base, actor: developer, expectedStatus: "OPEN", status: "NEEDS_REVIEW", expectedWorkflowVersion: 1 });
+    await repository.migrate(); // Repeat migration with live NEEDS_REVIEW data.
+    await repository.checkHealth();
+    const filtered = await service.listPageCommentPage({ ...control, actor: reviewer, status: "OPEN" });
+    assert.equal(filtered.comments[0]?.status, "NEEDS_REVIEW");
+    assert.equal(filtered.openCount, 1);
+    await service.createReply({ ...base, actor: reviewer, body: "Still reviewing" });
+    await assert.rejects(service.changePageCommentStatus({ ...base, actor: { ...otherDeveloper, capabilities: reviewer.capabilities }, expectedStatus: "NEEDS_REVIEW", status: "RESOLVED", expectedWorkflowVersion: 2 }), { code: "FORBIDDEN" });
+    const concurrent = await Promise.allSettled([
+      service.changePageCommentStatus({ ...base, actor: reviewer, expectedStatus: "NEEDS_REVIEW", status: "OPEN", expectedWorkflowVersion: 2 }),
+      service.changePageCommentStatus({ ...base, actor: reviewer, expectedStatus: "NEEDS_REVIEW", status: "RESOLVED", expectedWorkflowVersion: 2 }),
+    ]);
+    assert.equal(concurrent.filter(item => item.status === "fulfilled").length, 1);
+    await pool.query("DELETE FROM rt_review_events");
+    const restarted = createReviewService({ repository: new PostgresReviewRepository(pool) });
+    const detail = await restarted.getThreadForControl(reviewer, thread.id);
+    assert.equal(detail.thread.workflowVersion, 3);
+    assert.equal(detail.thread.workflowHistory?.length, 2);
+    const requestNotices = (await restarted.listInbox(reviewer)).notifications.filter(item => item.reason === "WORKFLOW_REQUEST");
+    assert.equal(requestNotices.length, 1);
+    assert.ok(requestNotices[0]?.readAt);
+    const outcomes = (await restarted.listInbox(developer)).notifications.filter(item => item.reason === "WORKFLOW_RESULT");
+    assert.equal(outcomes.length, 1);
+    assert.equal(outcomes[0]?.workflowVersion, requestNotices[0]?.workflowVersion);
+    assert.equal((await restarted.listProjects(reviewer))[0]?.id, binding.project.id);
+    assert.equal((await restarted.listRevisions(reviewer, binding.project.id))[0]?.id, binding.revision.id);
+  } finally {
+    await pool.end(); await admin.query(`DROP SCHEMA ${schema} CASCADE`); await admin.end();
+  }
+});
+
 test("PostgreSQL persists and isolates review projects, revisions, bindings, and page comments", {
   skip: databaseUrl === undefined ? "TEST_DATABASE_URL is not configured" : false,
 }, async () => {
@@ -140,6 +205,7 @@ test("PostgreSQL persists and isolates review projects, revisions, bindings, and
         height: 0.4,
         document: { width: 1440, height: 3200 },
         viewport: { width: 1280, height: 720 },
+        element: { attribute: "data-review-id", value: "secondary-action", x: 0.1, y: 0.2, width: 0.5, height: 0.4 },
       },
     });
     const reply = await service.createReply({
@@ -786,3 +852,75 @@ async function insertAccount(
     ],
   );
 }
+
+test("PostgreSQL publishes review events in commit order across concurrent writers", {
+  skip: databaseUrl === undefined ? "TEST_DATABASE_URL is not configured" : false,
+}, async () => {
+  const schema = `rt_review_order_${randomBytes(8).toString("hex")}`;
+  const admin = new Pool({ connectionString: databaseUrl, max: 1 });
+  await admin.query(`CREATE SCHEMA ${schema}`);
+  const pool = new Pool({ connectionString: databaseUrl, max: 6, options: `-c search_path=${schema}` });
+  const inserted = Promise.withResolvers<void>();
+  const commit = Promise.withResolvers<void>();
+  const secondStarted = Promise.withResolvers<void>();
+  let armed = false;
+  let paused = false;
+  const database = new Proxy(pool, {
+    get(target, property) {
+      if (property === "connect") return async () => {
+        const client = await target.connect();
+        return new Proxy(client, {
+          get(connection, member) {
+            if (member === "query") return async (...arguments_: unknown[]) => {
+              const sql = String(arguments_[0]);
+              if (armed && paused && (sql.includes("pg_advisory_xact_lock") || sql.includes("INSERT INTO rt_review_events"))) {
+                secondStarted.resolve();
+              }
+              const result = await Reflect.apply(connection.query, connection, arguments_);
+              if (armed && !paused && sql.includes("INSERT INTO rt_review_events")) {
+                paused = true;
+                inserted.resolve();
+                await commit.promise;
+              }
+              return result;
+            };
+            const value = Reflect.get(connection, member);
+            return typeof value === "function" ? value.bind(connection) : value;
+          },
+        });
+      };
+      const value = Reflect.get(target, property);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+  let writes: Promise<unknown>[] = [];
+  try {
+    await new PostgresAuthRepository(pool).migrate();
+    const repository = new PostgresReviewRepository(database);
+    await repository.migrate();
+    await insertAccount(pool, developer, ["DEVELOPER"]);
+    const service = createReviewService({ repository });
+    const query = { actor: developer, tunnelId: "ordered-tunnel", sessionId: "ordered-session", routePath: "/" };
+    await service.bindTunnel({ ...query, tunnelOwnerAccountId: developer.accountId, projectSlug: "ordered", revisionKey: "revision" });
+    armed = true;
+    const first = service.createPageComment({ ...query, body: "First, delayed commit" });
+    writes = [first];
+    await inserted.promise;
+    const second = service.createPageComment({ ...query, body: "Second writer" });
+    writes.push(second);
+    await secondStarted.promise;
+    // A live subscriber must not advance past an event from an uncommitted writer.
+    assert.deepEqual(await service.listEvents({ ...query, afterId: "0" }), []);
+    commit.resolve();
+    const [firstThread, secondThread] = await Promise.all([first, second]);
+    const events = await service.listEvents({ ...query, afterId: "0" });
+    assert.deepEqual(events.map(event => event.threadId), [firstThread.id, secondThread.id]);
+    assert.deepEqual((await service.listEvents({ ...query, afterId: events[0]!.id })).map(event => event.threadId), [secondThread.id]);
+  } finally {
+    commit.resolve();
+    await Promise.allSettled(writes);
+    await pool.end();
+    await admin.query(`DROP SCHEMA ${schema} CASCADE`);
+    await admin.end();
+  }
+});

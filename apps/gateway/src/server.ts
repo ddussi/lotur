@@ -1,3 +1,5 @@
+import { reviewActorFromPrincipal } from "./review-http.ts";
+import { createReviewControlHandler } from "./review-control.ts";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import {
   createServer,
@@ -418,6 +420,11 @@ export function createGatewayServer(
     : createReviewHttpHandler({
         service: options.reviewService,
         resolveTunnel: resolveReviewTunnel,
+        controlOrigin(tunnel) {
+          const origin = new URL(tunnel.publicOrigin);
+          origin.hostname = options.controlHost ?? `control.${contentDomain}`;
+          return origin.origin;
+        },
         ...(options.reviewEventStreamPolicy === undefined
           ? {}
           : { eventStreamPolicy: options.reviewEventStreamPolicy }),
@@ -480,7 +487,25 @@ export function createGatewayServer(
     },
     ...(reviewHttp === undefined
       ? {}
-      : { clientControlExtension: reviewHttp.clientControlExtension }),
+      : { clientControlExtension: reviewHttp.clientControlExtension,
+          reviewControlExtension: createReviewControlHandler({
+            service: options.reviewService!,
+            isReadOnly: () => killSwitchEnabled,
+            async activeTargets(principal, revisionId, threadId) {
+              const targets: { url: string; label: string }[] = [];
+              for (const session of sessions.values()) {
+                const target = resolveReviewTunnel(session.tunnelId);
+                if (!target?.active) continue;
+                try {
+                  const context = await options.reviewService!.getContext({
+                    actor: reviewActorFromPrincipal(principal), tunnelId: target.tunnelId, sessionId: target.sessionId,
+                  });
+                  if (context.revision.id === revisionId) targets.push({ url: `${target.publicOrigin}/_review-tunnel/review/focus?thread=${encodeURIComponent(threadId)}`, label: `앱에서 보기 · ${target.tunnelId}` });
+                } catch { /* A session may close while the list is being built. */ }
+              }
+              return targets;
+            },
+          }) }),
     reserveCarrierCredential(principal, purpose, tunnelId) {
       cleanupCredentialReservations();
       if (!hasPendingTunnelCapacity()) return undefined;

@@ -1,3 +1,6 @@
+import { REVIEW_MENTIONS_VIEW_SOURCE } from "./review-mentions-view.ts";
+import { REVIEW_THREAD_VIEW_SOURCE } from "./review-thread-view.ts";
+
 export const REVIEW_REFRESH_COORDINATOR_SOURCE = `(loadOnce) => {
   let refreshPromise;
   let refreshDirty = false;
@@ -18,32 +21,6 @@ export const REVIEW_REFRESH_COORDINATOR_SOURCE = `(loadOnce) => {
   };
 }`;
 
-export const REVIEW_PAGE_MERGER_SOURCE = `(current, latest) => {
-  const latestIds = new Set(latest.comments.map((comment) => comment.id));
-  const currentById = new Map(current.comments.map((comment) => [comment.id, comment]));
-  const latestComments = latest.comments.map((latestComment) => {
-    const currentComment = currentById.get(latestComment.id);
-    if (currentComment === undefined) return latestComment;
-    const latestReplyIds = new Set(latestComment.replies.map((reply) => reply.id));
-    const keptReplies = currentComment.replies.filter((reply) => !latestReplyIds.has(reply.id));
-    const keptOlderReplies = currentComment.replies.length > latestComment.replies.length;
-    return {
-      ...latestComment,
-      replies: [...keptReplies, ...latestComment.replies],
-      replyPageInfo: keptOlderReplies
-        ? currentComment.replyPageInfo
-        : latestComment.replyPageInfo,
-    };
-  });
-  const keptComments = current.comments.filter((comment) => !latestIds.has(comment.id));
-  const keptOlderComments = current.comments.length > latest.comments.length;
-  return {
-    ...latest,
-    comments: [...keptComments, ...latestComments],
-    pageInfo: keptOlderComments ? current.pageInfo : latest.pageInfo,
-  };
-}`;
-
 export const REVIEW_BOOTSTRAP_SOURCE = `
 const overlayTag = "review-tunnel-overlay";
 if (document.querySelector(overlayTag) === null) {
@@ -58,6 +35,7 @@ if (document.querySelector(overlayTag) === null) {
     ":host { all: initial; position: fixed; inset: 0; z-index: 2147483647; display: block; pointer-events: none; color-scheme: light; }",
     ".marker-layer, .selection-layer { position: fixed; inset: 0; width: 100%; height: 100%; }",
     ".marker-layer { z-index: 1; pointer-events: none; overflow: hidden; }",
+    ".marker[hidden] { display: none; }",
     ".selection-layer { z-index: 2; pointer-events: auto; cursor: crosshair; touch-action: none; background: rgba(20, 87, 217, .025); }",
     ".selection-layer[hidden] { display: none; }",
     ".selection-preview { fill: rgba(20, 87, 217, .13); stroke: #1457d9; stroke-width: 2; pointer-events: none; }",
@@ -65,11 +43,23 @@ if (document.querySelector(overlayTag) === null) {
     ".marker { pointer-events: auto; cursor: pointer; outline: none; }",
     ".marker-shape { fill: rgba(20, 87, 217, .82); stroke: #1457d9; stroke-width: 2; filter: drop-shadow(0 2px 4px rgba(15, 23, 42, .25)); }",
     ".marker.point .marker-shape { fill: #1457d9; }",
+    ".marker.rect .marker-shape { fill: rgba(20, 87, 217, .08); pointer-events: stroke; }",
+    ".marker.approximate .marker-shape { stroke-dasharray: 5 4; }",
     ".marker.active .marker-shape { fill: rgba(240, 68, 56, .2); stroke: #f04438; stroke-width: 3; }",
     ".marker.point.active .marker-shape { fill: #f04438; }",
     ".marker:focus-visible .marker-shape { stroke: #f04438; stroke-width: 4; }",
     ".marker-label { fill: #fff; pointer-events: none; text-anchor: middle; font: 700 11px/1 ui-sans-serif, system-ui, sans-serif; }",
+    ".marker.rect .marker-label { fill: #1457d9; stroke: #fff; stroke-width: 3px; paint-order: stroke; pointer-events: auto; }",
+    ".marker.rect.active .marker-label { fill: #f04438; }",
+    ".mention-options button[aria-selected=true] { background: #dbe8ff; }",
     ".panel { position: fixed; z-index: 3; top: 16px; right: 16px; width: min(360px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; box-sizing: border-box; padding: 16px; border: 1px solid #d7dce2; border-radius: 12px; background: #fff; color: #17202a; box-shadow: 0 16px 48px rgba(15, 23, 42, .2); font: 14px/1.45 ui-sans-serif, system-ui, sans-serif; pointer-events: auto; }",
+    ".panel[hidden], .review-launcher[hidden] { display: none; }",
+    ".review-launcher { position: fixed; bottom: 16px; right: 16px; z-index: 4; pointer-events: auto; padding: 12px 16px; border-radius: 24px; box-shadow: 0 4px 20px #0003; }",
+    ".review-filters { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 12px 0; }",
+    ".review-filters select { padding: 6px; border: 1px solid #bcccdc; border-radius: 6px; background: white; color: #17202a; font: inherit; }",
+    ".review-filters label { display: flex; align-items: center; gap: 4px; }",
+    ".edit-form { margin-top: 8px; padding: 8px; border: 1px solid #bcccdc; border-radius: 8px; }",
+    "@media (max-width: 600px) { .panel { top: auto; bottom: 8px; right: 8px; width: calc(100vw - 16px); max-height: 65vh; max-height: 65dvh; } }",
     ".heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }",
     "h2 { margin: 0; font-size: 16px; }",
     ".context, .status, .selection-state { color: #52606d; font-size: 12px; }",
@@ -86,6 +76,8 @@ if (document.querySelector(overlayTag) === null) {
     ".comment-body, .reply-body { white-space: pre-wrap; }",
     ".author { margin-bottom: 4px; color: #334e68; font-weight: 650; }",
     ".anchor-summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; color: #1457d9; font-size: 12px; }",
+    ".anchor-state { margin-top: 4px; color: #52606d; font-size: 12px; }",
+    ".pin-controls { margin: 10px 0; }",
     ".content-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 8px; }",
     ".danger-button { color: #b42318; background: #ffebe9; }",
     ".tombstone { color: #697586; font-style: italic; }",
@@ -128,7 +120,45 @@ if (document.querySelector(overlayTag) === null) {
   title.textContent = "Page review";
   const contextLabel = document.createElement("span");
   contextLabel.className = "context";
-  heading.append(title, contextLabel);
+  const collapseButton = document.createElement("button");
+  collapseButton.type = "button";
+  collapseButton.className = "secondary-button small-button";
+  collapseButton.textContent = "Close review panel";
+  heading.append(title, contextLabel, collapseButton);
+  const launcher = document.createElement("button");
+  launcher.type = "button";
+  launcher.className = "review-launcher";
+  launcher.textContent = "Review";
+  launcher.setAttribute("aria-label", "Open review panel");
+  const readPreference = (key, fallback) => { try { return sessionStorage.getItem("review-tunnel:" + key) ?? fallback; } catch { return fallback; } };
+  const savePreference = (key, value) => { try { sessionStorage.setItem("review-tunnel:" + key, value); } catch {} };
+  let panelOpen = readPreference("panel-open", innerWidth <= 600 ? "false" : "true") === "true";
+  panel.hidden = !panelOpen;
+  launcher.hidden = panelOpen;
+  const filters = document.createElement("div");
+  filters.className = "review-filters";
+  const statusFilter = document.createElement("select");
+  statusFilter.setAttribute("aria-label", "Comment status");
+  for (const [value, label] of [["OPEN", "Unresolved"], ["ALL", "All"], ["RESOLVED", "Resolved"]]) {
+    const option = document.createElement("option");
+    option.value = value; option.textContent = label; statusFilter.append(option);
+  }
+  const savedFilter = readPreference("comment-status", "OPEN");
+  statusFilter.value = ["OPEN", "ALL", "RESOLVED"].includes(savedFilter) ? savedFilter : "OPEN";
+  const authorLabel = document.createElement("label");
+  const authorFilter = document.createElement("input");
+  authorFilter.type = "checkbox";
+  authorFilter.checked = readPreference("comment-mine", "false") === "true";
+  authorLabel.append(authorFilter, document.createTextNode("Started by me"));
+  filters.append(statusFilter, authorLabel);
+  const pinControls = document.createElement("div");
+  pinControls.className = "pin-controls";
+  const pinVisibilityButton = document.createElement("button");
+  pinVisibilityButton.type = "button";
+  pinVisibilityButton.className = "secondary-button small-button";
+  pinVisibilityButton.textContent = "Hide all pins";
+  pinVisibilityButton.setAttribute("aria-pressed", "true");
+  pinControls.append(pinVisibilityButton);
   const status = document.createElement("div");
   status.className = "status";
   status.setAttribute("role", "status");
@@ -172,10 +202,13 @@ if (document.querySelector(overlayTag) === null) {
   submit.type = "submit";
   submit.textContent = "Comment";
   form.append(body, selectionControls, submit);
-  panel.append(heading, status, notificationPanel, comments, loadOlderButton, form);
-  root.append(style, markerLayer, selectionLayer, panel);
+  panel.append(heading, pinControls, filters, status, notificationPanel, comments, loadOlderButton, form);
+  root.append(style, markerLayer, selectionLayer, panel, launcher);
   document.documentElement.append(host);
 
+  const pageDrafts = new Map();
+  let draftPath = location.pathname;
+  body.addEventListener("input", () => pageDrafts.set(draftPath, body.value));
   let context;
   let loadSequence = 0;
   let commentPage = { comments: [], openCount: 0, eventCursor: "0", pageInfo: { hasMore: false } };
@@ -185,10 +218,23 @@ if (document.querySelector(overlayTag) === null) {
   let selectionStart;
   let eventSource;
   let eventPath;
+  let pinsVisible = true;
+  try { pinsVisible = sessionStorage.getItem("review-tunnel:show-pins") !== "false"; } catch {}
+  const pinOverrides = new Map();
+  const wantsPinVisible = (threadId) => pinOverrides.get(threadId) ?? pinsVisible;
   const api = "/_review-tunnel/review";
   const readJson = async (response) => {
     const value = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(typeof value.error === "string" ? value.error : "HTTP_" + response.status);
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        threadView.clear();
+        pageDrafts.clear();
+        body.value = "";
+        commentPage = { comments: [], openCount: 0, eventCursor: "0", pageInfo: { hasMore: false } };
+        renderComments();
+      }
+      throw new Error(typeof value.error === "string" ? value.error : "HTTP_" + response.status);
+    }
     return value;
   };
   const readReview = async (path) => readJson(await fetch(api + path, {
@@ -236,9 +282,41 @@ if (document.querySelector(overlayTag) === null) {
       geometry,
     };
   };
+  const findAnchorElement = (identity) => {
+    const matches = document.querySelectorAll("[" + identity.attribute + "=" + CSS.escape(identity.value) + "]");
+    return matches.length === 1 && matches[0] !== host ? matches[0] : undefined;
+  };
+  const elementAnchorFromSelection = (start, end, dragged) => {
+    const left = dragged ? Math.min(start.clientX, end.clientX) : end.clientX;
+    const top = dragged ? Math.min(start.clientY, end.clientY) : end.clientY;
+    const right = dragged ? Math.max(start.clientX, end.clientX) : end.clientX;
+    const bottom = dragged ? Math.max(start.clientY, end.clientY) : end.clientY;
+    const hit = document.elementsFromPoint((left + right) / 2, (top + bottom) / 2)
+      .find((element) => element !== host);
+    // Prefer an explicit review identity; never guess by text, CSS classes, or child order.
+    for (const attribute of ["data-review-id", "id"]) {
+      for (let element = hit; element && element !== document.body && element !== document.documentElement; element = element.parentElement) {
+        const value = element.getAttribute(attribute);
+        if (!value || !value.trim() || value.length > 256 || /[\\u0000-\\u001f\\u007f]/.test(value)) continue;
+        if (findAnchorElement({ attribute, value }) !== element) continue;
+        const rect = element.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0 || left < rect.left || top < rect.top || right > rect.right || bottom > rect.bottom) continue;
+        // A whole-page app wrapper is no more precise than a page-coordinate anchor.
+        if (attribute === "id" && rect.width >= end.geometry.width * .9 && rect.height >= end.geometry.height * .9) continue;
+        const x = canonicalCoordinate((left - rect.left) / rect.width);
+        const y = canonicalCoordinate((top - rect.top) / rect.height);
+        const width = Math.min(1 - x, canonicalCoordinate((right - left) / rect.width));
+        const height = Math.min(1 - y, canonicalCoordinate((bottom - top) / rect.height));
+        if (dragged && (width <= 0 || height <= 0)) continue;
+        return { attribute, value, x, y, width, height };
+      }
+    }
+  };
   const anchorFromSelection = (start, end) => {
     const dragged = Math.hypot(end.clientX - start.clientX, end.clientY - start.clientY) >= 6;
     const geometry = end.geometry;
+    const element = elementAnchorFromSelection(start, end, dragged);
+    const target = element === undefined ? {} : { element };
     if (!dragged) {
       return {
         type: "REGION_V1",
@@ -249,6 +327,7 @@ if (document.querySelector(overlayTag) === null) {
         height: 0,
         document: { width: geometry.width, height: geometry.height },
         viewport: { width: geometry.viewportWidth, height: geometry.viewportHeight },
+        ...target,
       };
     }
     const left = Math.min(start.x, end.x);
@@ -264,6 +343,7 @@ if (document.querySelector(overlayTag) === null) {
       height: canonicalCoordinate((bottom - top) / geometry.height),
       document: { width: geometry.width, height: geometry.height },
       viewport: { width: geometry.viewportWidth, height: geometry.viewportHeight },
+      ...target,
     };
   };
   const updateSelectionState = () => {
@@ -318,20 +398,64 @@ if (document.querySelector(overlayTag) === null) {
     }
   });
 
+  const anchorPlacement = (anchor, geometry) => {
+    if (anchor.element !== undefined) {
+      const element = findAnchorElement(anchor.element);
+      if (element === undefined) return { reason: "Target missing or not unique on this page" };
+      const rect = element.getBoundingClientRect();
+      if (!element.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) || rect.width <= 0 || rect.height <= 0) {
+        return { reason: "Target hidden in this layout; open it to see the pin" };
+      }
+      return {
+        x: rect.left + anchor.element.x * rect.width,
+        y: rect.top + anchor.element.y * rect.height,
+        width: anchor.element.width * rect.width,
+        height: anchor.element.height * rect.height,
+        element,
+      };
+    }
+    if (Math.abs(geometry.width - anchor.document.width) > 2 ||
+        Math.abs(geometry.height - anchor.document.height) > 2 ||
+        Math.abs(geometry.viewportWidth - anchor.viewport.width) > 2) {
+      return { reason: "Page layout differs from capture; coordinate pin hidden" };
+    }
+    return {
+      x: anchor.x * geometry.width - scrollX,
+      y: anchor.y * geometry.height - scrollY,
+      width: anchor.width * geometry.width,
+      height: anchor.height * geometry.height,
+    };
+  };
   const updateMarkerPositions = () => {
     const geometry = documentGeometry();
+    const items = new Map(commentPage.comments.map((item) => [item.id, item]));
     for (const marker of markerLayer.querySelectorAll(".marker")) {
-      const item = commentPage.comments.find((candidate) => candidate.id === marker.dataset.reviewThreadId);
+      const item = items.get(marker.dataset.reviewThreadId);
       if (item === undefined || item.anchor.type !== "REGION_V1") continue;
-      const x = item.anchor.x * geometry.width - scrollX;
-      const y = item.anchor.y * geometry.height - scrollY;
+      const placement = anchorPlacement(item.anchor, geometry);
+      const visible = placement.reason === undefined && wantsPinVisible(item.id);
+      marker.toggleAttribute("hidden", !visible);
+      marker.setAttribute("aria-hidden", String(!visible));
+      const row = comments.querySelector('[data-review-thread-id="' + item.id + '"]');
+      const button = row?.querySelector(".anchor-button");
+      if (button) {
+        button.textContent = visible ? "Hide pin" : "Show pin";
+        button.setAttribute("aria-pressed", String(visible));
+      }
+      const state = row?.querySelector(".anchor-state");
+      if (state) {
+        const capture = "Captured at " + item.anchor.viewport.width + " × " + item.anchor.viewport.height;
+        state.textContent = (placement.reason ?? (item.anchor.element ? "Follows target element" : "Approximate page coordinates")) + " · " + capture;
+      }
+      if (placement.reason !== undefined) continue;
+      const { x, y, width, height } = placement;
       const markerShape = marker.querySelector(".marker-shape");
       const markerLabel = marker.querySelector(".marker-label");
       if (item.anchor.selection === "RECT") {
         markerShape?.setAttribute("x", String(x));
         markerShape?.setAttribute("y", String(y));
-        markerShape?.setAttribute("width", String(Math.max(12, item.anchor.width * geometry.width)));
-        markerShape?.setAttribute("height", String(Math.max(12, item.anchor.height * geometry.height)));
+        markerShape?.setAttribute("width", String(Math.max(12, width)));
+        markerShape?.setAttribute("height", String(Math.max(12, height)));
         markerLabel?.setAttribute("x", String(x + 10));
         markerLabel?.setAttribute("y", String(y + 15));
       } else {
@@ -341,7 +465,17 @@ if (document.querySelector(overlayTag) === null) {
         markerLabel?.setAttribute("y", String(y + 4));
       }
     }
+    const anyEnabled = pinsVisible || [...pinOverrides.values()].some(Boolean);
+    pinVisibilityButton.textContent = anyEnabled ? "Hide all pins" : "Show all pins";
+    pinVisibilityButton.setAttribute("aria-pressed", String(anyEnabled));
   };
+  pinVisibilityButton.addEventListener("click", () => {
+    pinsVisible = !(pinsVisible || [...pinOverrides.values()].some(Boolean));
+    pinOverrides.clear();
+    try { sessionStorage.setItem("review-tunnel:show-pins", String(pinsVisible)); } catch {}
+    activateThread(undefined, false);
+    updateMarkerPositions();
+  });
   const activateThread = (threadId, scrollPage) => {
     activeThreadId = threadId;
     for (const row of comments.querySelectorAll(".comment")) {
@@ -352,8 +486,18 @@ if (document.querySelector(overlayTag) === null) {
     }
     const item = commentPage.comments.find((candidate) => candidate.id === threadId);
     if (scrollPage && item?.anchor.type === "REGION_V1") {
-      const geometry = documentGeometry();
-      window.scrollTo({ top: Math.max(0, item.anchor.y * geometry.height - innerHeight * 0.25), behavior: "smooth" });
+      let placement = anchorPlacement(item.anchor, documentGeometry());
+      if (placement.reason !== undefined) {
+        setStatus(placement.reason);
+        return;
+      }
+      placement.element?.scrollIntoView({ block: "center", inline: "center", behavior: "instant" });
+      placement = anchorPlacement(item.anchor, documentGeometry());
+      window.scrollTo({
+        top: Math.max(0, placement.y + scrollY - innerHeight * 0.25),
+        left: Math.max(0, placement.x + scrollX - innerWidth * 0.25),
+        behavior: "smooth",
+      });
       requestAnimationFrame(updateMarkerPositions);
     }
   };
@@ -363,6 +507,7 @@ if (document.querySelector(overlayTag) === null) {
       if (item.anchor.type !== "REGION_V1") continue;
       const marker = document.createElementNS(svgNamespace, "g");
       marker.setAttribute("class", "marker " + (item.anchor.selection === "POINT" ? "point" : "rect"));
+      marker.classList.toggle("approximate", item.anchor.element === undefined);
       marker.setAttribute("role", "button");
       marker.setAttribute("tabindex", "0");
       marker.dataset.reviewThreadId = item.id;
@@ -393,259 +538,39 @@ if (document.querySelector(overlayTag) === null) {
     updateMarkerPositions();
     if (activeThreadId !== undefined) activateThread(activeThreadId, false);
   };
+  (${REVIEW_MENTIONS_VIEW_SOURCE})(root, prefix => readReview("/mentions?prefix=" + encodeURIComponent(prefix)));
+  const threadView = (${REVIEW_THREAD_VIEW_SOURCE})({
+    container: comments,
+    getPage: () => commentPage,
+    getContext: () => context,
+    read: (path) => readReview(path),
+    mutate: (path, method, command) => mutateReview(path, method, command),
+    reload: () => requestLoad(),
+    replacePage: (page) => replaceCommentPage(page),
+    showStatus: setStatus,
+    showPin(item) {
+      const placement = anchorPlacement(item.anchor, documentGeometry());
+      if (placement.reason !== undefined) { setStatus(placement.reason); return; }
+      pinOverrides.set(item.id, true);
+      activateThread(item.id, true);
+      updateMarkerPositions();
+    },
+    togglePin(item) {
+      const placement = anchorPlacement(item.anchor, documentGeometry());
+      if (placement.reason !== undefined) { setStatus(placement.reason); return; }
+      const show = !wantsPinVisible(item.id);
+      pinOverrides.set(item.id, show);
+      activateThread(show ? item.id : undefined, show);
+      updateMarkerPositions();
+    },
+    afterRender: () => renderMarkers(),
+  });
   const renderComments = () => {
-    const { comments: items, openCount, pageInfo } = commentPage;
-    loadOlderButton.hidden = !pageInfo.hasMore;
-    comments.replaceChildren();
-    for (const item of items) {
-      const row = document.createElement("li");
-      row.className = "thread comment";
-      row.dataset.reviewThreadId = item.id;
-      const threadHeader = document.createElement("div");
-      threadHeader.className = "thread-header";
-      const author = document.createElement("div");
-      author.className = "author";
-      author.textContent = item.author.displayName;
-      const threadStatus = document.createElement("span");
-      threadStatus.className = "thread-status";
-      threadStatus.textContent = item.body === null
-        ? "Deleted"
-        : item.status === "RESOLVED" ? "Resolved" : "Open";
-      threadHeader.append(author, threadStatus);
-      const text = document.createElement("div");
-      text.className = "comment-body";
-      text.textContent = item.body === null ? "Deleted comment" : item.body;
-      if (item.body === null) text.classList.add("tombstone");
-      row.append(threadHeader, text);
-
-      if (item.canEdit || item.canDelete) {
-        const contentActions = document.createElement("div");
-        contentActions.className = "content-actions";
-        if (item.canEdit) {
-          const editButton = document.createElement("button");
-          editButton.type = "button";
-          editButton.className = "secondary-button small-button";
-          editButton.textContent = "Edit comment";
-          editButton.addEventListener("click", async () => {
-            const nextBody = window.prompt("Edit comment", item.body);
-            if (nextBody === null || nextBody === item.body) return;
-            await runMutationAction(
-              editButton,
-              "Editing comment…",
-              "Comment edit failed: ",
-              async () => {
-                await mutateReview("/comments/" + encodeURIComponent(item.id), "PATCH", {
-                  path: location.pathname,
-                  expectedVersion: item.version,
-                  body: nextBody,
-                });
-                await requestLoad();
-              },
-            );
-          });
-          contentActions.append(editButton);
-        }
-        if (item.canDelete) {
-          const deleteButton = document.createElement("button");
-          deleteButton.type = "button";
-          deleteButton.className = "danger-button small-button";
-          deleteButton.textContent = "Delete comment";
-          deleteButton.addEventListener("click", async () => {
-            if (!window.confirm("Delete this comment? Replies and the pin will remain.")) return;
-            await runMutationAction(
-              deleteButton,
-              "Deleting comment…",
-              "Comment delete failed: ",
-              async () => {
-                await mutateReview("/comments/" + encodeURIComponent(item.id), "DELETE", {
-                  path: location.pathname,
-                  expectedVersion: item.version,
-                });
-                await requestLoad();
-              },
-            );
-          });
-          contentActions.append(deleteButton);
-        }
-        row.append(contentActions);
-      }
-
-      if (item.anchor.type === "REGION_V1") {
-        const anchorSummary = document.createElement("div");
-        anchorSummary.className = "anchor-summary";
-        const anchorLabel = document.createElement("span");
-        anchorLabel.textContent = "Pin #" + item.pinNumber +
-          (item.anchor.selection === "POINT" ? " · Point" : " · Area");
-        const anchorButton = document.createElement("button");
-        anchorButton.type = "button";
-        anchorButton.className = "anchor-button small-button";
-        anchorButton.textContent = "Show pin";
-        anchorButton.addEventListener("click", () => activateThread(item.id, true));
-        anchorSummary.append(anchorLabel, anchorButton);
-        row.append(anchorSummary);
-      }
-
-      const replies = document.createElement("div");
-      replies.className = "replies";
-      for (const itemReply of item.replies ?? []) {
-        const reply = document.createElement("div");
-        reply.className = "reply";
-        const replyAuthor = document.createElement("div");
-        replyAuthor.className = "author";
-        replyAuthor.textContent = itemReply.author.displayName;
-        const replyBody = document.createElement("div");
-        replyBody.className = "reply-body";
-        replyBody.textContent = itemReply.body === null ? "Deleted reply" : itemReply.body;
-        if (itemReply.body === null) replyBody.classList.add("tombstone");
-        reply.append(replyAuthor, replyBody);
-        if (itemReply.canEdit || itemReply.canDelete) {
-          const replyActions = document.createElement("div");
-          replyActions.className = "content-actions";
-          if (itemReply.canEdit) {
-            const editReplyButton = document.createElement("button");
-            editReplyButton.type = "button";
-            editReplyButton.className = "secondary-button small-button";
-            editReplyButton.textContent = "Edit reply";
-            editReplyButton.addEventListener("click", async () => {
-              const nextBody = window.prompt("Edit reply", itemReply.body);
-              if (nextBody === null || nextBody === itemReply.body) return;
-              await runMutationAction(
-                editReplyButton,
-                "Editing reply…",
-                "Reply edit failed: ",
-                async () => {
-                  await mutateReview(
-                    "/comments/" + encodeURIComponent(item.id) + "/replies/" + encodeURIComponent(itemReply.id),
-                    "PATCH",
-                    {
-                      path: location.pathname,
-                      expectedVersion: itemReply.version,
-                      body: nextBody,
-                    },
-                  );
-                  await requestLoad();
-                },
-              );
-            });
-            replyActions.append(editReplyButton);
-          }
-          if (itemReply.canDelete) {
-            const deleteReplyButton = document.createElement("button");
-            deleteReplyButton.type = "button";
-            deleteReplyButton.className = "danger-button small-button";
-            deleteReplyButton.textContent = "Delete reply";
-            deleteReplyButton.addEventListener("click", async () => {
-              if (!window.confirm("Delete this reply?")) return;
-              await runMutationAction(
-                deleteReplyButton,
-                "Deleting reply…",
-                "Reply delete failed: ",
-                async () => {
-                  await mutateReview(
-                    "/comments/" + encodeURIComponent(item.id) + "/replies/" + encodeURIComponent(itemReply.id),
-                    "DELETE",
-                    { path: location.pathname, expectedVersion: itemReply.version },
-                  );
-                  await requestLoad();
-                },
-              );
-            });
-            replyActions.append(deleteReplyButton);
-          }
-          reply.append(replyActions);
-        }
-        replies.append(reply);
-      }
-      if (item.replyPageInfo?.hasMore) {
-        const olderRepliesButton = document.createElement("button");
-        olderRepliesButton.type = "button";
-        olderRepliesButton.className = "secondary-button small-button";
-        olderRepliesButton.textContent = "Load older replies";
-        olderRepliesButton.addEventListener("click", async () => {
-          olderRepliesButton.disabled = true;
-          const routePath = location.pathname;
-          try {
-            const result = await readReview(
-              "/comments/" + encodeURIComponent(item.id) + "/replies?path=" +
-              encodeURIComponent(routePath) + "&before=" +
-              encodeURIComponent(item.replyPageInfo.nextCursor),
-            );
-            if (routePath !== location.pathname) return;
-            const seen = new Set(result.replies.map((reply) => reply.id));
-            const mergedReplies = [...result.replies, ...item.replies.filter((reply) => !seen.has(reply.id))];
-            replaceCommentPage({
-              ...commentPage,
-              comments: commentPage.comments.map((candidate) => candidate.id === item.id
-                ? { ...candidate, replies: mergedReplies, replyPageInfo: result.pageInfo }
-                : candidate),
-            });
-          } catch (error) {
-            setStatus("Older replies failed: " + (error instanceof Error ? error.message : "unknown error"), true);
-            olderRepliesButton.disabled = false;
-          }
-        });
-        replies.append(olderRepliesButton);
-      }
-      if (replies.childElementCount > 0) row.append(replies);
-
-      if (context.principal.canComment && item.status === "OPEN" && item.body !== null) {
-        const replyForm = document.createElement("form");
-        replyForm.className = "reply-form";
-        const replyBody = document.createElement("textarea");
-        replyBody.maxLength = 4000;
-        replyBody.required = true;
-        replyBody.placeholder = "Reply to this comment";
-        replyBody.setAttribute("aria-label", "Reply to comment");
-        const replySubmit = document.createElement("button");
-        replySubmit.type = "submit";
-        replySubmit.textContent = "Reply";
-        replyForm.append(replyBody, replySubmit);
-        replyForm.addEventListener("submit", async (event) => {
-          event.preventDefault();
-          await runMutationAction(
-            replySubmit,
-            "Saving reply…",
-            "Reply failed: ",
-            async () => {
-              await mutateReview("/comments/" + encodeURIComponent(item.id) + "/replies", "POST", {
-                path: location.pathname,
-                body: replyBody.value,
-              });
-              await requestLoad();
-            },
-          );
-        });
-        row.append(replyForm);
-      }
-
-      if (context.principal.canManageProject && item.body !== null) {
-        const statusButton = document.createElement("button");
-        statusButton.type = "button";
-        statusButton.className = "status-button";
-        statusButton.textContent = item.status === "RESOLVED" ? "Reopen" : "Resolve";
-        statusButton.addEventListener("click", async () => {
-          const nextStatus = item.status === "RESOLVED" ? "OPEN" : "RESOLVED";
-          await runMutationAction(
-            statusButton,
-            nextStatus === "RESOLVED" ? "Resolving comment…" : "Reopening comment…",
-            "Status change failed: ",
-            async () => {
-              await mutateReview("/comments/" + encodeURIComponent(item.id) + "/status", "PATCH", {
-                path: location.pathname,
-                expectedStatus: item.status,
-                status: nextStatus,
-              });
-              await requestLoad();
-            },
-          );
-        });
-        row.append(statusButton);
-      }
-      comments.append(row);
-    }
-    renderMarkers();
-    if (items.length === 0) setPassiveStatus("No comments on this page");
-    else setPassiveStatus(openCount + " open · " + items.length + " loaded");
+    loadOlderButton.hidden = !commentPage.pageInfo.hasMore;
+    launcher.textContent = "Review · " + commentPage.openCount + " unresolved";
+    threadView.render();
+    if (commentPage.comments.length === 0) setPassiveStatus("No comments on this page");
+    else setPassiveStatus(commentPage.openCount + " open · " + commentPage.comments.length + " loaded");
   };
   const replaceCommentPage = (nextPage) => {
     commentPage = nextPage;
@@ -660,8 +585,7 @@ if (document.querySelector(overlayTag) === null) {
       const row = document.createElement("li");
       row.className = "notification" + (item.readAt === null ? "" : " read");
       const message = document.createElement("span");
-      message.textContent = item.actor.displayName + " mentioned you in a " +
-        (item.contentType === "COMMENT" ? "comment" : "reply");
+      message.textContent = item.actor.displayName + (item.reason === "REPLY" ? " replied to you" : item.reason === "WORKFLOW_REQUEST" ? " requested your review" : item.reason === "WORKFLOW_RESULT" ? " responded to your review request" : " mentioned you in a " + (item.contentType === "COMMENT" ? "comment" : "reply"));
       const action = document.createElement("button");
       action.type = "button";
       action.className = "secondary-button small-button";
@@ -689,6 +613,7 @@ if (document.querySelector(overlayTag) === null) {
       "&after=" + encodeURIComponent(eventCursor),
     );
     eventSource.addEventListener("review", () => void requestLoad());
+    eventSource.addEventListener("open", () => void requestLoad());
     eventSource.addEventListener("review-error", (event) => {
       let code = "REVIEW_UNAVAILABLE";
       try {
@@ -697,9 +622,48 @@ if (document.querySelector(overlayTag) === null) {
       } catch {}
       eventSource?.close();
       eventSource = undefined;
+      if (code === "REVIEW_FORBIDDEN") {
+        threadView.clear(); pageDrafts.clear(); body.value = "";
+        commentPage = { comments: [], openCount: 0, eventCursor: "0", pageInfo: { hasMore: false } };
+        renderComments();
+      }
       setStatus("Live updates unavailable: " + code, true);
     });
   };
+  const reachesOldest = (items, previous) => {
+    const oldest = previous?.[0];
+    const first = items[0];
+    return !oldest || !first || items.some(item => item.id === oldest.id) ||
+      first.createdAt < oldest.createdAt ||
+      (first.createdAt === oldest.createdAt && first.id <= oldest.id);
+  };
+  const commentQuery = (path) => "/comments?path=" + encodeURIComponent(path) +
+    "&status=" + statusFilter.value + (authorFilter.checked ? "&author=me" : "");
+  const readVisiblePage = async (path) => {
+    const query = commentQuery(path);
+    const previous = commentPath === path ? commentPage.comments : [];
+    const result = await readReview(query);
+    while (result.pageInfo.hasMore && !reachesOldest(result.comments, previous)) {
+      const page = await readReview(query + "&before=" + encodeURIComponent(result.pageInfo.nextCursor));
+      if (path !== location.pathname) return result;
+      result.comments = [...page.comments, ...result.comments];
+      result.pageInfo = page.pageInfo;
+    }
+    const previousById = new Map(previous.map(item => [item.id, item]));
+    for (const item of result.comments) {
+      const oldReplies = previousById.get(item.id)?.replies;
+      while (item.replyPageInfo?.hasMore && !reachesOldest(item.replies, oldReplies)) {
+        const page = await readReview("/comments/" + encodeURIComponent(item.id) + "/replies?path=" + encodeURIComponent(path) + "&before=" + encodeURIComponent(item.replyPageInfo.nextCursor));
+        if (path !== location.pathname) return result;
+        item.replies = [...page.replies, ...item.replies];
+        item.replyPageInfo = page.pageInfo;
+      }
+    }
+    return result;
+  };
+  let pendingFocus;
+  try { pendingFocus = JSON.parse(sessionStorage.getItem("review-tunnel:focus") ?? "null"); sessionStorage.removeItem("review-tunnel:focus"); } catch {}
+  if (pendingFocus && (pendingFocus.expiresAt < Date.now() || pendingFocus.path !== location.pathname)) pendingFocus = undefined;
   const loadOnce = async () => {
     const sequence = ++loadSequence;
     const routePath = location.pathname;
@@ -707,17 +671,30 @@ if (document.querySelector(overlayTag) === null) {
     try {
       if (context === undefined) {
         context = await readReview("/context");
+        if (context.controlOrigin && !panel.querySelector(".review-inbox-link")) {
+          const inboxLink = document.createElement("a"); inboxLink.className = "review-inbox-link"; inboxLink.textContent = "Review inbox · All pages"; inboxLink.href = context.controlOrigin + "/reviews"; inboxLink.target = "_blank"; inboxLink.rel = "noopener noreferrer"; contextLabel.after(inboxLink);
+        }
         contextLabel.textContent = context.project.displayName + " · " + context.revision.key;
         form.hidden = !context.principal.canComment;
       }
       const [result, notificationResult] = await Promise.all([
-        readReview("/comments?path=" + encodeURIComponent(routePath)),
+        readVisiblePage(routePath),
         readReview("/notifications?path=" + encodeURIComponent(routePath)),
       ]);
       if (sequence === loadSequence && routePath === location.pathname) {
-        replaceCommentPage(commentPath === routePath
-          ? (${REVIEW_PAGE_MERGER_SOURCE})(commentPage, result)
-          : result);
+        const focus = pendingFocus; pendingFocus = undefined;
+        if (focus && focus.revisionId === context.revision.id) {
+          try {
+            const target = await readReview("/comments/" + encodeURIComponent(focus.id) + "?path=" + encodeURIComponent(routePath));
+            if (!result.comments.some(item => item.id === target.comment.id)) result.comments.push(target.comment);
+          } catch { setStatus("This review is no longer available.", true); }
+        }
+        replaceCommentPage(result);
+        if (focus) {
+          setPanelOpen(true);
+          const row = comments.querySelector('[data-review-thread-id="' + CSS.escape(focus.id) + '"]');
+          row?.scrollIntoView({ block: "nearest" }); activateThread(focus.id, true);
+        }
         commentPath = routePath;
         renderNotifications(notificationResult.notifications);
         ensureEventStream(result.eventCursor);
@@ -727,6 +704,28 @@ if (document.querySelector(overlayTag) === null) {
     }
   };
   const requestLoad = (${REVIEW_REFRESH_COORDINATOR_SOURCE})(loadOnce);
+  const setPanelOpen = (open) => {
+    panelOpen = open;
+    panel.hidden = !open;
+    launcher.hidden = open;
+    savePreference("panel-open", String(open));
+    if (!open) cancelSelection(false);
+    (open ? collapseButton : launcher).focus({ preventScroll: true });
+  };
+  collapseButton.addEventListener("click", () => setPanelOpen(false));
+  launcher.addEventListener("click", () => setPanelOpen(true));
+  const changeFilters = () => {
+    savePreference("comment-status", statusFilter.value);
+    savePreference("comment-mine", String(authorFilter.checked));
+    ++loadSequence;
+    commentPath = undefined;
+    activeThreadId = undefined;
+    commentPage = { comments: [], openCount: commentPage.openCount, eventCursor: "0", pageInfo: { hasMore: false } };
+    renderComments();
+    void requestLoad();
+  };
+  statusFilter.addEventListener("change", changeFilters);
+  authorFilter.addEventListener("change", changeFilters);
   loadOlderButton.addEventListener("click", async () => {
     if (!commentPage.pageInfo.hasMore) return;
     loadOlderButton.disabled = true;
@@ -734,7 +733,7 @@ if (document.querySelector(overlayTag) === null) {
     const routePath = location.pathname;
     try {
       const result = await readReview(
-        "/comments?path=" + encodeURIComponent(routePath) + "&before=" +
+        commentQuery(routePath) + "&before=" +
         encodeURIComponent(commentPage.pageInfo.nextCursor),
       );
       if (sequence !== loadSequence || routePath !== location.pathname) return;
@@ -760,16 +759,35 @@ if (document.querySelector(overlayTag) === null) {
     event.preventDefault();
     await runMutationAction(submit, "Saving comment…", "Comment failed: ", async () => {
       const command = { path: location.pathname, body: body.value };
+      const submittedPath = location.pathname;
       if (pendingAnchor !== undefined) command.anchor = pendingAnchor;
       await mutateReview("/comments", "POST", command);
-      body.value = "";
+      if (pageDrafts.get(submittedPath) === command.body) pageDrafts.delete(submittedPath);
+      if (location.pathname === submittedPath && body.value === command.body) body.value = "";
       pendingAnchor = undefined;
       updateSelectionState();
       await requestLoad();
     });
   });
-  window.addEventListener("scroll", updateMarkerPositions, { passive: true });
-  window.addEventListener("resize", updateMarkerPositions);
+  let markerFrame;
+  const scheduleMarkerUpdate = () => {
+    if (markerFrame !== undefined) return;
+    markerFrame = requestAnimationFrame(() => {
+      markerFrame = undefined;
+      updateMarkerPositions();
+    });
+  };
+  window.addEventListener("scroll", scheduleMarkerUpdate, { passive: true, capture: true });
+  window.addEventListener("resize", scheduleMarkerUpdate);
+  new ResizeObserver(scheduleMarkerUpdate).observe(document.documentElement);
+  new MutationObserver(scheduleMarkerUpdate).observe(document.documentElement, {
+    subtree: true, childList: true, attributes: true, characterData: true,
+  });
+  document.addEventListener("load", scheduleMarkerUpdate, true);
+  document.addEventListener("transitionend", scheduleMarkerUpdate, true);
+  document.addEventListener("animationend", scheduleMarkerUpdate, true);
+  document.fonts.ready.then(scheduleMarkerUpdate);
+  document.fonts.addEventListener("loadingdone", scheduleMarkerUpdate);
   const navigationEvent = "review-tunnel:navigation";
   const wrapHistory = (name) => {
     const original = history[name];
@@ -783,7 +801,15 @@ if (document.querySelector(overlayTag) === null) {
   wrapHistory("replaceState");
   window.addEventListener("popstate", () => window.dispatchEvent(new Event(navigationEvent)));
   window.addEventListener(navigationEvent, () => {
+    if (draftPath !== location.pathname) {
+      pageDrafts.set(draftPath, body.value);
+      draftPath = location.pathname;
+      body.value = pageDrafts.get(draftPath) ?? "";
+    }
     activeThreadId = undefined;
+    pinOverrides.clear();
+    commentPage = { comments: [], openCount: 0, eventCursor: "0", pageInfo: { hasMore: false } };
+    renderComments();
     cancelSelection(true);
     eventSource?.close();
     eventSource = undefined;

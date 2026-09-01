@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { randomBytes } from "node:crypto";
 
 import {
   canDeleteReviewContent,
@@ -23,7 +24,8 @@ import { REVIEW_BOOTSTRAP_SOURCE } from "./review-bootstrap.ts";
 const REVIEW_PREFIX = "/_review-tunnel/review";
 const CLIENT_BINDING_PREFIX = "/api/client/review-bindings/";
 const MAX_CONTROL_FORM_BYTES = 4 * 1_024;
-const MAX_REVIEW_JSON_BYTES = 8 * 1_024;
+// Includes UTF-8 text, JSON escaping, the route and optional element anchor.
+const MAX_REVIEW_JSON_BYTES = 64 * 1_024;
 
 export type ReviewEventStreamPolicy = Readonly<{
   pollIntervalMs?: number;
@@ -68,6 +70,7 @@ export type ReviewTunnelTarget = Readonly<{
 export function createReviewHttpHandler(input: Readonly<{
   service: ReviewService;
   resolveTunnel(tunnelId: string): ReviewTunnelTarget | undefined;
+  controlOrigin?(tunnel: ReviewTunnelTarget): string;
   reportFailure?: (operation: "control" | "content" | "cleanup") => void;
   eventStreamPolicy?: ReviewEventStreamPolicy;
 }>) {
@@ -219,6 +222,8 @@ export function createReviewHttpHandler(input: Readonly<{
         ? { status: 409, code: "REVIEW_STATE_CONFLICT" }
         : error.code === "VERSION_CONFLICT"
         ? { status: 409, code: "REVIEW_VERSION_CONFLICT" }
+        : error.code === "REVIEWER_UNAVAILABLE"
+        ? { status: 409, code: "REVIEW_REVIEWER_UNAVAILABLE" }
         : { status: 409, code: "REVIEW_BINDING_CONFLICT" };
       writeJsonError(response, mapping.status, mapping.code);
       return;
@@ -302,11 +307,24 @@ export function createReviewHttpHandler(input: Readonly<{
           return;
         }
         if (request.method === "GET" && url.pathname === `${REVIEW_PREFIX}/context`) {
-          writeJson(response, 200, await input.service.getContext({
+          writeJson(response, 200, { ...await input.service.getContext({
             actor,
             tunnelId: tunnel.tunnelId,
             sessionId: tunnel.sessionId,
-          }));
+          }), controlOrigin: input.controlOrigin?.(tunnel) });
+          return;
+        }
+        if (request.method === "GET" && url.pathname === `${REVIEW_PREFIX}/mentions`) {
+          writeJson(response, 200, { candidates: await input.service.listMentionCandidates({ actor, tunnelId: tunnel.tunnelId, sessionId: tunnel.sessionId, prefix: url.searchParams.get("prefix") ?? "" }) });
+          return;
+        }
+        if (request.method === "GET" && url.pathname === `${REVIEW_PREFIX}/focus`) {
+          const comment = await input.service.getThread({ actor, tunnelId: tunnel.tunnelId, sessionId: tunnel.sessionId, commentId: url.searchParams.get("thread") ?? "" });
+          const nonce = randomBytes(18).toString("base64");
+          const focus = JSON.stringify({ id: comment.id, path: comment.routePath, revisionId: comment.revisionId, expiresAt: Date.now() + 60_000 }).replaceAll("<", "\\u003c");
+          response.setHeader("Content-Security-Policy", `default-src 'none'; script-src 'nonce-${nonce}'; base-uri 'none'; frame-ancestors 'none'`);
+          response.setHeader("Content-Type", "text/html; charset=utf-8");
+          response.end(`<!doctype html><meta charset="utf-8"><title>리뷰로 이동</title><p>리뷰가 있는 페이지로 이동합니다.</p><script nonce="${nonce}">const focus=${focus};try{sessionStorage.setItem('review-tunnel:focus',JSON.stringify(focus));}catch{}location.replace(focus.path);</script>`);
           return;
         }
         if (url.pathname === `${REVIEW_PREFIX}/events`) {
@@ -388,17 +406,20 @@ export function createReviewHttpHandler(input: Readonly<{
         }
         if (url.pathname === `${REVIEW_PREFIX}/comments`) {
           if (request.method === "GET") {
-            const query = pageQuery(url);
+            const query = pageQuery(url, true);
             const page = await input.service.listPageCommentPage({
               actor,
               tunnelId: tunnel.tunnelId,
               sessionId: tunnel.sessionId,
               routePath: query.path,
+              ...(query.status === undefined ? {} : { status: query.status }),
+              ...(query.author === undefined ? {} : { author: query.author }),
               ...(query.before === undefined ? {} : { before: query.before }),
             });
             writeJson(response, 200, {
               comments: page.comments.map((comment) => publicComment(comment, actor)),
               openCount: page.openCount,
+              filteredCount: page.filteredCount,
               eventCursor: page.eventCursor,
               pageInfo: page.pageInfo,
             });
@@ -432,6 +453,12 @@ export function createReviewHttpHandler(input: Readonly<{
         const commentAction = matchCommentAction(url.pathname);
         if (commentAction !== undefined) {
           if (commentAction.action === "comment") {
+            if (request.method === "GET") {
+              const query = pageQuery(url);
+              const comment = await input.service.getThread({ actor, tunnelId: tunnel.tunnelId, sessionId: tunnel.sessionId, commentId: commentAction.commentId, routePath: query.path });
+              writeJson(response, 200, { comment: publicComment(comment, actor) });
+              return;
+            }
             requireNoSearchParameters(url);
             if (request.method !== "PATCH" && request.method !== "DELETE") {
               response.setHeader("Allow", "PATCH, DELETE");
@@ -535,7 +562,7 @@ export function createReviewHttpHandler(input: Readonly<{
           }
           requireExactOrigin(request, tunnel.publicOrigin);
           const command = await readJsonObject(request, MAX_REVIEW_JSON_BYTES);
-          requireExactObjectKeys(command, ["path", "expectedStatus", "status"]);
+          requireExactObjectKeys(command, Object.hasOwn(command, "expectedWorkflowVersion") ? ["path", "expectedStatus", "status", "expectedWorkflowVersion"] : ["path", "expectedStatus", "status"]);
           const comment = await input.service.changePageCommentStatus({
             actor,
             tunnelId: tunnel.tunnelId,
@@ -543,6 +570,7 @@ export function createReviewHttpHandler(input: Readonly<{
             commentId: commentAction.commentId,
             routePath: requiredString(command, "path"),
             expectedStatus: requiredThreadStatus(command, "expectedStatus"),
+            expectedWorkflowVersion: command.expectedWorkflowVersion === undefined ? 1 : requiredContentVersion(command, "expectedWorkflowVersion"),
             status: requiredThreadStatus(command, "status"),
           });
           writeJson(response, 200, { comment: publicComment(comment, actor) });
@@ -602,7 +630,7 @@ export function reviewActorFromPrincipal(principal: Principal): ReviewActor {
   };
 }
 
-function publicComment(
+export function publicComment(
   comment: PageCommentThread | PageCommentPageItem,
   actor: ReviewActor,
 ) {
@@ -626,11 +654,14 @@ function publicComment(
     body: comment.body,
     version: comment.version,
     status: comment.status,
+    workflowVersion: comment.workflowVersion ?? 1,
+    ...(comment.workflowHistory === undefined ? {} : { workflowHistory: comment.workflowHistory }),
+    canVerify: actor.capabilities.canComment && actor.accountId === comment.author.accountId && comment.status === "NEEDS_REVIEW",
     author: comment.author,
     ...resolution,
     ...deletion,
     canEdit: comment.body !== null &&
-      comment.status === "OPEN" &&
+      comment.status !== "RESOLVED" &&
       canEditReviewContent(actor, comment.author.accountId),
     canDelete: comment.body !== null &&
       canDeleteReviewContent(actor, comment.author.accountId),
@@ -643,7 +674,7 @@ function publicComment(
   };
 }
 
-function publicReply(
+export function publicReply(
   reply: ReviewReply,
   actor: ReviewActor,
   threadStatus: ReviewThreadStatus,
@@ -662,7 +693,7 @@ function publicReply(
     author: reply.author,
     ...deletion,
     canEdit: reply.body !== null &&
-      threadStatus === "OPEN" &&
+      threadStatus !== "RESOLVED" &&
       canEditReviewContent(actor, reply.author.accountId),
     canDelete: reply.body !== null &&
       canDeleteReviewContent(actor, reply.author.accountId),
@@ -681,12 +712,15 @@ function publicEvent(event: ReviewEvent) {
   };
 }
 
-function publicNotification(notification: ReviewNotification) {
+export function publicNotification(notification: ReviewNotification) {
   return {
     id: notification.id,
     threadId: notification.threadId,
     contentType: notification.contentType,
     contentId: notification.contentId,
+    routePath: notification.routePath,
+    reason: notification.reason ?? "MENTION",
+    ...(notification.workflowVersion === undefined ? {} : { workflowVersion: notification.workflowVersion }),
     actor: notification.actor,
     readAt: notification.readAt?.toISOString() ?? null,
     createdAt: notification.createdAt.toISOString(),
@@ -739,7 +773,7 @@ async function readForm(request: IncomingMessage, maxBytes: number): Promise<URL
   return new URLSearchParams((await readBody(request, maxBytes)).toString("utf8"));
 }
 
-async function readJsonObject(
+export async function readJsonObject(
   request: IncomingMessage,
   maxBytes: number,
 ): Promise<Record<string, unknown>> {
@@ -788,7 +822,7 @@ function requiredFormValue(form: URLSearchParams, name: string): string {
   return value;
 }
 
-function requireExactObjectKeys(
+export function requireExactObjectKeys(
   value: Readonly<Record<string, unknown>>,
   expected: readonly string[],
 ): void {
@@ -800,30 +834,30 @@ function requireExactObjectKeys(
   ) throw new ReviewError("INVALID_INPUT", "review comment fields are invalid");
 }
 
-function requiredString(value: Readonly<Record<string, unknown>>, name: string): string {
+export function requiredString(value: Readonly<Record<string, unknown>>, name: string): string {
   const field = value[name];
   if (typeof field !== "string") throw new ReviewError("INVALID_INPUT", `${name} is required`);
   return field;
 }
 
-function requiredBoolean(value: Readonly<Record<string, unknown>>, name: string): boolean {
+export function requiredBoolean(value: Readonly<Record<string, unknown>>, name: string): boolean {
   const field = value[name];
   if (typeof field !== "boolean") throw new ReviewError("INVALID_INPUT", `${name} is required`);
   return field;
 }
 
-function requiredThreadStatus(
+export function requiredThreadStatus(
   value: Readonly<Record<string, unknown>>,
   name: string,
 ): ReviewThreadStatus {
   const field = value[name];
-  if (field !== "OPEN" && field !== "RESOLVED") {
+  if (field !== "OPEN" && field !== "NEEDS_REVIEW" && field !== "RESOLVED") {
     throw new ReviewError("INVALID_INPUT", `${name} is invalid`);
   }
   return field;
 }
 
-function requiredContentVersion(
+export function requiredContentVersion(
   value: Readonly<Record<string, unknown>>,
   name: string,
 ): number {
@@ -840,18 +874,27 @@ function requireNoSearchParameters(url: URL): void {
   }
 }
 
-function pageQuery(url: URL): Readonly<{ path: string; before?: string }> {
+function pageQuery(url: URL, filters = false): Readonly<{
+  path: string; before?: string; status?: "OPEN" | "RESOLVED" | "ALL"; author?: "me";
+}> {
   const paths = url.searchParams.getAll("path");
   const cursors = url.searchParams.getAll("before");
-  if (
-    paths.length !== 1 ||
-    cursors.length > 1 ||
-    [...url.searchParams.keys()].some((key) => key !== "path" && key !== "before") ||
-    cursors[0] === ""
-  ) throw new ReviewError("INVALID_INPUT", "review page query is invalid");
-  return cursors[0] === undefined
-    ? { path: paths[0]! }
-    : { path: paths[0]!, before: cursors[0] };
+  const statuses = url.searchParams.getAll("status");
+  const authors = url.searchParams.getAll("author");
+  const allowed = filters ? ["path", "before", "status", "author"] : ["path", "before"];
+  if (paths.length !== 1 || cursors.length > 1 || cursors[0] === "" ||
+      statuses.length > 1 || authors.length > 1 ||
+      [...url.searchParams.keys()].some(key => !allowed.includes(key)) ||
+      (statuses[0] !== undefined && !["OPEN", "RESOLVED", "ALL"].includes(statuses[0])) ||
+      (authors[0] !== undefined && authors[0] !== "me")) {
+    throw new ReviewError("INVALID_INPUT", "review page query is invalid");
+  }
+  return {
+    path: paths[0]!,
+    ...(cursors[0] === undefined ? {} : { before: cursors[0] }),
+    ...(statuses[0] === undefined ? {} : { status: statuses[0] as "OPEN" | "RESOLVED" | "ALL" }),
+    ...(authors[0] === undefined ? {} : { author: "me" as const }),
+  };
 }
 
 function requireExactOrigin(request: IncomingMessage, publicOrigin: string): void {
@@ -882,7 +925,7 @@ function writeJavaScript(response: ServerResponse, body: string): void {
   response.end(body);
 }
 
-function writeJson(response: ServerResponse, status: number, value: unknown): void {
+export function writeJson(response: ServerResponse, status: number, value: unknown): void {
   const body = JSON.stringify(value);
   response.statusCode = status;
   response.setHeader("Content-Type", "application/json; charset=utf-8");

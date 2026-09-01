@@ -21,6 +21,7 @@ import {
   type ReviewActor,
 } from "./index.ts";
 
+
 const developer: ReviewActor = {
   accountId: "account-developer",
   username: "developer",
@@ -171,6 +172,28 @@ test("REGION_V1 anchors canonicalize point and rectangle geometry", () => {
     { type: "REGION_V1", selection: "RECT", x: 0.1, y: 0.1, width: 0, height: 0.2, document: { width: 1, height: 1 }, viewport: { width: 1, height: 1 } },
     { type: "REGION_V1", selection: "RECT", x: 0.1, y: 0.1, width: 0.2, height: 0.2, document: { width: 0, height: 1 }, viewport: { width: 1, height: 1 } },
   ]) assert.throws(() => normalizeRegionAnchor(anchor), ReviewError);
+});
+
+test("element anchors accept only bounded identities and matching relative geometry", () => {
+  const anchor = {
+    type: "REGION_V1", selection: "RECT", x: 0.1, y: 0.2, width: 0.2, height: 0.1,
+    document: { width: 1440, height: 1600 }, viewport: { width: 1440, height: 900 },
+    element: { attribute: "data-review-id", value: "checkout:primary", x: 0.1250004, y: 0.1, width: 0.5, height: 0.4 },
+  };
+  assert.deepEqual(normalizeRegionAnchor(anchor).element, { ...anchor.element, x: 0.125 });
+  assert.equal(normalizeRegionAnchor({ ...anchor, element: { ...anchor.element, attribute: "id" } }).element?.attribute, "id");
+  for (const element of [
+    null, undefined, { ...anchor.element, selector: "#checkout" },
+    { ...anchor.element, attribute: "onclick" }, { ...anchor.element, value: " " },
+    { ...anchor.element, value: "x".repeat(257) }, { ...anchor.element, value: "bad\nidentity" },
+    { ...anchor.element, x: Number.NaN }, { ...anchor.element, y: -1 },
+    { ...anchor.element, width: 0 }, { ...anchor.element, x: 0.9, width: 0.2 },
+  ]) assert.throws(() => normalizeRegionAnchor({ ...anchor, element }), ReviewError);
+  assert.throws(() => normalizeRegionAnchor({ ...anchor, selection: "POINT", width: 0, height: 0 }), ReviewError);
+  assert.equal(normalizeRegionAnchor({
+    ...anchor, selection: "POINT", width: 0, height: 0,
+    element: { ...anchor.element, width: 0, height: 0 },
+  }).element?.width, 0);
 });
 
 test("a developer binds stable project revisions while tunnel sessions remain exact", async () => {
@@ -371,6 +394,7 @@ test("region comments share the page conversation while retaining a validated an
       height: 0.4,
       document: { width: 1440, height: 3200 },
       viewport: { width: 1280, height: 720 },
+      element: { attribute: "id", value: "product-card", x: 0.1, y: 0.2, width: 0.5, height: 0.4 },
     },
   });
   const page = await service.createPageComment({
@@ -411,9 +435,11 @@ test("review context exposes only the bound project, revision, and caller capabi
     sessionId: "session-a",
   });
   assert.deepEqual(context, {
-    project: { slug: "storefront", displayName: "storefront" },
-    revision: { key: "commit-a" },
+    project: { id: context.project.id, slug: "storefront", displayName: "storefront" },
+    revision: { id: context.revision.id, key: "commit-a" },
+    features: { workflowVersion: 1, canRequestReview: true },
     principal: {
+      accountId: reviewer.accountId,
       username: "reviewer",
       displayName: "Reviewer",
       canComment: true,
@@ -524,6 +550,7 @@ test("review replies and thread status transitions preserve permissions and opti
     (error: unknown) => error instanceof ReviewError && error.code === "STATE_CONFLICT",
   );
   const reopened = await service.changePageCommentStatus({
+    expectedWorkflowVersion: 2,
     actor: developer,
     tunnelId: "tunnel-conversation",
     sessionId: "session-conversation",
@@ -545,6 +572,7 @@ test("review replies and thread status transitions preserve permissions and opti
   assert.deepEqual(events.map((event) => event.type), [
     "COMMENT_CREATED",
     "REPLY_CREATED",
+    "NOTIFICATION_CREATED",
     "THREAD_STATUS_CHANGED",
     "THREAD_STATUS_CHANGED",
   ]);
@@ -998,4 +1026,72 @@ test("expired Tunnel bindings are rejected and reclaimed without removing review
     sessionId: "replacement-session",
     routePath: "/",
   })).comments[0]?.id, comment.id);
+});
+
+test("review filters search the whole revision and reject cursors from another filter", async () => {
+  const repository = new InMemoryReviewRepository();
+  let time = Date.now();
+  const service = createReviewService({ repository, now: () => new Date(time++) });
+  const query = { actor: reviewer, tunnelId: "filter-tunnel", sessionId: "filter-session", routePath: "/filters" };
+  await service.bindTunnel({ ...query, actor: developer, tunnelOwnerAccountId: developer.accountId, projectSlug: "filters", revisionKey: "revision" });
+  const oldest = await service.createPageComment({ ...query, body: "Old unresolved feedback" });
+  for (let index = 0; index < 101; index++) {
+    const thread = await service.createPageComment({ ...query, actor: developer, body: `Resolved ${index}` });
+    await service.changePageCommentStatus({ ...query, actor: developer, commentId: thread.id, expectedStatus: "OPEN", status: "RESOLVED" });
+  }
+  assert.equal((await service.listPageCommentPage(query)).comments.some(item => item.id === oldest.id), false);
+  const open = await service.listPageCommentPage({ ...query, status: "OPEN" });
+  assert.deepEqual(open.comments.map(item => item.id), [oldest.id]);
+  assert.equal(open.filteredCount, 1);
+  const mine = await service.listPageCommentPage({ ...query, author: "me" });
+  assert.deepEqual(mine.comments.map(item => item.id), [oldest.id]);
+  const resolved = await service.listPageCommentPage({ ...query, status: "RESOLVED" });
+  assert.equal(resolved.filteredCount, 101);
+  assert.equal(resolved.openCount, 1);
+  assert.ok(resolved.pageInfo.nextCursor);
+  assert.equal((await service.listPageCommentPage({ ...query, status: "RESOLVED", before: resolved.pageInfo.nextCursor })).comments.length, 1);
+  await assert.rejects(service.listPageCommentPage({ ...query, status: "OPEN", before: resolved.pageInfo.nextCursor }), ReviewError);
+  await assert.rejects(service.listPageCommentPage({ ...query, routePath: "/other", status: "RESOLVED", before: resolved.pageInfo.nextCursor }), ReviewError);
+});
+
+test("offline review access, workflow versions, history and cross-page inbox remain scoped", async () => {
+  const repository = new InMemoryReviewRepository();
+  const service = createReviewService({ repository });
+  const binding = await service.bindTunnel({ actor: developer, tunnelOwnerAccountId: developer.accountId,
+    tunnelId: "offline", sessionId: "offline-session", projectSlug: "offline", revisionKey: "v1" });
+  const tunnel = { tunnelId: "offline", sessionId: "offline-session" };
+  const thread = await service.createPageComment({ ...tunnel, actor: reviewer, routePath: "/other", body: "Please fix this" });
+  const control = { controlProjectId: binding.project.id, controlRevisionId: binding.revision.id };
+  await service.removeTunnelBinding(tunnel);
+  await assert.rejects(service.getThread({ ...tunnel, actor: reviewer, commentId: thread.id }), { code: "NOT_FOUND" });
+  await assert.rejects(service.getThread({ ...control, ...tunnel, actor: reviewer, commentId: thread.id }), { code: "INVALID_INPUT" });
+  await assert.rejects(service.getThread({ ...control, controlProjectId: "wrong-project", actor: reviewer, commentId: thread.id }), { code: "NOT_FOUND" });
+  await assert.rejects(service.getThreadForControl(outsider, thread.id), { code: "FORBIDDEN" });
+  assert.equal((await service.listPageCommentPage({ ...control, actor: reviewer })).comments[0]?.id, thread.id);
+  const base = { ...control, commentId: thread.id, routePath: "/other" };
+  const disabled = createReviewService({ repository, workflowEnabled: false });
+  assert.equal(disabled.getFeatures().canRequestReview, false);
+  await assert.rejects(disabled.changePageCommentStatus({ ...base, actor: developer, expectedStatus: "OPEN", status: "NEEDS_REVIEW", expectedWorkflowVersion: 1 }), { code: "FORBIDDEN" });
+  await service.createReply({ ...base, actor: developer, body: "Fixed @reviewer" });
+  assert.equal((await service.listInbox(reviewer)).notifications.length, 1);
+  assert.equal((await service.listInbox(developer)).notifications.length, 0);
+  const notification = (await service.listInbox(reviewer)).notifications[0]!;
+  await assert.rejects(service.setInboxRead(developer, notification.id, true), { code: "NOT_FOUND" });
+  await service.setInboxRead(reviewer, notification.id, true);
+  assert.equal((await service.listInbox(reviewer)).unreadCount, 0);
+  assert.equal((await service.listMentionCandidates({ ...control, actor: reviewer, prefix: "dev" }))[0]?.username, "developer");
+  const request = await service.changePageCommentStatus({ ...base, actor: developer, expectedStatus: "OPEN", status: "NEEDS_REVIEW", expectedWorkflowVersion: 1 });
+  assert.equal(request.workflowVersion, 2);
+  assert.equal((await service.listPageCommentPage({ ...control, actor: reviewer, status: "OPEN" })).openCount, 1);
+  await service.createReply({ ...base, actor: reviewer, body: "Checking now" });
+  await assert.rejects(service.changePageCommentStatus({ ...base, actor: { ...reviewer, accountId: "another-reviewer" }, expectedStatus: "NEEDS_REVIEW", status: "RESOLVED", expectedWorkflowVersion: 2 }), { code: "FORBIDDEN" });
+  const reopened = await service.changePageCommentStatus({ ...base, actor: reviewer, expectedStatus: "NEEDS_REVIEW", status: "OPEN", expectedWorkflowVersion: 2 });
+  assert.equal(reopened.workflowVersion, 3);
+  await assert.rejects(service.changePageCommentStatus({ ...base, actor: developer, expectedStatus: "OPEN", status: "RESOLVED", expectedWorkflowVersion: 1 }), { code: "STATE_CONFLICT" });
+  await service.changePageCommentStatus({ ...base, actor: developer, expectedStatus: "OPEN", status: "NEEDS_REVIEW", expectedWorkflowVersion: 3 });
+  await service.changePageCommentStatus({ ...base, actor: reviewer, expectedStatus: "NEEDS_REVIEW", status: "RESOLVED", expectedWorkflowVersion: 4 });
+  const final = await service.getThreadForControl(reviewer, thread.id);
+  assert.equal(final.thread.workflowHistory?.length, 4);
+  assert.equal(final.thread.resolvedBy?.accountId, reviewer.accountId);
+  assert.equal((await disabled.getThreadForControl(reviewer, thread.id)).thread.status, "RESOLVED");
 });

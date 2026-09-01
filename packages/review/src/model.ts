@@ -11,7 +11,8 @@ export type ReviewErrorCode =
   | "NOT_FOUND"
   | "CONFLICT"
   | "STATE_CONFLICT"
-  | "VERSION_CONFLICT";
+  | "VERSION_CONFLICT"
+  | "REVIEWER_UNAVAILABLE";
 
 export class ReviewError extends Error {
   readonly code: ReviewErrorCode;
@@ -68,12 +69,12 @@ export type ReviewBindingContext = Readonly<{
   binding: ReviewTunnelBinding;
 }>;
 
-export type ReviewThreadStatus = "OPEN" | "RESOLVED";
+export type ReviewThreadStatus = "OPEN" | "NEEDS_REVIEW" | "RESOLVED";
 
 export function isOpenReviewThread(
   thread: Readonly<{ status: ReviewThreadStatus; deletedAt?: Date }>,
 ): boolean {
-  return thread.status === "OPEN" && thread.deletedAt === undefined;
+  return thread.status !== "RESOLVED" && thread.deletedAt === undefined;
 }
 
 export type ReviewEventType =
@@ -112,6 +113,9 @@ export type ReviewNotification = Readonly<{
   threadId: string;
   contentType: ReviewMentionContentType;
   contentId: string;
+  reason?: "MENTION" | "REPLY" | "WORKFLOW_REQUEST" | "WORKFLOW_RESULT";
+  sourceKey?: string;
+  workflowVersion?: number;
   recipientAccountId: string;
   actor: ReviewIdentity;
   readAt?: Date;
@@ -132,6 +136,15 @@ export type ReviewReply = Readonly<{
 
 export type PageReviewAnchor = Readonly<{ type: "PAGE" }>;
 
+export type ReviewElementAnchor = Readonly<{
+  attribute: "data-review-id" | "id";
+  value: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}>;
+
 export type RegionReviewAnchorV1 = Readonly<{
   type: "REGION_V1";
   selection: "POINT" | "RECT";
@@ -141,6 +154,7 @@ export type RegionReviewAnchorV1 = Readonly<{
   height: number;
   document: Readonly<{ width: number; height: number }>;
   viewport: Readonly<{ width: number; height: number }>;
+  element?: ReviewElementAnchor;
 }>;
 
 export type ReviewAnchor = PageReviewAnchor | RegionReviewAnchorV1;
@@ -154,6 +168,8 @@ export type PageCommentThread = Readonly<{
   body: string | null;
   version: number;
   status: ReviewThreadStatus;
+  workflowVersion?: number;
+  workflowHistory?: readonly Readonly<{ version: number; from: ReviewThreadStatus; to: ReviewThreadStatus; actor: ReviewIdentity; changedAt: Date }>[];
   author: ReviewIdentity;
   resolvedBy?: ReviewIdentity;
   resolvedAt?: Date;
@@ -167,6 +183,7 @@ export type PageCommentThread = Readonly<{
 export type ReviewPageCursor = Readonly<{
   createdAt: Date;
   id: string;
+  scope?: string;
 }>;
 
 export type ReviewPageInfo = Readonly<{
@@ -181,6 +198,7 @@ export type PageCommentPageItem = PageCommentThread & Readonly<{
 export type PageCommentPage = Readonly<{
   comments: readonly PageCommentPageItem[];
   openCount: number;
+  filteredCount?: number;
   eventCursor: string;
   pageInfo: ReviewPageInfo;
 }>;
@@ -205,6 +223,7 @@ export function normalizeRegionAnchor(value: unknown): RegionReviewAnchorV1 {
     "height",
     "document",
     "viewport",
+    ...(Object.hasOwn(anchor, "element") ? ["element"] : []),
   ], "review region anchor");
   if (anchor.type !== "REGION_V1") {
     throw new ReviewError("INVALID_INPUT", "review region anchor type is invalid");
@@ -233,7 +252,31 @@ export function normalizeRegionAnchor(value: unknown): RegionReviewAnchorV1 {
     height,
     document: normalizeCaptureDimensions(anchor.document, "review document"),
     viewport: normalizeCaptureDimensions(anchor.viewport, "review viewport"),
+    ...(Object.hasOwn(anchor, "element")
+      ? { element: normalizeElementAnchor(anchor.element, anchor.selection) }
+      : {}),
   };
+}
+
+function normalizeElementAnchor(value: unknown, selection: "POINT" | "RECT"): ReviewElementAnchor {
+  const element = requireRecord(value, "review element anchor");
+  requireExactKeys(element, ["attribute", "value", "x", "y", "width", "height"], "review element anchor");
+  if (
+    (element.attribute !== "data-review-id" && element.attribute !== "id") ||
+    typeof element.value !== "string" || element.value.trim().length === 0 ||
+    element.value.length > 256 ||
+    [...element.value].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127)
+  ) throw new ReviewError("INVALID_INPUT", "review element identity is invalid");
+  const x = normalizeUnitCoordinate(element.x, "review element x");
+  const y = normalizeUnitCoordinate(element.y, "review element y");
+  const width = normalizeUnitCoordinate(element.width, "review element width");
+  const height = normalizeUnitCoordinate(element.height, "review element height");
+  if (
+    (selection === "POINT" && (width !== 0 || height !== 0)) ||
+    (selection === "RECT" && (width === 0 || height === 0)) ||
+    x + width > 1 || y + height > 1
+  ) throw new ReviewError("INVALID_INPUT", "review element geometry is invalid");
+  return { attribute: element.attribute, value: element.value, x, y, width, height };
 }
 
 function normalizeUnitCoordinate(value: unknown, name: string): number {
@@ -371,8 +414,8 @@ export function normalizeThreadStatusTransition(
   status: ReviewThreadStatus,
 ): Readonly<{ expectedStatus: ReviewThreadStatus; status: ReviewThreadStatus }> {
   if (
-    (expectedStatus !== "OPEN" && expectedStatus !== "RESOLVED") ||
-    (status !== "OPEN" && status !== "RESOLVED") ||
+    (expectedStatus !== "OPEN" && expectedStatus !== "NEEDS_REVIEW" && expectedStatus !== "RESOLVED") ||
+    (status !== "OPEN" && status !== "NEEDS_REVIEW" && status !== "RESOLVED") ||
     expectedStatus === status
   ) {
     throw new ReviewError("INVALID_INPUT", "review thread status transition is invalid");
@@ -396,7 +439,12 @@ export function encodeReviewPageCursor(value: ReviewPageCursor): string {
   if (!(value.createdAt instanceof Date) || !Number.isFinite(value.createdAt.getTime())) {
     throw new ReviewError("INVALID_INPUT", "review page cursor timestamp is invalid");
   }
-  return Buffer.from(JSON.stringify([value.createdAt.toISOString(), id]), "utf8").toString("base64url");
+  if (value.scope !== undefined && !/^[a-f0-9]{64}$/.test(value.scope)) {
+    throw new ReviewError("INVALID_INPUT", "review page cursor scope is invalid");
+  }
+  return Buffer.from(JSON.stringify([
+    value.createdAt.toISOString(), id, ...(value.scope === undefined ? [] : [value.scope]),
+  ]), "utf8").toString("base64url");
 }
 
 export function normalizeReviewPageCursor(value: string | undefined): ReviewPageCursor | undefined {
@@ -416,7 +464,8 @@ export function normalizeReviewPageCursor(value: string | undefined): ReviewPage
   }
   if (
     !Array.isArray(parsed) ||
-    parsed.length !== 2 ||
+    (parsed.length !== 2 && parsed.length !== 3) ||
+    (parsed.length === 3 && (typeof parsed[2] !== "string" || !/^[a-f0-9]{64}$/.test(parsed[2]))) ||
     typeof parsed[0] !== "string" ||
     typeof parsed[1] !== "string"
   ) throw new ReviewError("INVALID_INPUT", "review page cursor is invalid");
@@ -427,6 +476,7 @@ export function normalizeReviewPageCursor(value: string | undefined): ReviewPage
   const cursor = {
     createdAt,
     id: normalizeOpaqueReviewId(parsed[1], "review page cursor id"),
+    ...(parsed.length === 3 ? { scope: parsed[2] as string } : {}),
   };
   if (encodeReviewPageCursor(cursor) !== value) {
     throw new ReviewError("INVALID_INPUT", "review page cursor is invalid");

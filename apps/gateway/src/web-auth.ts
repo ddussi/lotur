@@ -60,6 +60,14 @@ export type WebAuthOptions = Readonly<{
       principal: Principal;
     }>): Promise<void>;
   }>;
+  reviewControlExtension?: Readonly<{
+    matches(method: string, pathname: string): boolean;
+    handle(input: Readonly<{
+      request: IncomingMessage;
+      response: ServerResponse;
+      principal: Principal;
+    }>): Promise<void>;
+  }>;
 }>;
 
 export type WebAuthHandler = Readonly<{
@@ -252,7 +260,19 @@ export function createWebAuthHandler(options: WebAuthOptions): WebAuthHandler {
       applySecurityHeaders(response);
       const url = new URL(request.url ?? "/", `${scheme}://${request.headers.host ?? options.controlHost}`);
       const principal = await resolveCookiePrincipalForRequest(request, controlCookie);
+      const returnTo = safeReviewReturn(url.searchParams.get("returnTo"));
       try {
+        if (options.reviewControlExtension?.matches(request.method ?? "GET", url.pathname)) {
+          if (principal === undefined || principal.mustChangePassword) {
+            if (url.pathname.startsWith("/api/")) writeJsonError(response, 401, "LOGIN_REQUIRED");
+            else redirect(response, `${principal === undefined ? "/login" : "/account/change-password"}?returnTo=${encodeURIComponent(url.pathname + url.search)}`);
+            return;
+          }
+          if (!canAccessSharedContent(principal.roles)) throw new AuthError("FORBIDDEN", "리뷰 권한이 필요합니다.");
+          if (request.method !== "GET") requireSameOrigin(request, scheme);
+          await runAuthorizationMutation(request, () => options.reviewControlExtension!.handle({ request, response, principal }));
+          return;
+        }
         if (request.method === "POST" && url.pathname === "/api/client/login") {
           requireCliRequest(request);
           const form = await readForm(request);
@@ -401,6 +421,10 @@ export function createWebAuthHandler(options: WebAuthOptions): WebAuthHandler {
           return;
         }
         if (request.method === "GET" && url.pathname === "/login") {
+          if (principal !== undefined && !principal.mustChangePassword && returnTo !== "" && !url.searchParams.has("intent")) {
+            redirect(response, returnTo);
+            return;
+          }
           if (principal !== undefined && !principal.mustChangePassword && url.searchParams.has("intent")) {
             await redirectToExchangeForRequest(
               request,
@@ -410,7 +434,7 @@ export function createWebAuthHandler(options: WebAuthOptions): WebAuthHandler {
             );
             return;
           }
-          writeHtml(response, 200, loginPage(url.searchParams.get("intent"), undefined));
+          writeHtml(response, 200, loginPage(url.searchParams.get("intent"), undefined, returnTo));
           return;
         }
         if (request.method === "POST" && url.pathname === "/login") {
@@ -430,7 +454,7 @@ export function createWebAuthHandler(options: WebAuthOptions): WebAuthHandler {
           });
           setSessionCookie(response, controlCookie, login.sessionToken, secureCookies);
           if (login.principal.mustChangePassword) {
-            redirect(response, `/account/change-password${intent === "" ? "" : `?intent=${encodeURIComponent(intent)}`}`);
+            redirect(response, `/account/change-password?${new URLSearchParams({ intent, returnTo })}`);
           } else if (exchange !== undefined) {
             response.setHeader("Cache-Control", "no-store");
             response.setHeader("Referrer-Policy", "no-referrer");
@@ -439,7 +463,7 @@ export function createWebAuthHandler(options: WebAuthOptions): WebAuthHandler {
               `${scheme}://${exchange.targetHost}/_review-tunnel/session?code=${encodeURIComponent(exchange.code)}`,
             );
           } else {
-            redirect(response, login.principal.roles.includes("ADMIN") ? "/admin/users" : "/account");
+            redirect(response, returnTo || (login.principal.roles.includes("ADMIN") ? "/admin/users" : "/account"));
           }
           return;
         }
@@ -448,7 +472,7 @@ export function createWebAuthHandler(options: WebAuthOptions): WebAuthHandler {
             redirect(response, `/login${url.search}`);
             return;
           }
-          writeHtml(response, 200, passwordChangePage(url.searchParams.get("intent"), undefined));
+          writeHtml(response, 200, passwordChangePage(url.searchParams.get("intent"), undefined, returnTo));
           return;
         }
         if (request.method === "POST" && url.pathname === "/account/change-password") {
@@ -486,7 +510,7 @@ export function createWebAuthHandler(options: WebAuthOptions): WebAuthHandler {
               `${scheme}://${exchange.targetHost}/_review-tunnel/session?code=${encodeURIComponent(exchange.code)}`,
             );
           } else {
-            redirect(response, login.principal.roles.includes("ADMIN") ? "/admin/users" : "/account");
+            redirect(response, returnTo || (login.principal.roles.includes("ADMIN") ? "/admin/users" : "/account"));
           }
           return;
         }
@@ -620,7 +644,7 @@ export function createWebAuthHandler(options: WebAuthOptions): WebAuthHandler {
         }
         writeHtml(response, 404, messagePage("페이지를 찾을 수 없습니다."));
       } catch (error) {
-        handleWebError(response, error, url.pathname, url.searchParams.get("intent"));
+        handleWebError(response, error, url.pathname, url.searchParams.get("intent"), returnTo);
       }
     },
 
@@ -1040,6 +1064,7 @@ function handleWebError(
   error: unknown,
   path: string,
   intent: string | null,
+  returnTo = "",
 ): void {
   if (response.writableEnded || response.destroyed) return;
   if (error instanceof WebAuthBoundaryError) {
@@ -1073,9 +1098,9 @@ function handleWebError(
     response.setHeader("Retry-After", "60");
   }
   if (path.startsWith("/api/")) writeJsonError(response, status, error.code);
-  else if (path === "/login") writeHtml(response, status, loginPage(intent, error.message));
+  else if (path === "/login") writeHtml(response, status, loginPage(intent, error.message, returnTo));
   else if (path === "/account/change-password") {
-    writeHtml(response, status, passwordChangePage(intent, error.message));
+    writeHtml(response, status, passwordChangePage(intent, error.message, returnTo));
   } else writeHtml(response, status, messagePage(error.message));
 }
 
@@ -1089,4 +1114,11 @@ function matchAdminAction(pathname: string): Readonly<{
     accountId: decodeURIComponent(match[1]),
     action: match[2] as "enable" | "disable" | "roles" | "reset" | "revoke",
   };
+}
+
+// Only our review pages may be restored after authentication.
+function safeReviewReturn(value: string | null): string {
+  if (value === null || value.length > 2048 || !/^\/reviews(?:\/|\?|$)/.test(value) || ([...value].some(char => char.charCodeAt(0) <= 32) || value.includes("\\"))) return "";
+  const url = new URL(value, "https://control.invalid");
+  return url.origin === "https://control.invalid" && /^\/reviews(?:\/|$)/.test(url.pathname) ? url.pathname + url.search : "";
 }

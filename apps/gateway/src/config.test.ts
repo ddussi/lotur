@@ -10,6 +10,13 @@ const deploymentEnvironment = {
   CANARY_BEARER_TOKEN: "c".repeat(32),
 };
 
+test("재검토 요청은 배포 설정에서 명시적으로 켜며 잘못된 값은 거부한다", () => {
+  assert.equal(readGatewayConfig({}).reviewWorkflowEnabled, undefined);
+  assert.equal(readGatewayConfig({ REVIEW_WORKFLOW_ENABLED: "true" }).reviewWorkflowEnabled, true);
+  assert.equal(readGatewayConfig({ REVIEW_WORKFLOW_ENABLED: "false" }).reviewWorkflowEnabled, false);
+  assert.throws(() => readGatewayConfig({ REVIEW_WORKFLOW_ENABLED: "yes" }));
+});
+
 test("POC Gateway는 기본적으로 loopback localhost content domain만 사용한다", () => {
   assert.deepEqual(readGatewayConfig({}), {
     host: "127.0.0.1",

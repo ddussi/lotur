@@ -423,4 +423,36 @@ INSERT INTO rt_schema_migrations(version) VALUES (16)
 ON CONFLICT (version) DO NOTHING;
 INSERT INTO rt_schema_migrations(version) VALUES (17)
 ON CONFLICT (version) DO NOTHING;
+
+ALTER TABLE rt_review_threads ADD COLUMN IF NOT EXISTS workflow_version integer NOT NULL DEFAULT 1 CHECK (workflow_version > 0);
+ALTER TABLE rt_review_threads DROP CONSTRAINT IF EXISTS rt_review_threads_status_check;
+ALTER TABLE rt_review_threads ADD CONSTRAINT rt_review_threads_status_check CHECK (status IN ('OPEN', 'NEEDS_REVIEW', 'RESOLVED'));
+ALTER TABLE rt_review_threads DROP CONSTRAINT IF EXISTS rt_review_threads_resolution_shape;
+ALTER TABLE rt_review_threads ADD CONSTRAINT rt_review_threads_resolution_shape CHECK (
+  (status <> 'RESOLVED' AND resolved_by_account_id IS NULL AND resolved_at IS NULL)
+  OR (status = 'RESOLVED' AND ((resolved_by_account_id IS NULL AND resolved_at IS NULL) OR (resolved_by_account_id IS NOT NULL AND resolved_at IS NOT NULL)))
+);
+CREATE TABLE IF NOT EXISTS rt_review_workflow_history (
+  thread_id text NOT NULL REFERENCES rt_review_threads(id) ON DELETE CASCADE,
+  version integer NOT NULL CHECK (version > 1),
+  from_status text NOT NULL CHECK (from_status IN ('OPEN', 'NEEDS_REVIEW', 'RESOLVED')),
+  to_status text NOT NULL CHECK (to_status IN ('OPEN', 'NEEDS_REVIEW', 'RESOLVED')),
+  actor_account_id text NOT NULL REFERENCES rt_accounts(id) ON DELETE RESTRICT,
+  changed_at timestamptz NOT NULL,
+  PRIMARY KEY (thread_id, version)
+);
+CREATE INDEX IF NOT EXISTS rt_review_threads_revision_created_idx ON rt_review_threads(revision_id, created_at DESC, id DESC);
+INSERT INTO rt_schema_migrations(version) VALUES (18) ON CONFLICT (version) DO NOTHING;
+ALTER TABLE rt_review_notifications ADD COLUMN IF NOT EXISTS reason text NOT NULL DEFAULT 'MENTION' CHECK (reason IN ('MENTION', 'REPLY'));
+CREATE INDEX IF NOT EXISTS rt_review_notifications_recipient_id_idx ON rt_review_notifications(recipient_account_id, id DESC);
+CREATE INDEX IF NOT EXISTS rt_review_notifications_unread_idx ON rt_review_notifications(recipient_account_id, id DESC) WHERE read_at IS NULL;
+INSERT INTO rt_schema_migrations(version) VALUES (19) ON CONFLICT (version) DO NOTHING;
+ALTER TABLE rt_review_notifications DROP CONSTRAINT IF EXISTS rt_review_notifications_reason_check;
+ALTER TABLE rt_review_notifications ADD CONSTRAINT rt_review_notifications_reason_check CHECK (reason IN ('MENTION', 'REPLY', 'WORKFLOW_REQUEST', 'WORKFLOW_RESULT'));
+ALTER TABLE rt_review_notifications ADD COLUMN IF NOT EXISTS source_key text;
+UPDATE rt_review_notifications SET source_key = 'legacy:' || id WHERE source_key IS NULL;
+ALTER TABLE rt_review_notifications ALTER COLUMN source_key SET NOT NULL;
+ALTER TABLE rt_review_notifications ADD COLUMN IF NOT EXISTS workflow_version integer;
+CREATE UNIQUE INDEX IF NOT EXISTS rt_review_notifications_source_unique ON rt_review_notifications(recipient_account_id, source_key);
+INSERT INTO rt_schema_migrations(version) VALUES (20) ON CONFLICT (version) DO NOTHING;
 `;

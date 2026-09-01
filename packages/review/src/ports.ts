@@ -39,6 +39,7 @@ export type CreateReviewReplyResult =
   | Readonly<{ status: "STALE_AUTHORIZATION" }>;
 
 export type ChangePageCommentStatusResult =
+  | Readonly<{ status: "REVIEWER_UNAVAILABLE" }>
   | Readonly<{ status: "UPDATED"; thread: PageCommentThread }>
   | Readonly<{ status: "THREAD_NOT_FOUND" }>
   | Readonly<{ status: "STATE_CONFLICT" }>
@@ -79,6 +80,14 @@ export type MutateReviewReplyResult =
 
 export interface ReviewRepository {
   checkHealth(): Promise<void>;
+  listProjects(): Promise<readonly (ReviewProject & { openCount: number; lastActivityAt: Date })[]>;
+  listRevisions(projectId: string): Promise<readonly (ReviewRevision & { openCount: number })[]>;
+  findRevisionContext(projectId: string | undefined, revisionId: string): Promise<{ project: ReviewProject; revision: ReviewRevision } | undefined>;
+  findThread(threadId: string): Promise<PageCommentPage["comments"][number] | undefined>;
+  listInbox(input: Readonly<{ actorAccountId: string; before?: string; unreadOnly: boolean }>): Promise<{ notifications: readonly ReviewNotification[]; unreadCount: number; nextCursor?: string }>;
+  findNotificationForAccount(id: string, accountId: string): Promise<ReviewNotification | undefined>;
+  listMentionCandidates(revisionId: string, prefix: string): Promise<readonly { username: string; displayName: string }[]>;
+
   bindTunnel(input: BindReviewTunnelInput): Promise<BindReviewTunnelResult>;
   findBindingContext(input: Readonly<{
     tunnelId: string;
@@ -93,8 +102,9 @@ export interface ReviewRepository {
     actorUsername: string;
     mentionUsernames: readonly string[];
     actorAuthorizationVersion: number;
-    tunnelId: string;
-    sessionId: string;
+    tunnelId?: string;
+    sessionId?: string;
+    controlProjectId?: string;
   }>): Promise<CreatePageCommentResult>;
   createReply(input: Readonly<{
     reply: ReviewReply;
@@ -103,27 +113,34 @@ export interface ReviewRepository {
     revisionId: string;
     routePath: string;
     actorAuthorizationVersion: number;
-    tunnelId: string;
-    sessionId: string;
+    tunnelId?: string;
+    sessionId?: string;
+    controlProjectId?: string;
   }>): Promise<CreateReviewReplyResult>;
   changePageCommentStatus(input: Readonly<{
     threadId: string;
     revisionId: string;
     routePath: string;
     expectedStatus: ReviewThreadStatus;
+    expectedWorkflowVersion: number;
+    actorCanManageProject: boolean;
     status: ReviewThreadStatus;
     actor: ReviewIdentity;
     actorAuthorizationVersion: number;
-    tunnelId: string;
-    sessionId: string;
+    tunnelId?: string;
+    sessionId?: string;
+    controlProjectId?: string;
     changedAt: Date;
   }>): Promise<ChangePageCommentStatusResult>;
   listPageCommentPage(input: Readonly<{
     revisionId: string;
-    routePath: string;
+    routePath?: string;
     before?: ReviewPageCursor;
     limit: number;
     replyLimit: number;
+    summaryOnly?: boolean;
+    status?: "OPEN" | "RESOLVED";
+    authorAccountId?: string;
   }>): Promise<PageCommentPage>;
   listReplyPage(input: Readonly<{
     revisionId: string;
@@ -139,8 +156,9 @@ export interface ReviewRepository {
     limit: number;
     actorAccountId: string;
     actorAuthorizationVersion: number;
-    tunnelId: string;
-    sessionId: string;
+    tunnelId?: string;
+    sessionId?: string;
+    controlProjectId?: string;
   }>): Promise<ListReviewEventsResult>;
   listNotifications(input: Readonly<{
     revisionId: string;
@@ -148,8 +166,9 @@ export interface ReviewRepository {
     limit: number;
     actorAccountId: string;
     actorAuthorizationVersion: number;
-    tunnelId: string;
-    sessionId: string;
+    tunnelId?: string;
+    sessionId?: string;
+    controlProjectId?: string;
   }>): Promise<ListReviewNotificationsResult>;
   setNotificationRead(input: Readonly<{
     notificationId: string;
@@ -158,8 +177,9 @@ export interface ReviewRepository {
     read: boolean;
     actor: ReviewIdentity;
     actorAuthorizationVersion: number;
-    tunnelId: string;
-    sessionId: string;
+    tunnelId?: string;
+    sessionId?: string;
+    controlProjectId?: string;
     changedAt: Date;
   }>): Promise<SetReviewNotificationReadResult>;
   updateComment(input: Readonly<{
@@ -172,8 +192,9 @@ export interface ReviewRepository {
     mentionUsernames: readonly string[];
     actor: ReviewIdentity;
     actorAuthorizationVersion: number;
-    tunnelId: string;
-    sessionId: string;
+    tunnelId?: string;
+    sessionId?: string;
+    controlProjectId?: string;
     changedAt: Date;
   }>): Promise<MutateReviewCommentResult>;
   deleteComment(input: Readonly<{
@@ -184,8 +205,9 @@ export interface ReviewRepository {
     actor: ReviewIdentity;
     actorCanManageProject: boolean;
     actorAuthorizationVersion: number;
-    tunnelId: string;
-    sessionId: string;
+    tunnelId?: string;
+    sessionId?: string;
+    controlProjectId?: string;
     changedAt: Date;
   }>): Promise<MutateReviewCommentResult>;
   updateReply(input: Readonly<{
@@ -199,8 +221,9 @@ export interface ReviewRepository {
     mentionUsernames: readonly string[];
     actor: ReviewIdentity;
     actorAuthorizationVersion: number;
-    tunnelId: string;
-    sessionId: string;
+    tunnelId?: string;
+    sessionId?: string;
+    controlProjectId?: string;
     changedAt: Date;
   }>): Promise<MutateReviewReplyResult>;
   deleteReply(input: Readonly<{
@@ -212,8 +235,9 @@ export interface ReviewRepository {
     actor: ReviewIdentity;
     actorCanManageProject: boolean;
     actorAuthorizationVersion: number;
-    tunnelId: string;
-    sessionId: string;
+    tunnelId?: string;
+    sessionId?: string;
+    controlProjectId?: string;
     changedAt: Date;
   }>): Promise<MutateReviewReplyResult>;
 }
