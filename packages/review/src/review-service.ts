@@ -408,6 +408,7 @@ export function createReviewService(input: Readonly<{
         revisionId: context.revision.id,
         routePath: normalizeRoutePath(query.routePath),
         afterId: normalizeReviewEventCursor(query.afterId),
+        requireContinuity: query.afterId !== undefined,
         limit: DEFAULT_REVIEW_EVENT_LIMIT,
         actorAccountId: normalizeOpaqueReviewId(query.actor.accountId, "account id"),
         actorAuthorizationVersion: normalizeAuthorizationVersion(
@@ -421,6 +422,9 @@ export function createReviewService(input: Readonly<{
       }
       if (result.status === "BINDING_NOT_FOUND") {
         throw new ReviewError("NOT_FOUND", "review binding was not found");
+      }
+      if (result.status === "CURSOR_EXPIRED") {
+        throw new ReviewError("CURSOR_EXPIRED", "review events were removed; reload the page data before resuming");
       }
       return result.events;
     },

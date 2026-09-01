@@ -1,3 +1,4 @@
+import { checkContentMutation } from "./content-mutation-policy.ts";
 import type {
   PageCommentPage,
   PageCommentThread,
@@ -288,11 +289,14 @@ export class InMemoryReviewRepository implements ReviewRepository {
   async updateComment(input: Parameters<ReviewRepository["updateComment"]>[0]) {
     const thread = this.#findBoundThread(input);
     if (thread === undefined) return { status: "THREAD_NOT_FOUND" } as const;
-    if (thread.author.accountId !== input.actor.accountId) return { status: "FORBIDDEN" } as const;
-    if (thread.status !== "OPEN" || thread.deletedAt !== undefined) {
-      return { status: "STATE_CONFLICT" } as const;
-    }
-    if (thread.version !== input.expectedVersion) return { status: "VERSION_CONFLICT" } as const;
+    const decision = checkContentMutation({
+      action: "UPDATE", actorAccountId: input.actor.accountId,
+      canManageProject: false,
+      content: { authorAccountId: thread.author.accountId, version: thread.version, deleted: thread.deletedAt !== undefined },
+      thread: { status: thread.status, deleted: thread.deletedAt !== undefined },
+      expectedVersion: input.expectedVersion,
+    });
+    if (decision !== "ALLOWED") return { status: decision };
     const changed: PageCommentThread = {
       ...thread,
       body: input.body,
@@ -316,12 +320,14 @@ export class InMemoryReviewRepository implements ReviewRepository {
   async deleteComment(input: Parameters<ReviewRepository["deleteComment"]>[0]) {
     const thread = this.#findBoundThread(input);
     if (thread === undefined) return { status: "THREAD_NOT_FOUND" } as const;
-    if (
-      thread.author.accountId !== input.actor.accountId &&
-      !input.actorCanManageProject
-    ) return { status: "FORBIDDEN" } as const;
-    if (thread.deletedAt !== undefined) return { status: "STATE_CONFLICT" } as const;
-    if (thread.version !== input.expectedVersion) return { status: "VERSION_CONFLICT" } as const;
+    const decision = checkContentMutation({
+      action: "DELETE", actorAccountId: input.actor.accountId,
+      canManageProject: input.actorCanManageProject,
+      content: { authorAccountId: thread.author.accountId, version: thread.version, deleted: thread.deletedAt !== undefined },
+      thread: { status: thread.status, deleted: thread.deletedAt !== undefined },
+      expectedVersion: input.expectedVersion,
+    });
+    if (decision !== "ALLOWED") return { status: decision };
     const changed: PageCommentThread = {
       ...thread,
       body: null,
@@ -341,13 +347,14 @@ export class InMemoryReviewRepository implements ReviewRepository {
     if (thread === undefined) return { status: "THREAD_NOT_FOUND" } as const;
     const reply = thread.replies.find((candidate) => candidate.id === input.replyId);
     if (reply === undefined) return { status: "REPLY_NOT_FOUND" } as const;
-    if (reply.author.accountId !== input.actor.accountId) return { status: "FORBIDDEN" } as const;
-    if (
-      thread.status !== "OPEN" ||
-      thread.deletedAt !== undefined ||
-      reply.deletedAt !== undefined
-    ) return { status: "STATE_CONFLICT" } as const;
-    if (reply.version !== input.expectedVersion) return { status: "VERSION_CONFLICT" } as const;
+    const decision = checkContentMutation({
+      action: "UPDATE", actorAccountId: input.actor.accountId,
+      canManageProject: false,
+      content: { authorAccountId: reply.author.accountId, version: reply.version, deleted: reply.deletedAt !== undefined },
+      thread: { status: thread.status, deleted: thread.deletedAt !== undefined },
+      expectedVersion: input.expectedVersion,
+    });
+    if (decision !== "ALLOWED") return { status: decision };
     const changed: ReviewReply = {
       ...reply,
       body: input.body,
@@ -373,12 +380,14 @@ export class InMemoryReviewRepository implements ReviewRepository {
     if (thread === undefined) return { status: "THREAD_NOT_FOUND" } as const;
     const reply = thread.replies.find((candidate) => candidate.id === input.replyId);
     if (reply === undefined) return { status: "REPLY_NOT_FOUND" } as const;
-    if (
-      reply.author.accountId !== input.actor.accountId &&
-      !input.actorCanManageProject
-    ) return { status: "FORBIDDEN" } as const;
-    if (reply.deletedAt !== undefined) return { status: "STATE_CONFLICT" } as const;
-    if (reply.version !== input.expectedVersion) return { status: "VERSION_CONFLICT" } as const;
+    const decision = checkContentMutation({
+      action: "DELETE", actorAccountId: input.actor.accountId,
+      canManageProject: input.actorCanManageProject,
+      content: { authorAccountId: reply.author.accountId, version: reply.version, deleted: reply.deletedAt !== undefined },
+      thread: { status: thread.status, deleted: thread.deletedAt !== undefined },
+      expectedVersion: input.expectedVersion,
+    });
+    if (decision !== "ALLOWED") return { status: decision };
     const changed: ReviewReply = {
       ...reply,
       body: null,

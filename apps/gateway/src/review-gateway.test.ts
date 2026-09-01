@@ -10,6 +10,7 @@ import {
 } from "../../../packages/auth/src/index.ts";
 import {
   InMemoryReviewRepository,
+  ReviewError,
   createReviewService,
 } from "../../../packages/review/src/index.ts";
 import { connectTunnelClient, type TunnelClient } from "../../client/src/client.ts";
@@ -95,13 +96,22 @@ test("authenticated review APIs bind stable revisions and never reach the local 
   assert.ok(originAddress !== null && typeof originAddress !== "string");
 
   const reviewRepository = new InMemoryReviewRepository();
+  const reviewService = createReviewService({ repository: reviewRepository });
+  const listEvents = reviewService.listEvents.bind(reviewService);
+  let expiringFeedReads = 0;
+  reviewService.listEvents = async (query) => {
+    if (query.routePath === "/expired" || (query.routePath === "/expires-later" && expiringFeedReads++ > 0)) {
+      throw new ReviewError("CURSOR_EXPIRED", "event retention exceeded");
+    }
+    return listEvents(query);
+  };
   const gateway = createGatewayServer({
     host: "127.0.0.1",
     port: 0,
     contentDomain: "localhost",
     controlHost: "control.localhost",
     authService,
-    reviewService: createReviewService({ repository: reviewRepository }),
+    reviewService,
     reviewEventStreamPolicy: {
       pollIntervalMs: 10,
       heartbeatIntervalMs: 20,
@@ -235,6 +245,13 @@ test("authenticated review APIs bind stable revisions and never reach the local 
       },
     );
     assert.equal(wrongEventOrigin.status, 403);
+    for (const path of ["/expired", "/expires-later"]) {
+      const expired = await send(gatewayPort, firstHost,
+        `/_review-tunnel/review/events?path=${encodeURIComponent(path)}&after=0`,
+        { method: "GET", headers: { cookie: contentCookie } });
+      assert.equal(expired.status, 200, "EventSource must receive a readable resynchronization event");
+      assert.match(expired.body, /event: review-error\ndata: \{"error":"REVIEW_CURSOR_EXPIRED"\}/);
+    }
     const reviewEvents = await openReviewEventStream(
       gatewayPort,
       firstHost,

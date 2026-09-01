@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { test } from "node:test";
+import { setTimeout as delay } from "node:timers/promises";
 import { Pool } from "pg";
 
 import {
@@ -44,6 +45,182 @@ const otherDeveloper: ReviewActor = {
   username: "review-other-developer",
   displayName: "Other Developer",
 };
+
+test("PostgreSQL event cursors never overtake a pending commit in the same review feed", {
+  skip: databaseUrl === undefined ? "TEST_DATABASE_URL is not configured" : false,
+  timeout: 20_000,
+}, async () => {
+  await withReviewRaceDatabase(async (pool, service) => {
+    const inserted = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const slowPool = observeQueries(pool, async (sql) => {
+      if (sql.trimStart().startsWith("INSERT INTO rt_review_events")) {
+        inserted.resolve();
+        await release.promise;
+      }
+    });
+    const slow = createReviewService({ repository: new PostgresReviewRepository(slowPool), now: () => now });
+    const base = { actor: developer, tunnelId: "race", sessionId: "race-session", routePath: "/" };
+    const pending = slow.createPageComment({ ...base, body: "first pending commit" });
+    let later: Promise<unknown> | undefined;
+    try {
+      await inserted.promise;
+      // A dedicated connection identifies the second writer independently of its SQL implementation.
+      const connection = await pool.connect();
+      const pid = (await connection.query<{ pid: number }>("SELECT pg_backend_pid() AS pid")).rows[0]!.pid;
+      const connectedPool = { connect: async () => ({ query: connection.query.bind(connection), release() {} }), query: pool.query.bind(pool) } as unknown as Pool;
+      const fast = createReviewService({ repository: new PostgresReviewRepository(connectedPool), now: () => now });
+      let completed = false;
+      later = fast.createPageComment({ ...base, body: "second commit" }).finally(() => { completed = true; connection.release(); });
+      const deadline = Date.now() + 5_000;
+      while (!completed) {
+        const activity = await pool.query<{ wait_event_type: string | null }>(
+          "SELECT wait_event_type FROM pg_stat_activity WHERE pid = $1", [pid],
+        );
+        if (activity.rows[0]?.wait_event_type === "Lock") break;
+        assert.ok(Date.now() < deadline, "second writer must complete or wait on the first transaction");
+        await delay(5);
+      }
+      assert.deepEqual(await service.listEvents({ ...base, afterId: "0" }), [], "uncommitted earlier events cannot be skipped");
+      // Serialization belongs to a feed, not the entire deployment.
+      await service.createPageComment({ ...base, routePath: "/independent", body: "independent feed" });
+      release.resolve();
+      await Promise.all([pending, later]);
+      const delivered = await service.listEvents({ ...base, afterId: "0" });
+      assert.equal(delivered.length, 2);
+      assert.equal(delivered[0]?.threadId, (await pending).id);
+      assert.deepEqual(await service.listEvents({ ...base, afterId: delivered[0]!.id }), [delivered[1]]);
+    } finally {
+      release.resolve();
+      await Promise.allSettled([pending, ...(later === undefined ? [] : [later])]);
+    }
+  });
+});
+
+test("PostgreSQL page data and initial event cursor share one read snapshot", {
+  skip: databaseUrl === undefined ? "TEST_DATABASE_URL is not configured" : false,
+  timeout: 20_000,
+}, async () => {
+  await withReviewRaceDatabase(async (pool, service) => {
+    const base = { actor: developer, tunnelId: "race", sessionId: "race-session", routePath: "/" };
+    const first = await service.createPageComment({ ...base, body: "before snapshot" });
+    const cursorRead = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const observed = observeQueries(pool, async (sql) => {
+      if (sql.includes("AS event_cursor")) {
+        cursorRead.resolve();
+        await release.promise;
+      }
+    });
+    const reader = createReviewService({ repository: new PostgresReviewRepository(observed), now: () => now });
+    const reading = reader.listPageCommentPage(base);
+    try {
+      await cursorRead.promise;
+      await service.createPageComment({ ...base, body: "after snapshot" });
+      release.resolve();
+      const page = await reading;
+      assert.deepEqual(page.comments.map((comment) => comment.id), [first.id]);
+      assert.equal(page.openCount, 1);
+      assert.equal((await service.listEvents({ ...base, afterId: page.eventCursor })).length, 1);
+    } finally {
+      release.resolve();
+      await Promise.allSettled([reading]);
+    }
+  });
+});
+
+function observeQueries(pool: Pool, after: (sql: string) => Promise<void>): Pool {
+  return {
+    async query(sql: string, values?: unknown[]) {
+      const result = await pool.query(sql, values);
+      await after(sql);
+      return result;
+    },
+    async connect() {
+      const client = await pool.connect();
+      return {
+        async query(sql: string, values?: unknown[]) {
+          const result = await client.query(sql, values);
+          await after(sql);
+          return result;
+        },
+        release: () => client.release(),
+      };
+    },
+  } as unknown as Pool;
+}
+
+test("PostgreSQL upgrade resets legacy cursors whose eviction history was not recorded", {
+  skip: databaseUrl === undefined ? "TEST_DATABASE_URL is not configured" : false,
+}, async () => {
+  await withReviewRaceDatabase(async (pool, service) => {
+    const base = { actor: developer, tunnelId: "race", sessionId: "race-session", routePath: "/" };
+    const comment = await service.createPageComment({ ...base, body: "legacy persistent comment" });
+    await pool.query("DELETE FROM rt_review_events");
+    await pool.query("DROP TABLE rt_review_event_retention");
+    await pool.query("DELETE FROM rt_schema_migrations WHERE version = 18");
+    const repository = new PostgresReviewRepository(pool);
+    await repository.migrate();
+    await assert.rejects(service.listEvents({ ...base, afterId: "0" }), (error: unknown) =>
+      error instanceof ReviewError && error.code === "CURSOR_EXPIRED");
+    const snapshot = await service.listPageCommentPage(base);
+    assert.equal(snapshot.comments[0]?.id, comment.id);
+    assert.ok(BigInt(snapshot.eventCursor) > 0n);
+    await repository.migrate();
+    await service.createPageComment({ ...base, body: "after upgrade" });
+    assert.equal((await service.listEvents({ ...base, afterId: snapshot.eventCursor })).length, 1);
+  });
+});
+
+test("PostgreSQL retained event gaps explicitly require resynchronization and an empty feed gets a usable cursor", {
+  skip: databaseUrl === undefined ? "TEST_DATABASE_URL is not configured" : false,
+  timeout: 20_000,
+}, async () => {
+  await withReviewRaceDatabase(async (pool, original) => {
+    const base = { actor: developer, tunnelId: "race", sessionId: "race-session", routePath: "/" };
+    const initial = await original.listPageCommentPage(base);
+    const retained = createReviewService({ repository: new PostgresReviewRepository(pool, { maxEvents: 2 }), now: () => now });
+    for (const body of ["one", "two", "three"]) await retained.createPageComment({ ...base, body });
+    await assert.rejects(retained.listEvents({ ...base, afterId: initial.eventCursor }), (error: unknown) =>
+      error instanceof ReviewError && error.code === "CURSOR_EXPIRED");
+    assert.equal((await retained.listEvents(base)).length, 2, "legacy non-resuming queries can read retained history");
+    assert.equal((await retained.listEvents({ ...base, afterId: "1" })).length, 2, "deleting an already delivered event is harmless");
+    await pool.query("UPDATE rt_review_events SET occurred_at = $1", [new Date(now.getTime() - 2_000)]);
+    const expiring = createReviewService({ repository: new PostgresReviewRepository(pool, { maxEventAgeMs: 1_000 }), now: () => now });
+    await expiring.createPageComment({ ...base, routePath: "/other", body: "expire older events" });
+    await assert.rejects(expiring.listEvents({ ...base, afterId: "1" }), (error: unknown) =>
+      error instanceof ReviewError && error.code === "CURSOR_EXPIRED");
+    const restarted = createReviewService({ repository: new PostgresReviewRepository(pool), now: () => now });
+    const refreshed = await restarted.listPageCommentPage(base);
+    assert.equal(refreshed.eventCursor, "3", "a fully trimmed feed keeps its last removed cursor");
+    assert.deepEqual(await restarted.listEvents({ ...base, afterId: refreshed.eventCursor }), []);
+    const newest = await restarted.createPageComment({ ...base, body: "after resynchronization" });
+    assert.equal((await restarted.listEvents({ ...base, afterId: refreshed.eventCursor }))[0]?.threadId, newest.id);
+  });
+});
+
+async function withReviewRaceDatabase(
+  work: (pool: Pool, service: ReturnType<typeof createReviewService>) => Promise<void>,
+): Promise<void> {
+  assert.ok(databaseUrl !== undefined);
+  const schema = `rt_review_race_${randomBytes(8).toString("hex")}`;
+  const administratorPool = new Pool({ connectionString: databaseUrl, max: 1 });
+  await administratorPool.query(`CREATE SCHEMA ${schema}`);
+  const pool = new Pool({ connectionString: databaseUrl, max: 8, options: `-c search_path=${schema}` });
+  try {
+    await new PostgresAuthRepository(pool).migrate();
+    const repository = new PostgresReviewRepository(pool);
+    await repository.migrate();
+    await insertAccount(pool, developer, ["DEVELOPER"]);
+    const service = createReviewService({ repository, now: () => now });
+    await service.bindTunnel({ actor: developer, tunnelOwnerAccountId: developer.accountId, tunnelId: "race", sessionId: "race-session", projectSlug: "race-project", revisionKey: "race-revision" });
+    await work(pool, service);
+  } finally {
+    await pool.end();
+    await administratorPool.query(`DROP SCHEMA ${schema} CASCADE`);
+    await administratorPool.end();
+  }
+}
 
 test("PostgreSQL persists and isolates review projects, revisions, bindings, and page comments", {
   skip: databaseUrl === undefined ? "TEST_DATABASE_URL is not configured" : false,

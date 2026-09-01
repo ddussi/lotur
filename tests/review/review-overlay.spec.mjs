@@ -12,6 +12,7 @@ import {
 } from "../../packages/review/src/index.ts";
 import { connectTunnelClient } from "../../apps/client/src/client.ts";
 import { createGatewayServer } from "../../apps/gateway/src/server.ts";
+import { reviewActorFromPrincipal } from "../../apps/gateway/src/review-http.ts";
 
 const DISCARD_AUTHENTICATION_EVENTS = { write() {}, reportFailure() {} };
 
@@ -51,6 +52,19 @@ test("Shadow DOM review overlay works with strict nonce CSP and survives API fai
     const homeThread = overlay.locator(".thread").first();
     await expect(homeThread).toContainText("home feedback");
     await expect(peerOverlay.locator(".thread")).toContainText("home feedback");
+    const draft = homeThread.getByRole("textbox", { name: "Reply to comment" });
+    await draft.fill("An unsent reply survives peer updates");
+    const threadId = await homeThread.getAttribute("data-review-thread-id");
+    await peerPage.evaluate(async (id) => {
+      const response = await fetch(`/_review-tunnel/review/comments/${id}`, {
+        method: "PATCH", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ path: "/", expectedVersion: 1, body: "home feedback updated remotely" }),
+      });
+      if (!response.ok) throw new Error("peer update failed");
+    }, threadId);
+    await expect(homeThread).toContainText("updated remotely");
+    await expect(draft).toHaveValue("An unsent reply survives peer updates");
+    await expect(draft).toBeFocused();
     await peerPage.close();
     expect(await page.evaluate(() => window.reviewTunnelXss)).toBeUndefined();
     await homeThread.getByRole("textbox", { name: "Reply to comment" }).fill(
@@ -178,6 +192,177 @@ test("Shadow DOM review overlay works with strict nonce CSP and survives API fai
   }
 });
 
+test("an expired SSE cursor reloads a snapshot and resumes updates without losing the draft", async ({ page }) => {
+  const runtime = await startReviewRuntime();
+  try {
+    const base = runtime.reviewCommand;
+    const comment = await runtime.service.createPageComment({ ...base, body: "cursor recovery thread" });
+    await page.context().addCookies([{ name: "rt_session_dev", value: runtime.contentSessionToken, url: runtime.shareUrl }]);
+    await page.goto(runtime.shareUrl);
+    const overlay = page.locator("review-tunnel-overlay");
+    const draft = overlay.locator(`.thread[data-review-thread-id="${comment.id}"]`).getByRole("textbox", { name: "Reply to comment" });
+    await draft.fill("keep through resynchronization");
+    await expect.poll(() => runtime.eventReadCount()).toBeGreaterThan(0);
+    runtime.expireNextCursor();
+    await runtime.service.createPageComment({ ...base, body: "snapshot after expired cursor" });
+    await expect.poll(() => runtime.expiredCursorCount()).toBe(1);
+    await expect(overlay.locator(".comment").filter({ hasText: "snapshot after expired cursor" })).toHaveCount(1);
+    await expect(draft).toHaveValue("keep through resynchronization");
+    await expect(draft).toBeFocused();
+    await runtime.service.createPageComment({ ...base, body: "live updates after recovery" });
+    await expect(overlay.locator(".comment").filter({ hasText: "live updates after recovery" })).toHaveCount(1);
+  } finally {
+    await page.close();
+    await runtime.close();
+  }
+});
+
+test("loaded older comments and replies stay current while pagination and peer events preserve a draft", async ({ page }) => {
+  const runtime = await startReviewRuntime();
+  try {
+    const base = runtime.reviewCommand;
+    const oldest = await runtime.service.createPageComment({ ...base, body: "oldest page comment" });
+    const oldestReply = await runtime.service.createReply({ ...base, commentId: oldest.id, body: "oldest page reply" });
+    for (let index = 0; index < 100; index += 1) {
+      await runtime.service.createReply({ ...base, commentId: oldest.id, body: `newer reply ${index}` });
+      await runtime.service.createPageComment({ ...base, body: `newer comment ${index}` });
+    }
+    await page.context().addCookies([{ name: "rt_session_dev", value: runtime.contentSessionToken, url: runtime.shareUrl }]);
+    await page.goto(runtime.shareUrl);
+    const overlay = page.locator("review-tunnel-overlay");
+    await expect(overlay.locator(".thread")).toHaveCount(100);
+    const activeDraft = overlay.locator(".thread").last().getByRole("textbox", { name: "Reply to comment" });
+    await activeDraft.fill("draft during pagination");
+    await overlay.getByRole("button", { name: "Load older comments" }).click();
+    await expect(overlay.locator(".thread")).toHaveCount(101);
+    await expect(activeDraft).toHaveValue("draft during pagination");
+    const thread = overlay.locator(`.thread[data-review-thread-id="${oldest.id}"]`);
+    await thread.getByRole("button", { name: "Load older replies" }).click();
+    await expect(thread.locator(".reply")).toHaveCount(101);
+    const draft = thread.getByRole("textbox", { name: "Reply to comment" });
+    await draft.fill("draft during live refresh");
+    await runtime.service.updateComment({ ...base, commentId: oldest.id, expectedVersion: 1, body: "oldest comment edited remotely" });
+    await expect(thread).toContainText("oldest comment edited remotely");
+    await expect(draft).toHaveValue("draft during live refresh");
+    await expect(draft).toBeFocused();
+    await runtime.service.updateReply({ ...base, commentId: oldest.id, replyId: oldestReply.id, expectedVersion: 1, body: "oldest reply edited remotely" });
+    await expect(thread.locator(".reply").first()).toContainText("oldest reply edited remotely");
+    await runtime.service.deleteReply({ ...base, commentId: oldest.id, replyId: oldestReply.id, expectedVersion: 2 });
+    await expect(thread.locator(".reply").first()).toContainText("Deleted reply");
+    await runtime.service.changePageCommentStatus({ ...base, actor: runtime.developerActor, commentId: oldest.id, expectedStatus: "OPEN", status: "RESOLVED" });
+    await expect(thread.locator(".thread-status")).toHaveText("Resolved");
+    await runtime.service.changePageCommentStatus({ ...base, actor: runtime.developerActor, commentId: oldest.id, expectedStatus: "RESOLVED", status: "OPEN" });
+    await expect(thread.locator(".thread-status")).toHaveText("Open");
+    await expect(draft).toHaveValue("draft during live refresh");
+    await runtime.service.deleteComment({ ...base, commentId: oldest.id, expectedVersion: 2 });
+    await expect(thread.locator(".comment-body")).toHaveText("Deleted comment");
+    await expect(activeDraft).toHaveValue("draft during pagination");
+  } finally {
+    await runtime.close();
+  }
+});
+
+test("a delayed older-replies response cannot overwrite a newer live snapshot", async ({ page }) => {
+  const runtime = await startReviewRuntime();
+  const started = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  try {
+    const base = runtime.reviewCommand;
+    const comment = await runtime.service.createPageComment({ ...base, body: "pagination race thread" });
+    let newest;
+    for (let index = 0; index < 101; index += 1) newest = await runtime.service.createReply({ ...base, commentId: comment.id, body: `reply ${index}` });
+    await page.context().addCookies([{ name: "rt_session_dev", value: runtime.contentSessionToken, url: runtime.shareUrl }]);
+    await page.goto(runtime.shareUrl);
+    const thread = page.locator("review-tunnel-overlay .thread");
+    await expect(thread.locator(".reply")).toHaveCount(100);
+    const pattern = `**/comments/${comment.id}/replies?*`;
+    await page.route(pattern, async (route) => {
+      const response = await route.fetch();
+      started.resolve();
+      await release.promise;
+      await route.fulfill({ response });
+    }, { times: 1 });
+    await thread.getByRole("button", { name: "Load older replies" }).click();
+    await started.promise;
+    await runtime.service.updateReply({ ...base, commentId: comment.id, replyId: newest.id, expectedVersion: 1, body: "newest live reply" });
+    await expect(thread.locator(".reply-body").filter({ hasText: "newest live reply" })).toHaveCount(1);
+    const received = page.waitForResponse((response) => response.url().includes(`/comments/${comment.id}/replies?`));
+    release.resolve();
+    await received;
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await expect(thread.locator(".reply-body").filter({ hasText: "newest live reply" })).toHaveCount(1, { timeout: 2_000 });
+    await thread.getByRole("button", { name: "Load older replies" }).click();
+    await expect(thread.locator(".reply")).toHaveCount(101);
+    await expect(thread.locator(".reply-body").filter({ hasText: "newest live reply" })).toHaveCount(1);
+  } finally {
+    release.resolve();
+    await page.close();
+    await runtime.close();
+  }
+});
+
+test("new comment submission preserves text typed while saving and after a failure", async ({ page }) => {
+  const runtime = await startReviewRuntime();
+  try {
+    await page.context().addCookies([{ name: "rt_session_dev", value: runtime.contentSessionToken, url: runtime.shareUrl }]);
+    await page.goto(runtime.shareUrl);
+    const overlay = page.locator("review-tunnel-overlay");
+    const draft = overlay.getByRole("textbox", { name: "Comment", exact: true });
+    await draft.fill("first comment to submit");
+    const pending = runtime.holdNextComment();
+    await overlay.getByRole("button", { name: "Comment", exact: true }).click();
+    await pending.started;
+    await draft.fill("next comment typed while saving");
+    pending.release();
+    await expect(overlay.locator(".comment").filter({ hasText: "first comment to submit" })).toHaveCount(1);
+    await expect(draft).toHaveValue("next comment typed while saving");
+    runtime.failNextComment();
+    await overlay.getByRole("button", { name: "Comment", exact: true }).click();
+    await expect(overlay.getByRole("status")).toContainText("Comment failed:");
+    await expect(draft).toHaveValue("next comment typed while saving");
+    await page.evaluate(() => history.pushState({}, "", "/different-draft"));
+    await expect(draft).toHaveValue("");
+    await draft.fill("other page draft");
+    await page.goBack();
+    await expect(draft).toHaveValue("next comment typed while saving");
+  } finally {
+    await page.close();
+    await runtime.close();
+  }
+});
+
+test("reply submission preserves newer typing and storage failures preserve the draft", async ({ page }) => {
+  const runtime = await startReviewRuntime();
+  try {
+    await runtime.service.createPageComment({ ...runtime.reviewCommand, body: "reply submission target" });
+    await page.context().addCookies([{ name: "rt_session_dev", value: runtime.contentSessionToken, url: runtime.shareUrl }]);
+    await page.goto(runtime.shareUrl);
+    const overlay = page.locator("review-tunnel-overlay");
+    const thread = overlay.locator(".thread").first();
+    const draft = thread.getByRole("textbox", { name: "Reply to comment" });
+    await draft.fill("submitted version");
+    const pending = runtime.holdNextReply();
+    await thread.getByRole("button", { name: "Reply", exact: true }).click();
+    await pending.started;
+    await draft.fill("new writing while saving");
+    await runtime.service.createPageComment({ ...runtime.reviewCommand, body: "peer update during submission" });
+    await expect(overlay.locator(".thread")).toHaveCount(2);
+    await expect(draft).toHaveValue("new writing while saving");
+    await expect(draft).toBeFocused();
+    pending.release();
+    await expect(thread.locator(".reply")).toContainText("submitted version");
+    await expect(draft).toHaveValue("new writing while saving");
+    runtime.failNextReply();
+    await thread.getByRole("button", { name: "Reply", exact: true }).click();
+    await expect(overlay.getByRole("status")).toContainText("REVIEW_UNAVAILABLE");
+    await expect(draft).toHaveValue("new writing while saving");
+    runtime.failCommentReads();
+    await runtime.service.createPageComment({ ...runtime.reviewCommand, body: "trigger failed refresh" });
+    await expect(overlay.getByRole("status")).toContainText("Review unavailable");
+    await expect(draft).toHaveValue("new writing while saving");
+  } finally { await runtime.close(); }
+});
+
 async function startReviewRuntime() {
   const authService = new AuthService({
     repository: new InMemoryAuthRepository(),
@@ -256,7 +441,42 @@ async function startReviewRuntime() {
   }
 
   const repository = new InMemoryReviewRepository();
-  const service = createReviewService({ repository });
+  let reviewClock = Date.now();
+  const service = createReviewService({ repository, now: () => new Date(reviewClock++) });
+  let expireNextCursor = false;
+  let expiredCursorCount = 0;
+  let eventReadCount = 0;
+  const listReviewEvents = repository.listReviewEvents.bind(repository);
+  repository.listReviewEvents = async (input) => {
+    eventReadCount += 1;
+    if (expireNextCursor) {
+      expireNextCursor = false;
+      expiredCursorCount += 1;
+      return { status: "CURSOR_EXPIRED" };
+    }
+    return listReviewEvents(input);
+  };
+  let replyGate;
+  const heldReplies = new Set();
+  let commentGate;
+  let failNextComment = false;
+  const createPageComment = repository.createPageComment.bind(repository);
+  repository.createPageComment = async (input) => {
+    if (failNextComment) { failNextComment = false; throw new Error("simulated comment failure"); }
+    const held = commentGate;
+    commentGate = undefined;
+    if (held !== undefined) { held.started.resolve(); await held.release.promise; }
+    return createPageComment(input);
+  };
+  let failNextReply = false;
+  const createReply = repository.createReply.bind(repository);
+  repository.createReply = async (input) => {
+    if (failNextReply) { failNextReply = false; throw new Error("simulated reply failure"); }
+    const held = replyGate;
+    replyGate = undefined;
+    if (held !== undefined) { held.started.resolve(); await held.release.promise; }
+    return createReply(input);
+  };
   let conflictNextStatusChange = false;
   let conflictNextContentMutation = false;
   const changePageCommentStatus = repository.changePageCommentStatus.bind(repository);
@@ -318,14 +538,39 @@ async function startReviewRuntime() {
   );
 
   return {
+    service,
+    reviewCommand: {
+      actor: reviewActorFromPrincipal(reviewer.principal),
+      tunnelId,
+      sessionId: repository.bindings.get(tunnelId).sessionId,
+      routePath: "/",
+    },
+    developerActor: reviewActorFromPrincipal(developer.principal),
     shareUrl: active.shareUrl,
     contentSessionToken: content.sessionToken,
     developerContentSessionToken: developerContent.sessionToken,
     localPaths,
     gatewayEvents,
+    expireNextCursor() { expireNextCursor = true; },
+    expiredCursorCount() { return expiredCursorCount; },
+    eventReadCount() { return eventReadCount; },
     conflictNextStatusChange() {
       conflictNextStatusChange = true;
     },
+    holdNextReply() {
+      const gate = { started: Promise.withResolvers(), release: Promise.withResolvers() };
+      heldReplies.add(gate);
+      replyGate = gate;
+      return { started: gate.started.promise, release: () => { heldReplies.delete(gate); gate.release.resolve(); } };
+    },
+    failNextReply() { failNextReply = true; },
+    holdNextComment() {
+      const gate = { started: Promise.withResolvers(), release: Promise.withResolvers() };
+      heldReplies.add(gate);
+      commentGate = gate;
+      return { started: gate.started.promise, release: () => { heldReplies.delete(gate); gate.release.resolve(); } };
+    },
+    failNextComment() { failNextComment = true; },
     conflictNextContentMutation() {
       conflictNextContentMutation = true;
     },
@@ -335,6 +580,7 @@ async function startReviewRuntime() {
       };
     },
     async close() {
+      for (const gate of heldReplies) gate.release.resolve();
       await client.close().catch(() => undefined);
       await gateway.close();
       origin.close();

@@ -46,6 +46,7 @@ export type ChangePageCommentStatusResult =
 
 export type ListReviewEventsResult =
   | Readonly<{ status: "FOUND"; events: readonly ReviewEvent[] }>
+  | Readonly<{ status: "CURSOR_EXPIRED" }>
   | Readonly<{ status: "BINDING_NOT_FOUND" }>
   | Readonly<{ status: "STALE_AUTHORIZATION" }>;
 
@@ -136,6 +137,7 @@ export interface ReviewRepository {
     revisionId: string;
     routePath: string;
     afterId: string;
+    requireContinuity?: boolean;
     limit: number;
     actorAccountId: string;
     actorAuthorizationVersion: number;

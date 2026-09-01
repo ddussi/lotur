@@ -11,7 +11,8 @@ export type ReviewErrorCode =
   | "NOT_FOUND"
   | "CONFLICT"
   | "STATE_CONFLICT"
-  | "VERSION_CONFLICT";
+  | "VERSION_CONFLICT"
+  | "CURSOR_EXPIRED";
 
 export class ReviewError extends Error {
   readonly code: ReviewErrorCode;

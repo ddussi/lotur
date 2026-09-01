@@ -1,15 +1,10 @@
+import { publicComment, publicReply, publicEvent, publicNotification } from "./review-contract.ts";
 import type { IncomingMessage, ServerResponse } from "node:http";
 
 import {
-  canDeleteReviewContent,
-  canEditReviewContent,
   ReviewError,
-  type PageCommentThread,
-  type PageCommentPageItem,
   type ReviewActor,
   type ReviewEvent,
-  type ReviewNotification,
-  type ReviewReply,
   type ReviewService,
   type ReviewThreadStatus,
 } from "../../../packages/review/src/index.ts";
@@ -137,7 +132,8 @@ export function createReviewHttpHandler(input: Readonly<{
     } catch (error) {
       if (error instanceof ReviewError) {
         writeEventChunk(subscription, `event: review-error\ndata: ${JSON.stringify({
-          error: error.code === "FORBIDDEN" ? "REVIEW_FORBIDDEN" : "REVIEW_NOT_FOUND",
+          error: error.code === "CURSOR_EXPIRED" ? "REVIEW_CURSOR_EXPIRED"
+            : error.code === "FORBIDDEN" ? "REVIEW_FORBIDDEN" : "REVIEW_NOT_FOUND",
         })}\n\n`);
       } else input.reportFailure?.("content");
       closeEventSubscription(subscription);
@@ -167,13 +163,21 @@ export function createReviewHttpHandler(input: Readonly<{
     }
     let retainedBySubscription = false;
     try {
-      const initialEvents = await input.service.listEvents({
-        actor: stream.actor,
-        tunnelId: stream.tunnel.tunnelId,
-        sessionId: stream.tunnel.sessionId,
-        routePath: stream.routePath,
-        ...(stream.afterId === undefined ? {} : { afterId: stream.afterId }),
-      });
+      let initialEvents: readonly ReviewEvent[];
+      let cursorExpired = false;
+      try {
+        initialEvents = await input.service.listEvents({
+          actor: stream.actor,
+          tunnelId: stream.tunnel.tunnelId,
+          sessionId: stream.tunnel.sessionId,
+          routePath: stream.routePath,
+          ...(stream.afterId === undefined ? {} : { afterId: stream.afterId }),
+        });
+      } catch (error) {
+        if (!(error instanceof ReviewError) || error.code !== "CURSOR_EXPIRED") throw error;
+        initialEvents = [];
+        cursorExpired = true;
+      }
       if (stream.request.destroyed || stream.response.destroyed) return;
       stream.response.statusCode = 200;
       stream.response.setHeader("Content-Type", "text/event-stream; charset=utf-8");
@@ -197,6 +201,11 @@ export function createReviewHttpHandler(input: Readonly<{
       eventSubscriptions.add(subscription);
       retainedBySubscription = true;
       if (!writeEventChunk(subscription, `retry: ${eventStreamPolicy.retryMs}\n\n`)) return;
+      if (cursorExpired) {
+        writeEventChunk(subscription, `event: review-error\ndata: ${JSON.stringify({ error: "REVIEW_CURSOR_EXPIRED" })}\n\n`);
+        closeEventSubscription(subscription);
+        return;
+      }
       writeEvents(subscription, initialEvents);
     } finally {
       if (!retainedBySubscription) releaseAdmission();
@@ -219,6 +228,8 @@ export function createReviewHttpHandler(input: Readonly<{
         ? { status: 409, code: "REVIEW_STATE_CONFLICT" }
         : error.code === "VERSION_CONFLICT"
         ? { status: 409, code: "REVIEW_VERSION_CONFLICT" }
+        : error.code === "CURSOR_EXPIRED"
+        ? { status: 409, code: "REVIEW_CURSOR_EXPIRED" }
         : { status: 409, code: "REVIEW_BINDING_CONFLICT" };
       writeJsonError(response, mapping.status, mapping.code);
       return;
@@ -599,97 +610,6 @@ export function reviewActorFromPrincipal(principal: Principal): ReviewActor {
       canComment: canRead,
       canManageProject: principal.roles.includes("DEVELOPER"),
     },
-  };
-}
-
-function publicComment(
-  comment: PageCommentThread | PageCommentPageItem,
-  actor: ReviewActor,
-) {
-  const resolution = comment.resolvedBy === undefined || comment.resolvedAt === undefined
-    ? {}
-    : {
-        resolvedBy: comment.resolvedBy,
-        resolvedAt: comment.resolvedAt.toISOString(),
-      };
-  const deletion = comment.deletedBy === undefined || comment.deletedAt === undefined
-    ? {}
-    : {
-        deletedBy: comment.deletedBy,
-        deletedAt: comment.deletedAt.toISOString(),
-      };
-  return {
-    id: comment.id,
-    routePath: comment.routePath,
-    anchor: comment.anchor,
-    ...(comment.pinNumber === undefined ? {} : { pinNumber: comment.pinNumber }),
-    body: comment.body,
-    version: comment.version,
-    status: comment.status,
-    author: comment.author,
-    ...resolution,
-    ...deletion,
-    canEdit: comment.body !== null &&
-      comment.status === "OPEN" &&
-      canEditReviewContent(actor, comment.author.accountId),
-    canDelete: comment.body !== null &&
-      canDeleteReviewContent(actor, comment.author.accountId),
-    replies: comment.replies.map((reply) => publicReply(reply, actor, comment.status)),
-    ...(Object.hasOwn(comment, "replyPageInfo")
-      ? { replyPageInfo: (comment as PageCommentPageItem).replyPageInfo }
-      : {}),
-    createdAt: comment.createdAt.toISOString(),
-    updatedAt: comment.updatedAt.toISOString(),
-  };
-}
-
-function publicReply(
-  reply: ReviewReply,
-  actor: ReviewActor,
-  threadStatus: ReviewThreadStatus,
-) {
-  const deletion = reply.deletedBy === undefined || reply.deletedAt === undefined
-    ? {}
-    : {
-        deletedBy: reply.deletedBy,
-        deletedAt: reply.deletedAt.toISOString(),
-      };
-  return {
-    id: reply.id,
-    threadId: reply.threadId,
-    body: reply.body,
-    version: reply.version,
-    author: reply.author,
-    ...deletion,
-    canEdit: reply.body !== null &&
-      threadStatus === "OPEN" &&
-      canEditReviewContent(actor, reply.author.accountId),
-    canDelete: reply.body !== null &&
-      canDeleteReviewContent(actor, reply.author.accountId),
-    createdAt: reply.createdAt.toISOString(),
-    updatedAt: reply.updatedAt.toISOString(),
-  };
-}
-
-function publicEvent(event: ReviewEvent) {
-  return {
-    id: event.id,
-    type: event.type,
-    threadId: event.threadId,
-    actor: event.actor,
-    occurredAt: event.occurredAt.toISOString(),
-  };
-}
-
-function publicNotification(notification: ReviewNotification) {
-  return {
-    id: notification.id,
-    threadId: notification.threadId,
-    contentType: notification.contentType,
-    contentId: notification.contentId,
-    actor: notification.actor,
-    readAt: notification.readAt?.toISOString() ?? null,
-    createdAt: notification.createdAt.toISOString(),
   };
 }
 

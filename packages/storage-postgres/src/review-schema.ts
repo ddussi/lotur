@@ -405,6 +405,23 @@ CREATE INDEX IF NOT EXISTS rt_review_events_recipient_id_idx
   ON rt_review_events(recipient_account_id, id)
   WHERE recipient_account_id IS NOT NULL;
 
+CREATE TABLE IF NOT EXISTS rt_review_event_retention (
+  revision_id text NOT NULL REFERENCES rt_review_revisions(id) ON DELETE CASCADE,
+  route_path text NOT NULL,
+  trimmed_through_id bigint NOT NULL CHECK (trimmed_through_id >= 0),
+  PRIMARY KEY (revision_id, route_path)
+);
+
+-- Legacy evictions have no per-feed history. On the first upgrade, force old
+-- cursors through a fresh snapshot without deleting comments or retained events.
+-- The sequence also covers feeds whose entire event history was already pruned.
+INSERT INTO rt_review_event_retention (revision_id, route_path, trimmed_through_id)
+SELECT DISTINCT revision_id, route_path,
+  (SELECT CASE WHEN is_called THEN last_value ELSE 0 END FROM rt_review_events_id_seq)
+FROM rt_review_threads
+WHERE NOT EXISTS (SELECT 1 FROM rt_schema_migrations WHERE version = 18)
+ON CONFLICT (revision_id, route_path) DO NOTHING;
+
 INSERT INTO rt_schema_migrations(version) VALUES (9)
 ON CONFLICT (version) DO NOTHING;
 INSERT INTO rt_schema_migrations(version) VALUES (10)
@@ -422,5 +439,7 @@ ON CONFLICT (version) DO NOTHING;
 INSERT INTO rt_schema_migrations(version) VALUES (16)
 ON CONFLICT (version) DO NOTHING;
 INSERT INTO rt_schema_migrations(version) VALUES (17)
+ON CONFLICT (version) DO NOTHING;
+INSERT INTO rt_schema_migrations(version) VALUES (18)
 ON CONFLICT (version) DO NOTHING;
 `;
