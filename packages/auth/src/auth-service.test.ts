@@ -1109,6 +1109,30 @@ test("account authorization checks deduplicate IDs and use bounded repository ba
   assert.deepEqual(repository.authorizationBatchSizes.toSorted((a, b) => a - b), [1, 512, 512]);
 });
 
+test("shared content revalidation uses the same role capability and current account safeguards", async () => {
+  const { service, repository } = fixture();
+  const roles = [
+    ["DEVELOPER"], ["REVIEWER"], ["DEVELOPER", "REVIEWER"], ["ADMIN", "DEVELOPER"], ["ADMIN"], [],
+  ] as const;
+  for (const [index, accountRoles] of roles.entries()) {
+    const accountId = `content-${index}`;
+    const account = {
+      id: accountId, username: accountId, displayName: accountId, roles: accountRoles,
+      passwordHash: "unused", enabled: true, mustChangePassword: false, authVersion: 7,
+      createdAt: new Date(), updatedAt: new Date(),
+    };
+    repository.accounts.set(accountId, account);
+    const check = { accountId, accountAuthVersion: 7, capability: "SHARED_CONTENT" as const };
+    assert.deepEqual(await service.areAccountsAuthorized([check]), [index < 4]);
+    for (const change of [
+      { enabled: false }, { mustChangePassword: true }, { authVersion: 8 },
+    ]) {
+      repository.accounts.set(accountId, { ...account, ...change });
+      assert.deepEqual(await service.areAccountsAuthorized([check]), [false]);
+    }
+  }
+});
+
 test("revoking sessions advances authorization and removes sessions and unused Carrier credentials", async () => {
   const { service, repository } = fixture();
   const bootstrap = await service.bootstrapAdministrator({ username: "admin", displayName: "Admin" });

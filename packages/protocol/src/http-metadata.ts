@@ -55,6 +55,7 @@ const decoder = new TextDecoder("utf-8", { fatal: true });
 const tunnelIdPattern = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 const methodPattern = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
 const headerNamePattern = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
+export const MAX_HTTP_HEADER_PAIRS = 256;
 
 export function encodeMetadata(value: unknown): Uint8Array {
   return encoder.encode(JSON.stringify(value));
@@ -148,7 +149,14 @@ export function decodeSessionActiveMetadata(
 }
 
 export function decodeOpenHttpMetadata(payload: Uint8Array): OpenHttpMetadata {
-  const value = parseObject(payload);
+  return parseOpenHttpMetadata(parseObject(payload));
+}
+
+export function encodeOpenHttpMetadata(value: OpenHttpMetadata): Uint8Array {
+  return encodeMetadata(parseOpenHttpMetadata(value));
+}
+
+function parseOpenHttpMetadata(value: Record<string, unknown>): OpenHttpMetadata {
   if (value.kind !== "HTTP" && value.kind !== "WEBSOCKET") {
     throw new TypeError("OPEN_HTTP kind is invalid");
   }
@@ -248,7 +256,7 @@ function parseObject(payload: Uint8Array): Record<string, unknown> {
 }
 
 function parseHeaders(value: unknown): readonly HeaderPair[] {
-  if (!Array.isArray(value) || value.length > 256) {
+  if (!Array.isArray(value) || value.length > MAX_HTTP_HEADER_PAIRS) {
     throw new TypeError("header list is invalid");
   }
   return value.map((entry) => {

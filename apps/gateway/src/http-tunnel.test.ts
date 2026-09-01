@@ -27,6 +27,32 @@ import {
 } from "../../../packages/relay/src/index.ts";
 import { createGatewayServer } from "./server.ts";
 
+test("review-disabled Gateway relays ordinary requests without a review repository", async (context) => {
+  const paths: string[] = [];
+  const origin = createServer((incoming, response) => {
+    paths.push(incoming.url ?? "/");
+    response.end("independent relay");
+  });
+  const originPort = await listen(origin);
+  context.after(() => close(origin));
+  const gateway = createGatewayServer();
+  const port = await gateway.listen();
+  context.after(() => gateway.close());
+  const client = connectTunnelClient({
+    gatewayUrl: `ws://127.0.0.1:${port}/_review-tunnel/carrier`,
+    tunnelId: "review-disabled", localOrigin: `http://127.0.0.1:${originPort}`,
+  });
+  context.after(() => client.disconnect());
+  await client.ready;
+  const review = await sendRequest({ port, host: "review-disabled.localhost", method: "GET", path: "/_review-tunnel/review/context", chunks: [] });
+  assert.equal(review.statusCode, 404);
+  const ordinary = await sendRequest({ port, host: "review-disabled.localhost", method: "GET", path: "/independent", chunks: [] });
+  assert.equal(ordinary.statusCode, 200);
+  assert.equal(ordinary.body.toString(), "independent relay");
+  assert.ok(!paths.includes("/_review-tunnel/review/context"));
+  assert.ok(paths.includes("/independent"));
+});
+
 test("generic CONNECT와 WebSocket 이외 Upgrade를 명시적으로 거부한다", async (context) => {
   const gateway = createGatewayServer();
   const gatewayPort = await gateway.listen();
@@ -1295,10 +1321,16 @@ test("PING/PONG heartbeat가 살아 있는 Carrier lease를 유지한다", async
 });
 
 test("developer authorization max-age가 실제 Carrier와 route를 종료한다", async (context) => {
+  let checkedAt = 1_000;
+  const expired = Promise.withResolvers<void>();
   const origin = createServer((_incoming, response) => response.end("expired"));
   const originPort = await listen(origin);
   context.after(() => close(origin));
   const gateway = createGatewayServer({
+    now: () => checkedAt,
+    logger(event) {
+      if (event.event === "tunnel.expired" && event.reason === "AUTHORIZATION_EXPIRED") expired.resolve();
+    },
     sessionPolicy: {
       maxTtlMs: 2_000,
       idleTimeoutMs: 1_000,
@@ -1319,7 +1351,8 @@ test("developer authorization max-age가 실제 Carrier와 route를 종료한다
   context.after(() => client.close());
   await client.ready;
 
-  await delay(100);
+  checkedAt += 61;
+  await expired.promise;
   const result = await sendRequest({
     port: gatewayPort,
     host: "authorization-expiry-test.localhost",

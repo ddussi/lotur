@@ -115,8 +115,17 @@ export type AccountAuthorization = Readonly<{
   authVersion: number;
 }>;
 
+export type AccountAccessRequirement = AccountRole | Readonly<{ capability: "SHARED_CONTENT" }>;
+
 export type AccountAuthorizationCheck = Readonly<{
   accountId: string;
   accountAuthVersion: number;
-  role: AccountRole;
-}>;
+}> & (Readonly<{ role: AccountRole }> | Readonly<{ capability: "SHARED_CONTENT" }>);
+
+export function accountAccessRequirement(check: AccountAuthorizationCheck): AccountAccessRequirement {
+  return "role" in check ? check.role : { capability: check.capability };
+}
+
+export function satisfiesAccountAccess(roles: readonly AccountRole[], requirement: AccountAccessRequirement): boolean {
+  return typeof requirement === "string" ? roles.includes(requirement) : canAccessSharedContent(roles);
+}

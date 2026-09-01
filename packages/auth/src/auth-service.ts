@@ -5,6 +5,7 @@ import type {
   Account,
   AccountAuthorization,
   AccountAuthorizationCheck,
+  AccountAccessRequirement,
   AccountRole,
   AuthenticationEvent,
   AuditAction,
@@ -15,7 +16,7 @@ import type {
   Principal,
   SessionExchange,
 } from "./model.ts";
-import { ACCOUNT_ROLES, canAccessSharedContent } from "./model.ts";
+import { ACCOUNT_ROLES, accountAccessRequirement, canAccessSharedContent, satisfiesAccountAccess } from "./model.ts";
 import {
   normalizeDisplayName,
   normalizeUsername,
@@ -396,12 +397,12 @@ export class AuthService {
   async isAccountAuthorized(
     accountId: string,
     accountAuthVersion: number,
-    role: AccountRole,
+    requirement: AccountAccessRequirement,
   ): Promise<boolean> {
     const [authorized] = await this.areAccountsAuthorized([{
       accountId,
       accountAuthVersion,
-      role,
+      ...(typeof requirement === "string" ? { role: requirement } : requirement),
     }]);
     return authorized ?? false;
   }
@@ -434,7 +435,8 @@ export class AuthService {
     return checks.map((check) => {
       const account = accounts.get(check.accountId);
       return account !== undefined && account.enabled && !account.mustChangePassword &&
-        account.authVersion === check.accountAuthVersion && account.roles.includes(check.role);
+        account.authVersion === check.accountAuthVersion &&
+        satisfiesAccountAccess(account.roles, accountAccessRequirement(check));
     });
   }
 

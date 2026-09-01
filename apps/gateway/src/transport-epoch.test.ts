@@ -888,7 +888,7 @@ function setAuthorizationCheck(
 ): void {
   service.isAccountAuthorized = check;
   service.areAccountsAuthorized = (checks) => Promise.all(checks.map((input) =>
-    check(input.accountId, input.accountAuthVersion, input.role)));
+    check(input.accountId, input.accountAuthVersion, "role" in input ? input.role : { capability: input.capability })));
 }
 
 function principal(accountId: string, sessionId: string): Principal {
