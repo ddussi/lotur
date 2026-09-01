@@ -1,0 +1,45 @@
+{
+  "date": "2026-09-07",
+  "baseline": "e41541c",
+  "scope": "current working tree; no commit, push or production deployment",
+  "environment": {
+    "node": "24.13.0",
+    "postgresql": "17.6",
+    "database": "disposable local test database",
+    "browser": "local Chrome via Playwright"
+  },
+  "checks": {
+    "npm run check with TEST_DATABASE_URL": {
+      "exitCode": 0,
+      "style": "pass, no warnings",
+      "types": "pass",
+      "architectureBoundaries": "pass",
+      "build": "pass",
+      "scriptTests": { "passed": 53, "failed": 0, "skipped": 0 },
+      "applicationAndPackageTests": { "passed": 349, "failed": 0, "skipped": 0 }
+    },
+    "npm run test:postgres": {
+      "exitCode": 0,
+      "passed": 17,
+      "failed": 0,
+      "skipped": 0,
+      "note": "also included in the 349 application and package tests"
+    },
+    "npm run test:frameworks": {
+      "exitCode": 0,
+      "passed": 9,
+      "failed": 0,
+      "frameworkTests": 3,
+      "reviewOverlayTests": 6
+    },
+    "git diff --check": { "exitCode": 0 }
+  },
+  "uniqueFinalTestCount": 411,
+  "notExecuted": [
+    "public HTTPS validation of this working tree",
+    "production deployment or rollback",
+    "full role-specific Docker image build",
+    "long-running load and failure endurance testing"
+  ],
+  "intermediateFailure": "An existing authorization max-age test depended on short wall-clock delays and expired the carrier lease under concurrent load. It now uses an injected clock and waits for the exact authorization-expiry event; the full final check passed."
+}
