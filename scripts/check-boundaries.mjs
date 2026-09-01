@@ -12,6 +12,12 @@ const root = resolve(readRootOption() ?? defaultRoot);
 const sourceRoots = [join(root, "apps"), join(root, "packages")];
 const violations = [];
 const workspaceDirectories = await loadWorkspaceDirectories(root);
+const purePolicyDependencies = new Map([
+  ["packages/review/src/content-mutation-policy.ts", ["packages/review/src/model.ts"]],
+  ["packages/protocol/src/session-state.ts", ["packages/protocol/src/session-policy.ts"]],
+  ["packages/protocol/src/session-policy.ts", []],
+  ["packages/operations/src/operational-state.ts", []],
+]);
 
 for (const sourceRoot of sourceRoots) {
   for (const file of await listTypeScriptFiles(sourceRoot)) {
@@ -19,6 +25,12 @@ for (const sourceRoot of sourceRoots) {
     const source = await readFile(file, "utf8");
     for (const specifier of collectModuleSpecifiers(source, file)) {
       const target = resolveImportTarget(file, specifier, workspaceDirectories);
+      const sourcePath = relative(root, file).split(sep).join("/");
+      const allowed = purePolicyDependencies.get(sourcePath);
+      if (allowed !== undefined && (target === undefined ||
+        !allowed.includes(relative(root, target).split(sep).join("/")))) {
+        violations.push(`${sourcePath} pure policy must not import ${specifier}`);
+      }
       if (target === undefined) continue;
       enforceBoundary(file, target);
     }
@@ -48,6 +60,17 @@ async function listTypeScriptFiles(directory) {
 function enforceBoundary(source, target) {
   const sourcePath = relative(root, source).split(sep).join("/");
   const targetPath = relative(root, target).split(sep).join("/");
+
+  for (const [core, dependencies] of [
+    ["proxy", ["proxy", "protocol"]],
+    ["operations", ["operations"]],
+  ]) {
+    if (sourcePath.startsWith(`packages/${core}/`) &&
+      targetPath.startsWith("packages/") &&
+      !dependencies.some((dependency) => targetPath.startsWith(`packages/${dependency}/`))) {
+      violations.push(`${sourcePath} ${core} core must not depend on ${targetPath}`);
+    }
+  }
 
   if (sourcePath.startsWith("packages/") && targetPath.startsWith("apps/")) {
     violations.push(`${sourcePath} must not depend on ${targetPath}`);

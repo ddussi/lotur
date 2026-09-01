@@ -156,3 +156,25 @@ async function writeWorkspace(root, group, directoryName, packageName, source) {
   await writeFile(join(directory, "package.json"), JSON.stringify({ name: packageName }));
   await writeFile(join(directory, "src", "index.ts"), source);
 }
+
+test("proxy·operations와 순수 변경 정책에 인프라 의존을 추가할 수 없다", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "review-tunnel-policy-boundary-"));
+  context.after(async () => {
+    await import("node:fs/promises").then(({ rm }) => rm(root, { recursive: true }));
+  });
+  await writeWorkspace(root, "apps", "gateway", "@review-tunnel/gateway", "export {};\n");
+  await writeWorkspace(root, "packages", "auth", "@review-tunnel/auth", "export {};\n");
+  await writeWorkspace(root, "packages", "proxy", "@review-tunnel/proxy", 'import "@review-tunnel/auth";\n');
+  await writeWorkspace(root, "packages", "operations", "@review-tunnel/operations", 'import "@review-tunnel/proxy";\n');
+  await writeWorkspace(root, "packages", "review", "@review-tunnel/review", "export {};\n");
+  await writeFile(join(root, "packages/review/src/content-mutation-policy.ts"), 'import "node:fs";\n');
+  await assert.rejects(execFileAsync(process.execPath, [
+    fileURLToPath(new URL("./check-boundaries.mjs", import.meta.url)), "--root", root,
+  ]), (error) => {
+    assert.equal(error.code, 1);
+    assert.match(error.stderr, /proxy core must not depend on/);
+    assert.match(error.stderr, /operations core must not depend on/);
+    assert.match(error.stderr, /pure policy must not import node:fs/);
+    return true;
+  });
+});
