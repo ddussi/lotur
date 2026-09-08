@@ -25,6 +25,17 @@ flowchart LR
 
 This repository provides self-hosted software. It does not include a hosted Gateway, a public sign-up service, or a domain supplied by the maintainers. Each operator chooses their own infrastructure. A reviewer needs only a browser and an account; developers using an existing Gateway do not need to buy a domain.
 
+## Try it locally
+
+With Node.js 24+, local Docker Engine 28+ / Compose, and Chrome, run from this checkout:
+
+```sh
+npm ci
+npm run demo
+```
+
+Open the printed shared app URL and use `npm run demo -- credentials` in another terminal to get your local reviewer and developer passwords. The demo includes a Vite example and a dedicated database; saved reviews survive stopping and restarting it. URLs work only on this computer. Follow the [local demo guide](docs/local-demo.en.md) for the two-user walkthrough, ports, and data deletion.
+
 ## Start sharing with an existing Gateway
 
 Prerequisites: Node.js 24+, a checkout of this repository, a running local web app, and a `DEVELOPER` account whose initial password has been changed. Commands below run from the repository root. Keep the web app running in another terminal.

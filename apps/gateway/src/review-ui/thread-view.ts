@@ -20,6 +20,7 @@ export const createThreadView = ({ container, getPage, getContext, getRoutePath,
   const edits = new Map<string, { body: string; version: number; draftVersion: number }>();
   let draftVersion = 0;
   const pending = new Set<string>();
+  const localActions = new Set(["edit", "cancel-edit", "rebase-edit", "show-pin", "toggle-pin"]);
   const key = (id: string) => location.pathname + ":" + id;
   const node = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string, id?: string) => {
     const value = document.createElement(tag);
@@ -148,6 +149,12 @@ export const createThreadView = ({ container, getPage, getContext, getRoutePath,
         for (const entry of item.workflowHistory) history.append(node("p", "context", entry.actor.displayName + " · " + entry.from + " → " + entry.to + " · " + new Date(entry.changedAt).toLocaleString()));
         row.append(history);
       }
+      if (pending.has(key(item.id))) {
+        row.setAttribute("aria-busy", "true");
+        for (const control of row.querySelectorAll<HTMLButtonElement>("button[data-action]")) {
+          if (!localActions.has(control.dataset.action ?? "")) control.disabled = true;
+        }
+      }
       fresh.append(row);
     }
     const focus = (container.getRootNode() as ShadowRoot | Document).activeElement;
@@ -196,7 +203,7 @@ export const createThreadView = ({ container, getPage, getContext, getRoutePath,
     if (pending.has(threadKey)) return;
     if (action === "delete" && !window.confirm(value.id === item.id ? "Delete this comment? Replies and the pin will remain." : "Delete this reply?")) return;
     pending.add(threadKey);
-    target.disabled = true;
+    render();
     try {
       if (action === "older-replies") {
         const snapshot = getPage();
@@ -235,7 +242,6 @@ export const createThreadView = ({ container, getPage, getContext, getRoutePath,
       showStatus("Review action failed: " + (error instanceof Error ? error.message === "REVIEW_REVIEWER_UNAVAILABLE" ? "The original reviewer is disabled or no longer has review access." : error.message : "unknown error"), true);
     } finally {
       pending.delete(threadKey);
-      target.disabled = false;
       if (location.pathname === pageLocation) render();
     }
   };

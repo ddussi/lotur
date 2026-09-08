@@ -40,13 +40,16 @@ Always stop the fixture after testing, including after a failed run. `check:mvp`
 | `npm test` | Application and package tests |
 | `npm run test:postgres` | Real database tests; requires an isolated `TEST_DATABASE_URL` |
 | `npm run test:frameworks` | Authenticated Vite/Next.js, production HTML, and review overlay tests |
+| `npm run test:demo` | Real local demo startup, two-user reviews, restart persistence, and interrupted account setup; requires local Docker Engine 28+ / Compose and Chrome |
 | `npm run test:frameworks:public` | Opt-in tests against your own deployed HTTPS Gateway |
 
 Run `npm run build` before invoking browser suites directly; their fixtures import the compiled integration packages.
 
 The public suite creates shares and revokes a reviewer's sessions. Configure dedicated accounts using the [public-path testing guide](docs/public-path-testing.md); it is not part of the default CI run.
 
-CI runs the full database-backed gate, audits production dependencies, and builds/smoke-checks the six production Docker targets. A local source check does not substitute for those image checks.
+`test:demo` creates its own isolated Compose projects on dynamically assigned loopback ports and deletes their test data afterward. It does not use `TEST_DATABASE_URL` or your `.review-tunnel-demo` directory. Its private browser traces can contain disposable login credentials; do not publish them without review.
+
+CI runs the full database-backed gate, the local demo suite, audits production dependencies, and builds/smoke-checks the six production Docker targets. A local source check does not substitute for those image checks.
 
 ## Propose a change
 

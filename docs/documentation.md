@@ -9,14 +9,15 @@ Start with the current guides below. Dated plans and validation reports describe
 | Purpose / 목적 | English | 한국어 |
 | --- | --- | --- |
 | Overview / 제품 소개 | [README](../README.md) | [README](../README.ko.md) |
+| Local demo / 로컬 체험 | [Demo walkthrough](local-demo.en.md) | [체험 안내](local-demo.md) |
 | Share and configure reviews / 공유·연동 설정 | [Getting started](getting-started.en.md) | [시작 안내](getting-started.md) |
 | Pins, inbox, notifications, re-review / 리뷰 사용 | [Review guide](review-guide.en.md) | [리뷰 안내](internal-review-guide.md) |
 | Boundaries and security reports / 권한·보안 제보 | [Security policy](../SECURITY.md) | [보안 안내](../SECURITY.md#한국어-안내) |
 | Changes / 변경 사항 | [Changelog](../CHANGELOG.md) | [현재 구현 현황](poc-status.md) |
 
-The standalone Client distribution and local demo are being prepared; the current guides use a source checkout. Only published, verified installation paths will be presented as available.
+The local demo runs from a source checkout. A standalone Client distribution is being prepared; the current Client guide also uses a source checkout.
 
-독립 설치 Client와 로컬 체험 환경은 준비 중입니다. 현재 실행 가능한 방법은 소스 checkout을 사용하는 안내를 따릅니다.
+로컬 체험은 소스 checkout에서 실행합니다. 독립 설치 Client는 준비 중이며, 현재 Client 안내도 소스 checkout을 사용합니다.
 
 ## Operate and contribute / 운영·기여
 

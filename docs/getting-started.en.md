@@ -4,6 +4,10 @@
 
 Review Tunnel connects a local web application to a Gateway operated by you or your team. The maintainers do not supply a hosted service or shared domain. All `tunnel.example.com` names below are placeholders to replace with your operator's domain.
 
+## Try the local demo first
+
+The [local demo](local-demo.en.md) starts a dedicated database, Gateway, Client, and Vite example with `npm run demo` after `npm ci`. Use Node.js 24+, local Docker Engine 28+ / Compose, and Chrome. It provides local developer/reviewer accounts and preserves saved reviews across restarts. The generated addresses work only on this computer.
+
 ## Use an existing Gateway
 
 You need Node.js 24+, a source checkout of this repository, and a `DEVELOPER` account. Download the repository and run `npm ci` from its root. If you were issued a temporary password, sign in at your Gateway's control host `/login` and change it before using the Client.

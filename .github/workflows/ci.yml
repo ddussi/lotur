@@ -39,6 +39,7 @@ jobs:
       - run: npx playwright install --with-deps chrome
       - run: npm audit --omit=dev
       - run: npm run check:mvp
+      - run: npm run test:demo
       - name: Build every production runtime image
         run: |
           docker build --target gateway -t review-tunnel-gateway:ci .

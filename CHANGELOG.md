@@ -2,12 +2,13 @@
 
 Changes awaiting a tagged release are recorded under Unreleased. The package version is currently `0.1.0`; that number alone does not establish that a release has been published.
 
-The first planned distribution is `v0.1.0-alpha.1`. Standalone Client installation and the local demo remain release-preparation work until their implementation and consumer validation are recorded.
+The first planned distribution is `v0.1.0-alpha.1`. The local demo runs from a source checkout; standalone Client installation remains release-preparation work until its consumer validation is recorded.
 
 ## Unreleased
 
 ### Fixed
 
+- Disable related thread actions throughout an in-flight reply/edit/status operation, including live refreshes, so a quick follow-up action cannot appear available while being ignored. Draft editing remains available.
 - Accept explicit Control host ports for local authenticated setups and non-default HTTPS entrypoints. Preserve that port in login redirects and permanent review links while rejecting a control hostname inside the content wildcard.
 
 - Preserve request isolation when oversized HTTP/WebSocket metadata is rejected; apply the same shared-content role policy at first access and periodic authorization revalidation.
@@ -28,6 +29,7 @@ The first planned distribution is `v0.1.0-alpha.1`. Standalone Client installati
 
 ### Added
 
+- A one-command local demo with a Vite example, dedicated PostgreSQL volume, generated developer/reviewer credentials, real authentication/canary/admission, preserved reviews on restart, and explicit demo-only data deletion.
 - Responsive element-anchored pins, per-pin visibility and jump controls, server-side status/author filters, and a collapsible mobile review panel.
 - A persistent `/reviews` inbox with project/revision/path navigation, permanent comment links, offline conversation access, and links back to active shares of the same revision.
 - Reply-participant notifications, cross-project notification pagination and unread filters, and participant mention completion.
