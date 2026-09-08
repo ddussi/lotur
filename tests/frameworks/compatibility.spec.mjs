@@ -1,10 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { spawn } from "node:child_process";
+import { spawn, execFile } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 
 import { AuthService, InMemoryAuthRepository, Argon2idPasswordHasher } from "../../packages/auth/src/index.ts";
 import { createCarrierAuthentication } from "../../apps/client/src/control-client.ts";
@@ -14,6 +15,7 @@ import { createGatewayServer } from "../../apps/gateway/src/server.ts";
 
 const repositoryRoot = fileURLToPath(new URL("../..", import.meta.url));
 const fixtureRoot = join(repositoryRoot, "tests", "frameworks", "fixtures");
+const execute = promisify(execFile);
 
 test("Vite 8 supports login, HMR and revocation through an authenticated Gateway", async ({ page }) => {
   const runtime = await startRuntime("vite");
@@ -80,6 +82,7 @@ test("Next.js production HTML excludes the review bootstrap", async () => {
   await cp(join(fixtureRoot, "next"), fixtureDirectory, { recursive: true });
   let server;
   try {
+    await installPackedIntegration(fixtureDirectory, "next");
     const executable = join(repositoryRoot, "node_modules", "next", "dist", "bin", "next");
     const environment = {
       ...process.env,
@@ -146,6 +149,7 @@ async function startRuntime(kind) {
   let authentication;
   try {
     await cp(join(fixtureRoot, kind), fixtureDirectory, { recursive: true });
+    await installPackedIntegration(fixtureDirectory, kind);
     framework = startFramework(kind, fixtureDirectory, originPort);
     await waitForHttp(`http://127.0.0.1:${originPort}/`, framework);
     await gateway.listen();
@@ -193,6 +197,17 @@ async function startRuntime(kind) {
     await rm(fixtureDirectory, { recursive: true, force: true });
     throw error;
   }
+}
+
+async function installPackedIntegration(directory, kind) {
+  const packagePath = join(repositoryRoot, "apps", kind === "vite" ? "vite-integration" : "next-integration");
+  const environment = { ...process.env, npm_config_cache: join(directory, ".npm-cache"), npm_config_audit: "false", npm_config_fund: "false" };
+  await writeFile(join(directory, "package.json"), JSON.stringify({ name: `review-tunnel-${kind}-consumer`, private: true, type: "module" }));
+  const { stdout } = await execute("npm", ["pack", packagePath, "--json", "--pack-destination", directory], { cwd: repositoryRoot, env: environment });
+  const [packed] = JSON.parse(stdout);
+  await execute("npm", ["install", "--offline", "--ignore-scripts", "--legacy-peer-deps", join(directory, packed.filename)], { cwd: directory, env: environment });
+  const { stdout: installed } = await execute(process.execPath, ["--input-type=module", "--eval", `console.log(import.meta.resolve('@review-tunnel/${kind}'))`], { cwd: directory, env: environment });
+  expect(fileURLToPath(installed.trim())).toBe(join(directory, "node_modules", "@review-tunnel", kind, "dist", "index.js"));
 }
 
 async function prepareAccounts(reviewerNeedsPasswordChange) {

@@ -1,6 +1,6 @@
 # Release procedure
 
-This is a maintainer procedure, not a record that a release has been published. The repository currently documents an alpha distributed from source or locally built Docker targets. The root, Gateway, and Client remain `private`. The Vite/Next integration manifests support packaging, and local tarball installation is tested; this is not a record of npm publication.
+This is a maintainer procedure, not a record that a release has been published. The alpha can be built from source as Docker targets, a [standalone Client archive](client-installation.en.md), and Vite/Next integration archives. The root, Gateway, and Client remain `private` in npm metadata. Local archive installation and real consumer behavior are tested; this is not a record of npm publication.
 
 ## Prepare the candidate
 
@@ -13,7 +13,7 @@ This is a maintainer procedure, not a record that a release has been published. 
 ## Validate
 
 - Run the full suite against an isolated PostgreSQL database using [CONTRIBUTING.md](../CONTRIBUTING.md), with no unexpected skips.
-- Pack both integration workspaces and verify that their tarballs include compiled JavaScript, declarations, and the MIT license; the script suite checks installation and imports outside this monorepo.
+- Run `npm run pack:client`, and pack both integration workspaces. Verify that their archives include the required compiled code, declarations where applicable, and licenses. The script suite checks offline Client installation and integration imports outside this monorepo; the demo suite checks the installed Client against a real Gateway, and the framework suite installs integration archives into its apps.
 - Audit production dependencies and complete the six runtime image builds and entrypoint smoke checks defined in [.github/workflows/ci.yml](../.github/workflows/ci.yml).
 - For hosted releases, use a candidate Gateway and the real DNS/TLS/proxy route. Run the canary, record its result, approve that exact deployment identity, and perform [public browser tests](public-path-testing.md) with dedicated accounts.
 - Record versions, platform, image/config identities, results, and untested limits. Publish anonymized evidence; keep deployment-specific secrets and endpoints in private operations records.

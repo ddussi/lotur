@@ -20,4 +20,6 @@ Verified with Node.js 24.12.0, npm, PostgreSQL 17.6, Docker 29.1.3, Chrome/Playw
 
 The loopback DNS preload and PTY/proxy helpers are explicit test-harness files copied into the external consumer directory. They are not dependencies of the installed Client. Normal team deployments use their operator's DNS and TLS.
 
-The existing standalone Vite/Next installation/import checks and framework browser tests remain in place. End-to-end browser checks using those packed integration archives, Linux verification of this Client change, final version/checksum selection, runtime-image verification, and the full candidate gate remain outstanding. No archive has been published as a release.
+The standalone Vite/Next installation/import check also passed. The three framework browser scenarios now first pack the integration, install that archive into each fixture app, and verify that ESM resolves the installed file rather than the workspace package. All three passed on macOS: authenticated Vite HMR/revocation, Next RSC/Server Actions/navigation/Fast Refresh/revocation, and Next production HTML without the review bootstrap. Framework runtimes still come from the harness's pinned development dependencies; the separate outside-repository installation test verifies the integration packages' independent imports.
+
+Linux verification of the Client change, final version/checksum selection, runtime-image verification, and the full candidate gate remain outstanding. No archive has been published as a release.
