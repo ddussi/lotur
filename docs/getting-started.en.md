@@ -165,6 +165,8 @@ METRICS_BEARER_TOKEN=<another random token of at least 32 characters>
 
 Replace every placeholder. Restrict `TRUSTED_PROXY_CIDRS` to the actual proxy peers when using `X-Forwarded-For`; it is unset by default. Keep Gateway and database listeners reachable only by the intended peers. Use the same operational limits and HMAC configuration for the Gateway and administrative jobs.
 
+If reviewers reach the control host on a non-default port, include it in `CONTROL_HOST`, for example `control.tunnel.example.com:8443`. This preserves the port in sign-in redirects and permanent review links. `CONTENT_DOMAIN` and `CANARY_HOST` remain bare DNS names; set the content port in `PUBLIC_CONTENT_ORIGIN`. The control hostname must still be outside the content wildcard, regardless of its port.
+
 Run migrations with a dedicated DDL database role. This initializes authentication, operational state, and review tables, including an upgrade from a sharing-only database:
 
 ```sh

@@ -206,7 +206,7 @@ export function createGatewayServer(options: GatewayServerOptions = {}): Gateway
           resolveTunnel: resolveReviewTunnel,
           controlOrigin(tunnel) {
             const origin = new URL(tunnel.publicOrigin);
-            origin.hostname = options.controlHost ?? `control.${contentDomain}`;
+            origin.host = options.controlHost ?? `control.${contentDomain}`;
             return origin.origin;
           },
           ...(options.reviewEventStreamPolicy === undefined

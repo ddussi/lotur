@@ -109,7 +109,7 @@ test("authenticated review APIs bind stable revisions and never reach the local 
     host: "127.0.0.1",
     port: 0,
     contentDomain: "localhost",
-    controlHost: "control.localhost",
+    controlHost: "control.localhost:9443",
     authService,
     reviewService,
     reviewEventStreamPolicy: {
@@ -204,7 +204,7 @@ test("authenticated review APIs bind stable revisions and never reach the local 
     assert.deepEqual(JSON.parse(context.body), {
       project: { id: JSON.parse(context.body).project.id, slug: "storefront", displayName: "storefront" },
       revision: { id: JSON.parse(context.body).revision.id, key: "commit-a" },
-      controlOrigin: `http://control.localhost:${gatewayPort}`,
+      controlOrigin: "http://control.localhost:9443",
       features: { workflowVersion: 1, canRequestReview: true },
       principal: {
         accountId: reviewer.principal.accountId,

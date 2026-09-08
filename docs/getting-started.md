@@ -86,6 +86,8 @@ CANARY_BEARER_TOKEN=<32자 이상의 별도 secret>
 
 위 값은 예시일 뿐이며 애플리케이션이 `.env` 파일을 자동으로 읽지는 않는다. 실행 환경이나 secret manager가 Gateway와 Admin CLI에 값을 주입해야 한다. Ingress나 reverse proxy는 control host와 wildcard host의 HTTP streaming, SSE, WebSocket을 모두 Gateway `8787` 포트로 전달해야 한다. 상세한 운영 한도와 배포 검증은 [Linux 배포 문서](linux-deployment.md)에 있다.
 
+검토자가 기본 포트가 아닌 주소로 로그인한다면 `CONTROL_HOST=control.tunnel.example.com:8443`처럼 포트를 포함한다. 로그인 복귀 주소와 영구 리뷰 링크에도 그 포트를 유지한다. `CONTENT_DOMAIN`과 `CANARY_HOST`는 포트 없는 DNS 이름으로 두고, 콘텐츠 포트는 `PUBLIC_CONTENT_ORIGIN`에 지정한다. Control hostname은 포트와 무관하게 콘텐츠 wildcard 바깥이어야 한다.
+
 ### 최초 계정 준비
 
 다음 명령은 `DATABASE_URL`이 주입된 환경에서 실행한다. `bootstrap`과 `change-password`에는 같은 `AUTH_SESSION_HMAC_KEY`도 필요하다.

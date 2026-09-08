@@ -8,6 +8,8 @@ The first planned distribution is `v0.1.0-alpha.1`. Standalone Client installati
 
 ### Fixed
 
+- Accept explicit Control host ports for local authenticated setups and non-default HTTPS entrypoints. Preserve that port in login redirects and permanent review links while rejecting a control hostname inside the content wildcard.
+
 - Preserve request isolation when oversized HTTP/WebSocket metadata is rejected; apply the same shared-content role policy at first access and periodic authorization revalidation.
 - Serialize review event writers per feed, use a consistent read snapshot, and resynchronize expired cursors without silently omitting comments.
 - Refresh already-loaded older comments and replies; preserve versioned drafts during live updates, navigation, failed requests, concurrent editing, and text composed while a submission is pending.

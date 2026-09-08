@@ -10,6 +10,41 @@ const deploymentEnvironment = {
   CANARY_BEARER_TOKEN: "c".repeat(32),
 };
 
+test("Control 주소의 명시적 포트는 로그인 복귀에 보존하고 콘텐츠 호스트 격리는 유지한다", () => {
+  const environment = {
+    GATEWAY_HOST: "127.0.0.1",
+    GATEWAY_PORT: "8788",
+    CONTENT_DOMAIN: "preview.localhost",
+    PUBLIC_CONTENT_ORIGIN: "http://preview.localhost:8788",
+    CONTROL_HOST: "CONTROL.localhost:8788",
+    DATABASE_URL: "postgres://demo@localhost/demo",
+    AUTH_SESSION_HMAC_KEY: Buffer.alloc(32, 8).toString("base64url"),
+    ALLOW_INSECURE_HTTP_AUTH: "true",
+    ...deploymentEnvironment,
+    CANARY_HOST: "canary.preview.localhost",
+  };
+  const config = readGatewayConfig(environment);
+  assert.equal(config.controlHost, "control.localhost:8788");
+  assert.equal(config.secureCookies, false);
+  for (const authority of ["preview.localhost:8788", "control.preview.localhost:8788"]) {
+    assert.throws(
+      () => readGatewayConfig({ ...environment, CONTROL_HOST: authority }),
+      /must not use the content wildcard namespace/,
+    );
+  }
+  for (const authority of [
+    "control.localhost:0", "control.localhost:65536", "control.localhost:",
+    "control.localhost:8788/path", "user@control.localhost:8788",
+    "http://control.localhost:8788", "control.localhost:8788?next=evil",
+  ]) {
+    assert.throws(() => readGatewayConfig({ ...environment, CONTROL_HOST: authority }));
+  }
+  assert.throws(
+    () => readGatewayConfig({ ...environment, GATEWAY_HOST: "0.0.0.0" }),
+    /only allowed on a loopback bind/,
+  );
+});
+
 test("재검토 요청은 배포 설정에서 명시적으로 켜며 잘못된 값은 거부한다", () => {
   assert.equal(readGatewayConfig({}).reviewWorkflowEnabled, undefined);
   assert.equal(readGatewayConfig({ REVIEW_WORKFLOW_ENABLED: "true" }).reviewWorkflowEnabled, true);

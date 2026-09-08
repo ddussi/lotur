@@ -466,8 +466,9 @@ export function readGatewayConfig(
   const deploymentIdentity = deploymentId === undefined || deploymentConfigDigest === undefined
     ? undefined
     : parseDeploymentIdentity(deploymentId, deploymentConfigDigest);
-  if (controlHost !== undefined) {
-    const normalizedControlHost = parseDomain(controlHost);
+  const parsedControlHost = controlHost === undefined ? undefined : parseControlHost(controlHost);
+  if (parsedControlHost !== undefined) {
+    const normalizedControlHost = parsedControlHost.hostname;
     if (
       normalizedControlHost === contentDomain ||
       normalizedControlHost.endsWith(`.${contentDomain}`)
@@ -491,7 +492,7 @@ export function readGatewayConfig(
   ) {
     throw new Error("CANARY_HOST must be a strict subdomain of CONTENT_DOMAIN");
   }
-  if (canaryHost !== undefined && canaryHost === controlHost) {
+  if (canaryHost !== undefined && canaryHost === parsedControlHost?.hostname) {
     throw new Error("CANARY_HOST must differ from CONTROL_HOST");
   }
   if (canaryBearerToken !== undefined && canaryBearerToken.length < 32) {
@@ -615,7 +616,7 @@ export function readGatewayConfig(
       : { canaryWebSocketIdleTimeoutMs }),
     ...(deploymentIdentity === undefined ? {} : { deploymentIdentity }),
     ...(databaseUrl === undefined ? {} : { databaseUrl }),
-    ...(controlHost === undefined ? {} : { controlHost: parseDomain(controlHost) }),
+    ...(parsedControlHost === undefined ? {} : { controlHost: parsedControlHost.authority }),
     ...(authSessionHmacKey === undefined ? {} : { authSessionHmacKey }),
     ...(authSessionHmacPreviousKeys.length === 0
       ? {}
@@ -726,6 +727,15 @@ function compactSessionLimits(
     if (parsed !== undefined) limits[property] = parsed;
   }
   return limits;
+}
+
+function parseControlHost(value: string): Readonly<{ hostname: string; authority: string }> {
+  const match = /^([^:]+)(?::([1-9]\d{0,4}))?$/.exec(value);
+  if (match === null || match[1] === undefined || Number(match[2] ?? 1) > 65_535) {
+    throw new TypeError("CONTROL_HOST must use a DNS hostname with an optional port from 1 to 65535");
+  }
+  const hostname = parseDomain(match[1]);
+  return { hostname, authority: hostname + (match[2] === undefined ? "" : `:${match[2]}`) };
 }
 
 function parseDomain(value: string): string {
