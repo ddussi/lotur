@@ -9,6 +9,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { chromium, expect } from '@playwright/test';
 import { createCarrierAuthentication } from '../../apps/client/src/control-client.ts';
 import { connectTunnelClient } from '../../apps/client/src/client.ts';
+import { observeViteHmr } from './vite-readiness.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const accessFile = process.env.PUBLIC_TEST_ACCESS_FILE;
@@ -63,6 +64,7 @@ async function runFramework(kind) {
     console.log(`Public test URL (${kind}): ${active.shareUrl}`);
 
     const sockets = new Set();
+    const hmr = kind === 'vite' ? observeViteHmr(page, active.shareUrl) : undefined;
     page.on('websocket', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); });
     await page.goto(active.shareUrl);
     await expect(page.getByRole('heading', { name: 'Review Tunnel 로그인' })).toBeVisible({ timeout: 15000 });
@@ -82,9 +84,11 @@ async function runFramework(kind) {
       await expect(page.getByRole('heading', { name: 'Vite through Review Tunnel' })).toBeVisible({ timeout: 20000 });
       await page.getByTestId('counter').click();
       await expect(page.getByTestId('counter')).toHaveText('count: 1');
+      await expect.poll(hmr.connected, { timeout: 20000 }).toBe(true);
       const sourcePath = join(directory, 'src/main.js');
       const source = await readFile(sourcePath, 'utf8');
       await writeFile(sourcePath, source.replace('vite-hmr-v1', 'vite-hmr-v2'));
+      await expect.poll(hmr.updates, { timeout: 20000 }).toBeGreaterThan(0);
       await expect(page.getByTestId('hmr-marker')).toHaveText('vite-hmr-v2', { timeout: 20000 });
       passed('Page interaction and HMR over public HTTPS');
 

@@ -12,6 +12,7 @@ import { createCarrierAuthentication } from "../../apps/client/src/control-clien
 
 import { connectTunnelClient } from "../../apps/client/src/client.ts";
 import { createGatewayServer } from "../../apps/gateway/src/server.ts";
+import { observeViteHmr } from "./vite-readiness.mjs";
 
 const repositoryRoot = fileURLToPath(new URL("../..", import.meta.url));
 const fixtureRoot = join(repositoryRoot, "tests", "frameworks", "fixtures");
@@ -20,16 +21,19 @@ const execute = promisify(execFile);
 test("Vite 8 supports login, HMR and revocation through an authenticated Gateway", async ({ page }) => {
   const runtime = await startRuntime("vite");
   try {
+    const hmr = observeViteHmr(page, runtime.shareUrl);
     await loginReviewer(page, runtime);
     await expect(page.locator('script[src="/_review-tunnel/review/bootstrap.js"]')).toHaveCount(1);
     await expect(page.getByRole("heading", { name: "Vite through Review Tunnel" })).toBeVisible();
     await expect(page.getByTestId("hmr-marker")).toHaveText("vite-hmr-v1");
     await page.getByTestId("counter").click();
     await expect(page.getByTestId("counter")).toHaveText("count: 1");
+    await expect.poll(hmr.connected, { message: "Vite HMR socket must be ready before changing source" }).toBe(true);
 
     const sourcePath = join(runtime.fixtureDirectory, "src", "main.js");
     const source = await readFile(sourcePath, "utf8");
     await writeFile(sourcePath, source.replace("vite-hmr-v1", "vite-hmr-v2"));
+    await expect.poll(hmr.updates, { message: "Source change must produce a proxied Vite update frame" }).toBeGreaterThan(0);
     await expect(page.getByTestId("hmr-marker")).toHaveText("vite-hmr-v2");
     await verifyReviewerRevocation(page, runtime);
   } finally {
