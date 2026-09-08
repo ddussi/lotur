@@ -52,20 +52,17 @@ restrict,command="python3 -B /opt/review-tunnel/receive-deployment.py --root /op
 
 저장소 Settings → Environments에 `production` 환경을 만든다. 이 환경의 배포 브랜치는 `main`으로 제한한다. 매 푸시마다 완전 자동으로 반영하려면 required reviewer를 지정하지 않는다. SSH 개인 키와 그 공개 키를 서버에 연결하는 작업은 선택한 배포 계정 범위에서 수행한다.
 
-`production` 환경의 Variables:
+`production` 환경의 Secrets:
 
 | 이름 | 값 |
 | --- | --- |
 | `DEPLOY_HOST` | 실제 서버 DNS 이름 또는 IPv4 주소 |
 | `DEPLOY_USER` | SSH 배포 계정 |
 | `DEPLOY_PORT` | SSH 포트, 생략 시 `22` |
-
-`production` 환경의 Secrets:
-
-| 이름 | 값 |
-| --- | --- |
 | `DEPLOY_SSH_KEY` | 위 고정 명령에 연결한 배포 전용 SSH 개인 키 |
 | `DEPLOY_KNOWN_HOSTS` | 서버 관리자와 fingerprint를 대조해 확인한 SSH known_hosts 항목. 기본 포트가 아니면 `[호스트]:포트` 항목 사용 |
+
+서버 주소·계정·포트도 Secret에 저장해 Actions의 환경 설정 출력에서 마스킹한다. 이전 버전에서 같은 이름의 Variables를 사용했다면 **기존 값을 바꾸지 않고 같은 환경의 Secrets로 먼저 복사**한 뒤 새 워크플로를 적용한다. 이전 워크플로가 실행될 수 있는 동안에는 Variables도 유지한다. Secrets로 옮겨도 이미 남은 과거 로그가 소급해서 가려지지는 않으므로, 공개 전환 전에는 별도로 점검한다.
 
 마지막으로 **저장소 Variables**에 `AUTO_DEPLOY_ENABLED=true`를 지정한다. 이 값은 이미지 게시 job에서도 사용하므로 `production` 환경에만 넣으면 켜지지 않는다. 되돌려 끄려면 이 저장소 변수를 `false`로 바꾼다.
 

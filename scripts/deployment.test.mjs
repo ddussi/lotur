@@ -31,4 +31,8 @@ test("배포는 main 검사 성공 뒤에만 실행하고 배포 중 취소와 S
   assert.match(rollout, /REGISTRY_TOKEN: \$\{\{ secrets\.GITHUB_TOKEN \}\}/);
   assert.doesNotMatch(source, /pull_request_target|workflow_run|StrictHostKeyChecking=no|ssh-keyscan/);
   assert.doesNotMatch(rollout, /DATABASE_URL|AUTH_SESSION_HMAC_KEY|ADMIN_PASSWORD/);
+  for (const name of ["DEPLOY_HOST", "DEPLOY_USER", "DEPLOY_PORT"]) {
+    assert.ok(rollout.includes(`secrets.${name}`), `${name} must be masked as a production environment secret`);
+    assert.ok(!rollout.includes(`vars.${name}`), `${name} must not be printed as a plain Actions variable`);
+  }
 });

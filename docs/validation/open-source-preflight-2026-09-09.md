@@ -30,6 +30,8 @@ No automatic history rewrite, remote log deletion, repository visibility change 
 
 ## Follow-up evidence
 
+- On 2026-09-09, the authenticated GitHub package list showed `lotur-gateway`, `lotur-admin-cli`, and `lotur-canary-check` as **Private**, linked to this repository. This closes the initial visibility inventory gap for those three packages; it does not establish anonymous access or the visibility of future packages. The local API credential still lacks `read:packages`.
+- The existing production environment values for `DEPLOY_HOST`, `DEPLOY_USER`, and `DEPLOY_PORT` were copied to same-named Secrets in the same repository/environment, and their presence was verified without printing their values. The preparation branch's deployment workflow now references those Secrets. Original Variables remain for the older workflow on `main`. Future masking must also be checked in the eventual deployment log; this change does not alter the three historical logs listed above.
 - Current implementation: [status](../poc-status.md).
 - Required later checks and final publication boundary: [alpha preparation plan](../open-source-alpha-plan.md).
 - GitHub describes Actions log visibility when a repository becomes public in [repository visibility documentation](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/managing-repository-settings/setting-repository-visibility).
