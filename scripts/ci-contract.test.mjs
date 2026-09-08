@@ -9,7 +9,7 @@ test("CI는 실제 PostgreSQL과 framework를 포함한 완료 게이트를 실�
   );
 
   assert.match(workflow, /services:\s*\n\s+postgres:/);
-  assert.match(workflow, /image: postgres:17\.6-bookworm@sha256:[a-f0-9]{64}/);
+  assert.match(workflow, /image: postgres:17\.11-bookworm@sha256:[a-f0-9]{64}/);
   assert.match(workflow, /TEST_DATABASE_URL:/);
   assert.match(workflow, /npm ci/);
   assert.match(workflow, /npm run check:mvp/);

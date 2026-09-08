@@ -29,6 +29,8 @@ The first planned distribution is `v0.1.0-alpha.1`. A local demo and standalone 
 
 ### Added
 
+- Source/package candidate manifests and checksums, with an opt-in six-image GHCR candidate workflow that records immutable digests separately from production deployment.
+- Actual local review screenshots and a short walkthrough, an alpha contributor roadmap, and English/Korean upgrade and restore guidance.
 - A standalone Client archive builder with an installed `review-tunnel` command, `--version`, bundled ws runtime/license, offline consumer installation, and real sharing/reconnection/cleanup validation.
 - A one-command local demo with a Vite example, dedicated PostgreSQL volume, generated developer/reviewer credentials, real authentication/canary/admission, preserved reviews on restart, and explicit demo-only data deletion.
 - Responsive element-anchored pins, per-pin visibility and jump controls, server-side status/author filters, and a collapsible mobile review panel.
@@ -50,6 +52,8 @@ The first planned distribution is `v0.1.0-alpha.1`. A local demo and standalone 
 
 ### Changed
 
+- Pin the demo, CI database and backup/restore tools to PostgreSQL 17.11, which includes the [August 2026 security fixes](https://www.postgresql.org/about/news/postgresql-186-1711-1615-1519-1424-and-19-beta-3-released-3365/). Existing installations require their own planned database update.
+- Read deployment connection settings from production environment Secrets so future Actions logs mask them; historical logs require separate review.
 - Extract local-origin resolution and WebSocket Upgrade validation from the Client transport.
 - Use controlled clocks in timing-sensitive transport tests.
 - Document sharing and implemented reviews separately from deferred project-specific authorization.
@@ -60,6 +64,7 @@ The first planned distribution is `v0.1.0-alpha.1`. A local demo and standalone 
 
 ### Upgrade notes
 
+- Follow the [upgrade and restore guide](docs/upgrading.en.md) ([한국어](docs/upgrading.md)). Dumps restore application accounts and reviews, while PostgreSQL roles/grants must be provisioned separately. Previous-container recovery does not reverse DB migrations.
 - Run the administrator migration command before starting a Gateway requiring review schema 21. Existing migration 18 must retain its deployed meaning; never renumber an applied production migration manually.
 - Upgrade every Gateway reading that database before enabling `REVIEW_WORKFLOW_ENABLED=true`. The runtime defaults to disabling new re-review requests; existing pending requests and their history remain readable and actionable.
 - Gateway restart ends active tunnel URLs. Restart sharing with the same owner/project/revision to retrieve saved feedback under a new URL.

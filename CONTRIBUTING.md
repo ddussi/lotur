@@ -21,7 +21,7 @@ This runs linting, type checking, architecture boundaries, build, script tests, 
 
 ## Run the full suite
 
-Use Docker Compose to start the isolated PostgreSQL 17.6 fixture. It uses a temporary filesystem and the following credentials are **test-only defaults**. Do not point these tests at a database whose data you need to retain.
+Use Docker Compose to start the isolated PostgreSQL 17.11 fixture. It uses a temporary filesystem and the following credentials are **test-only defaults**. Do not point these tests at a database whose data you need to retain.
 
 ```sh
 docker compose -f compose.test.yml up -d --wait

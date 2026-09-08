@@ -48,7 +48,7 @@ test("Docker image는 상주 Gateway와 one-off 역할을 별도 target으로 �
   assert.match(dockerfile, /FROM postgres-tools AS db-restore[\s\S]*ENTRYPOINT \["node", "scripts\/postgres-restore\.mjs"\]/);
   assert.match(
     dockerfile,
-    /FROM postgres:17\.6-bookworm[\s\S]*postgres-operations\.mjs[\s\S]*postgres-process\.mjs/,
+    /FROM postgres:17\.11-bookworm[\s\S]*postgres-operations\.mjs[\s\S]*postgres-process\.mjs/,
     "PostgreSQL tool images must include every shared module imported by their entrypoints",
   );
 });
@@ -59,7 +59,7 @@ test("운영 image base는 floating tag가 아니라 digest로 고정한다", ()
   for (const line of fromLines) assert.match(line, /@sha256:[a-f0-9]{64}\b/);
   assert.match(
     dockerfile,
-    /FROM postgres:17\.6-bookworm@sha256:[a-f0-9]{64} AS postgres-tools/,
+    /FROM postgres:17\.11-bookworm@sha256:[a-f0-9]{64} AS postgres-tools/,
   );
 });
 

@@ -55,7 +55,7 @@ jobs:
     timeout-minutes: 40
     services:
       postgres:
-        image: postgres:17.6-bookworm@sha256:f3bd19c606e442c3d7bdfa8002e03fe260a1023351e0ea4598032022b68dd6e3
+        image: postgres:17.11-bookworm@sha256:051f7b7b3abdd564d5d1bd1e8c4b9c1b6e77087d1dd22020ede611c096a272e0
         env:
           POSTGRES_USER: review_tunnel
           POSTGRES_PASSWORD: review_tunnel_test

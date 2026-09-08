@@ -1,6 +1,8 @@
 # GitHub 푸시부터 Gateway 배포까지
 
-`main` 푸시 → 기존 CI 검사 → GHCR 이미지 업로드 → SSH 서버 반영 → HTTPS 검증 → 공유 허용 순서로 실행한다. PR과 다른 브랜치에서는 검사만 실행한다. GitHub Actions의 `CI` 화면에서 `Run workflow`를 눌러 `main`을 다시 실행할 수도 있다. 수동 실행도 검사를 생략하지 않는다.
+`main` 푸시 → 기존 CI 검사 → GHCR 이미지 업로드 → SSH 서버 반영 → HTTPS 검증 → 공유 허용 순서로 실행한다. PR과 다른 브랜치의 일반 푸시에서는 검사만 실행한다. GitHub Actions의 `CI` 화면에서 `Run workflow`를 눌러 `main`을 다시 실행할 수도 있다. 수동 실행도 검사를 생략하지 않는다.
+
+수동 실행에서 `candidate_images=true`를 명시하면 별도의 [후보 이미지 절차](releasing.md#build-candidate-images)를 실행하며, `main`을 선택해도 운영 게시·배포 job은 건너뛴다. 일반 `main` 푸시의 자동 배포 조건은 유지한다.
 
 처음 한 번 서버와 GitHub 설정을 연결하고 `AUTO_DEPLOY_ENABLED=true`를 지정해야 한다. 현재 저장소에는 실제 서버 주소·SSH 키가 포함되어 있지 않다. 아래 설정 없이 워크플로 파일만 올리면 자동 배포가 활성화된 것으로 보지 않는다.
 

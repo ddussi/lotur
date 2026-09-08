@@ -9,7 +9,7 @@ Review Tunnel Gateway는 화면 없는 Linux 서버에서 단일 컨테이너로
 ## 필수 외부 구성
 
 - Node.js 24 실행 이미지 또는 이 저장소의 `Dockerfile`
-- PostgreSQL 15 이상. 자동 검증 기준 이미지는 PostgreSQL 17.6이다.
+- PostgreSQL 15 이상. 자동 검증 기준 이미지는 PostgreSQL 17.11이다.
 - TLS를 종료하는 승인된 Ingress 또는 Load Balancer
 - 하나의 기준 도메인 아래의 control DNS와 콘텐츠 wildcard DNS, 두 이름을 포함하는 TLS 인증서
 - 환경별 secret manager와 암호화된 PostgreSQL 백업 저장소
@@ -134,7 +134,7 @@ docker build --target db-restore -t registry.example/review-tunnel-db-restore:<r
 
 ### 공식 image digest 확인과 Docker Desktop credential 문제
 
-`Dockerfile`은 2026-09-01에 Docker Hub 공식 Registry v2 응답으로 재확인한 `node:24-bookworm-slim@sha256:ba849c60be29959425b8734d57b8b4b7d56f98edd9504c9af091d5281095a71e`와 `postgres:17.6-bookworm@sha256:f3bd19c606e442c3d7bdfa8002e03fe260a1023351e0ea4598032022b68dd6e3`에 고정한다. tag의 multi-platform OCI index digest를 pin하므로 amd64와 arm64가 같은 Dockerfile에서 각 플랫폼 image를 선택한다.
+`Dockerfile`은 2026-09-09에 Docker Hub 공식 레지스트리 응답으로 재확인한 `node:24-bookworm-slim@sha256:ba849c60be29959425b8734d57b8b4b7d56f98edd9504c9af091d5281095a71e`와 `postgres:17.11-bookworm@sha256:051f7b7b3abdd564d5d1bd1e8c4b9c1b6e77087d1dd22020ede611c096a272e0`에 고정한다. tag의 multi-platform OCI index digest를 pin하므로 amd64와 arm64가 같은 Dockerfile에서 각 플랫폼 image를 선택한다.
 
 macOS Docker Desktop에서 `docker pull`이나 `docker buildx imagetools inspect`가 image 조회 전에 멈추고 `error getting credentials`로 끝나며 `~/.docker/config.json`이 `credsStore: desktop`을 사용하는 경우, registry나 digest가 아니라 credential helper 상태를 먼저 의심한다. 사용자 설정을 수정하지 않고 공개 공식 image만 진단하려면 빈 임시 Docker config로 built-in manifest 명령을 실행한다.
 
@@ -143,7 +143,7 @@ mkdir -p /tmp/review-tunnel-docker-anonymous
 DOCKER_CONFIG=/tmp/review-tunnel-docker-anonymous \
   docker manifest inspect node:24-bookworm-slim
 DOCKER_CONFIG=/tmp/review-tunnel-docker-anonymous \
-  docker manifest inspect postgres:17.6-bookworm
+  docker manifest inspect postgres:17.11-bookworm
 ```
 
 같은 `DOCKER_CONFIG`로 실제 target build까지 통과하면 registry 접근과 digest는 정상이고 기존 credential helper가 실패 지점이다. 이 우회는 공개 image 진단에만 사용한다. private registry 자격 증명이나 운영자의 Docker 설정을 지우지 말고, Docker Desktop 재시작·credential store 복구가 필요한 경우에는 환경 소유자의 명시적 승인과 절차를 따른다.
@@ -166,7 +166,7 @@ postgres_registry_token=$(curl -fsSL \
 curl -fsSI \
   -H "Authorization: Bearer ${postgres_registry_token}" \
   -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json' \
-  'https://registry-1.docker.io/v2/library/postgres/manifests/17.6-bookworm' \
+  'https://registry-1.docker.io/v2/library/postgres/manifests/17.11-bookworm' \
   | grep -i '^docker-content-digest:'
 ```
 
@@ -296,7 +296,7 @@ DATABASE_URL="$PRODUCTION_DATABASE_URL" \
 npm run backup:postgres -- --output-dir /var/lib/review-tunnel/backups
 ```
 
-서버에 PostgreSQL client를 별도 설치하지 않을 때는 server와 같은 17.6 client를 고정한 one-off image를 사용한다. mount 디렉터리는 image의 non-root `postgres` 사용자가 쓸 수 있어야 한다. 배포 시 `docker run --rm --entrypoint id registry.example/review-tunnel-db-backup:<release>`로 그 release의 실제 UID·GID를 확인해 host volume 소유권을 준비하고, Gateway·Client의 `node` UID라고 가정하지 않는다.
+서버에 PostgreSQL client를 별도 설치하지 않을 때는 server와 같은 17.11 client를 고정한 one-off image를 사용한다. mount 디렉터리는 image의 non-root `postgres` 사용자가 쓸 수 있어야 한다. 배포 시 `docker run --rm --entrypoint id registry.example/review-tunnel-db-backup:<release>`로 그 release의 실제 UID·GID를 확인해 host volume 소유권을 준비하고, Gateway·Client의 `node` UID라고 가정하지 않는다.
 
 ```bash
 docker run --rm \

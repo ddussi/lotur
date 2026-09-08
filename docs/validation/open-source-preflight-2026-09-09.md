@@ -30,6 +30,7 @@ No automatic history rewrite, remote log deletion, repository visibility change 
 
 ## Follow-up evidence
 
+- The later [candidate image validation](candidate-images-2026-09-09.md) published and pulled all six runtime targets under unique private candidate tags. API checks confirmed private visibility for the existing Gateway/Admin CLI/canary packages and the new Client/backup/restore packages. Source/package files and image metadata are now retained as private seven-day CI artifacts; the initial inventory above predates those artifacts.
 - On 2026-09-09, the authenticated GitHub package list showed `lotur-gateway`, `lotur-admin-cli`, and `lotur-canary-check` as **Private**, linked to this repository. This closes the initial visibility inventory gap for those three packages; it does not establish anonymous access or the visibility of future packages. The local API credential still lacks `read:packages`.
 - The existing production environment values for `DEPLOY_HOST`, `DEPLOY_USER`, and `DEPLOY_PORT` were copied to same-named Secrets in the same repository/environment, and their presence was verified without printing their values. The preparation branch's deployment workflow now references those Secrets. Original Variables remain for the older workflow on `main`. Future masking must also be checked in the eventual deployment log; this change does not alter the three historical logs listed above.
 - Current implementation: [status](../poc-status.md).

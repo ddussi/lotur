@@ -42,7 +42,7 @@ COPY --from=build --chown=node:node /app/scripts/verify-public-path.mjs ./script
 COPY --from=build --chown=node:node /app/scripts/canary-policy.mjs ./scripts/canary-policy.mjs
 ENTRYPOINT ["node", "scripts/verify-public-path.mjs"]
 
-FROM postgres:17.6-bookworm@sha256:f3bd19c606e442c3d7bdfa8002e03fe260a1023351e0ea4598032022b68dd6e3 AS postgres-tools
+FROM postgres:17.11-bookworm@sha256:051f7b7b3abdd564d5d1bd1e8c4b9c1b6e77087d1dd22020ede611c096a272e0 AS postgres-tools
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=runtime-files /usr/local/bin/node /usr/local/bin/node
