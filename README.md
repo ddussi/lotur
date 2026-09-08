@@ -68,7 +68,9 @@ These are documentation placeholders, not working endpoints. The wildcard covers
 
 Follow the [English setup guide](docs/getting-started.en.md) or [한국어 시작 안내](docs/getting-started.md). The detailed [Linux deployment runbook (Korean)](docs/linux-deployment.md) covers runtime limits, Docker targets, secrets, backup/restore, and rollback. [.env.example](.env.example) is a configuration reference; the application does not automatically load `.env` files.
 
-New shares remain closed until the public-path canary passes and an administrator separately approves the exact deployment ID and configuration digest.
+For automatic deployment after a successful `main` build, configure the [GitHub Actions deployment pipeline](docs/automatic-deployment.md). It publishes pinned images to GHCR, updates the configured Linux Gateway over SSH, verifies the public path, and restores the previous container if the rollout fails.
+
+New shares remain closed until the public-path canary passes and an administrator or configured deployment pipeline separately approves the exact deployment ID and configuration digest.
 
 ## Features and current limits
 
