@@ -4,9 +4,11 @@ import copy
 import hashlib
 import importlib.util
 import io
+from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 from pathlib import Path
 import tempfile
+from threading import Thread
 import subprocess
 from types import SimpleNamespace
 import unittest
@@ -163,8 +165,31 @@ class DeploymentTests(unittest.TestCase):
             subject.execute()
         self.assert_old_running()
         probes = [command for command in self.docker.commands if command[0] == "exec"]
-        self.assertIn("127.0.0.1:8787", probes[0][-1])
-        self.assertIn("127.0.0.1:9090", probes[-1][-1])
+        self.assertIn('"port": 8787', probes[0][-1])
+        self.assertIn('"port": 9090', probes[-1][-1])
+
+    def test_actual_node_probe_preserves_control_host_and_rejects_wrong_host(self):
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                status = 200 if self.path == "/health/ready" and self.headers.get("Host") == "control.example.com" else 404
+                self.send_response(status)
+                self.end_headers()
+
+            def log_message(self, *_args):
+                pass
+
+        with HTTPServer(("127.0.0.1", 0), Handler) as server:
+            thread = Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                for host, expected in [("control.example.com", 0), ("wrong.example.com", 1)]:
+                    result = subprocess.run(["node", "--input-type=module", "-e",
+                                             deployment.readiness_probe(server.server_port, host)],
+                                            capture_output=True, timeout=10)
+                    self.assertEqual(result.returncode, expected, result.stderr.decode())
+            finally:
+                server.shutdown()
+                thread.join(timeout=2)
 
     def test_public_canary_has_egress_without_database_network_access(self):
         self.config.update(port=None, proxyNetwork="edge-proxy")

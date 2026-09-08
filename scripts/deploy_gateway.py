@@ -21,6 +21,15 @@ class DeploymentError(Exception):
     pass
 
 
+def readiness_probe(port, control_host):
+    options = {"host": "127.0.0.1", "port": port, "path": "/health/ready",
+               "headers": {"host": control_host}}
+    # Node fetch can replace Host with the URL host. The Gateway routes by Host.
+    return ("import http from 'node:http'; const request = http.get(" + json.dumps(options) +
+            ", response => { response.resume(); process.exit(response.statusCode === 200 ? 0 : 1); });"
+            "request.on('error', () => process.exit(1)); request.setTimeout(3000, () => request.destroy());")
+
+
 def require(condition, message):
     if not condition:
         raise DeploymentError(message)
@@ -176,9 +185,7 @@ class Deployment:
     def ready(self, previous=False):
         port, host = self.previous_address() if previous else (8787, self.gateway["CONTROL_HOST"])
         # Check the exact container, including installations that publish no host port.
-        probe = ("const r = await fetch(" + json.dumps(f"http://127.0.0.1:{port}/health/ready") +
-                 ", {headers: {Host: " + json.dumps(host) + "}, signal: AbortSignal.timeout(3000)});"
-                 "process.exit(r.status === 200 ? 0 : 1);")
+        probe = readiness_probe(port, host)
         deadline = time.monotonic() + self.config["healthTimeoutSeconds"]
         while True:
             result = self.docker.run(["exec", self.name, "node", "--input-type=module", "-e", probe],
