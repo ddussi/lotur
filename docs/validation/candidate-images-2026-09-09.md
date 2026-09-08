@@ -2,6 +2,8 @@
 
 This validates the image publication path for an early candidate. It is not a public release or production rollout. PostgreSQL was still 17.6 in this candidate; the subsequent 17.11 security refresh must be validated before final publication.
 
+See the later [refreshed candidate result](candidate-refresh-2026-09-09.md) for PostgreSQL 17.11, actual restoration and included runtime notices.
+
 - Source: `509667ea2129e25665262289db3c8915a9cf4b46`; version `0.1.0-alpha.1`.
 - [CI run 34258812926](https://github.com/ddussi/lotur/actions/runs/34258812926) passed verification, package inventory and candidate images. Normal production publish/deploy jobs were skipped.
 - 74 script tests, 359 application/PostgreSQL tests, 19 framework browser cases and 3 demo/installed-Client cases passed: 455 total, zero skips. Production npm audit found zero vulnerabilities. This audit does not cover the PostgreSQL binary or the base operating system.
