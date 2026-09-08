@@ -41,6 +41,7 @@ Always stop the fixture after testing, including after a failed run. `check:mvp`
 | `npm run test:postgres` | Real database tests; requires an isolated `TEST_DATABASE_URL` |
 | `npm run test:frameworks` | Authenticated Vite/Next.js, production HTML, and review overlay tests |
 | `npm run test:demo` | Real demo lifecycle and two-user reviews; externally installed Client terminal/sharing/reconnection/cleanup checks. Requires local Docker Engine 28+ / Compose, Chrome, and Python 3.9+ on Linux/macOS |
+| `npm run test:restore` | Back up real synthetic reviews, restore into an empty isolated DB, recreate restricted DB permissions, and continue authenticated reviews. Requires the locally built images described below |
 | `npm run test:frameworks:public` | Opt-in tests against your own deployed HTTPS Gateway |
 
 Run `npm run build` before invoking browser suites directly; their fixtures import the compiled integration packages.
@@ -49,7 +50,26 @@ The public suite creates shares and revokes a reviewer's sessions. Configure ded
 
 `test:demo` creates its own isolated Compose projects on dynamically assigned loopback ports and deletes their test data afterward. It does not use `TEST_DATABASE_URL` or your `.review-tunnel-demo` directory. Its private browser traces can contain disposable login credentials; do not publish them without review.
 
-CI runs the full database-backed gate, the local demo suite, audits production dependencies, and builds/smoke-checks the six production Docker targets. A local source check does not substitute for those image checks.
+CI runs the full database-backed gate, the local demo suite, audits production dependencies, and builds/smoke-checks the six production Docker targets. It then restores synthetic reviews using those exact images before creating release files. A local source check does not substitute for those image checks.
+
+## Exercise backup and restoration
+
+Build the four required images from the checkout being tested, with its source revision label. Use a clean checkout when recording release evidence. The drill checks the label and runs each inspected image by its local immutable ID:
+
+```sh
+restore_revision=$(git rev-parse HEAD)
+for target in gateway admin-cli db-backup db-restore; do
+  docker build --target "$target" \
+    --label "org.opencontainers.image.revision=${restore_revision}" \
+    -t "review-tunnel-${target}:restore-check" . || exit 1
+done
+npm run build
+npm run test:restore
+```
+
+The test owns a separate demo database, an empty restore database, a private backup volume and an isolated network. It does not use an existing demo state or `TEST_DATABASE_URL`; its own containers, dump and data are deleted in cleanup. It compares every table and sequence before allowing new writes, repeats migration twice, and checks fresh authentication, role restrictions, inbox recipients, a new canary/admission identity, replies, re-review and anchored pins in a new share.
+
+On Linux, the restored Gateway runs in the candidate image using host networking while binding only to loopback. On macOS, it runs the corresponding source on the host; migration, backup and restore still use the images. This does not establish Docker Desktop host-network support or an HTTPS/previous-image rollback result. CI requires the Linux image path. Only the sanitized `restore-validation.json` is uploaded; dumps, private runner logs, browser traces, sessions and account records must stay private.
 
 ## Propose a change
 

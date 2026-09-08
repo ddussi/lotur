@@ -38,7 +38,8 @@
     "test:demo": "node ./node_modules/@playwright/test/cli.js test --config tests/demo/playwright.config.mjs",
     "check:release-version": "node scripts/check-release-version.mjs",
     "pack:release": "node scripts/pack-release.mjs",
-    "verify:release": "node scripts/verify-release.mjs"
+    "verify:release": "node scripts/verify-release.mjs",
+    "test:restore": "node ./node_modules/@playwright/test/cli.js test --config tests/release/playwright.config.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.11",

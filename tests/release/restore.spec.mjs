@@ -1,0 +1,101 @@
+import { test, expect } from "@playwright/test";
+import { writeFile } from "node:fs/promises";
+import { fixture, login } from "../demo/runtime.mjs";
+import { restoreRuntime } from "./restore-runtime.mjs";
+
+test("candidate images restore saved reviews, roles, history and notifications into a new database", async ({ browser }, testInfo) => {
+  const demo = await fixture();
+  let restore;
+  const contexts = [];
+  const context = async () => { const value = await browser.newContext({ viewport: { width: 1440, height: 1100 } }); contexts.push(value); return value; };
+  const comment = "@developer Keep this anchored review through database recovery.";
+  try {
+    const ready = await demo.start();
+    const reviewer = await (await context()).newPage();
+    const developer = await (await context()).newPage();
+    await login(reviewer, ready.shareUrl, ready.accounts.reviewer);
+    await expect(reviewer.getByRole("heading", { name: "A calmer way to launch." })).toBeVisible();
+    const overlay = reviewer.locator("review-tunnel-overlay");
+    const box = await reviewer.locator('[data-review-id="launch-card"]').boundingBox();
+    await overlay.getByRole("button", { name: "Select area or pin" }).click();
+    await reviewer.mouse.move(box.x + box.width * .1, box.y + box.height * .1);
+    await reviewer.mouse.down();
+    await reviewer.mouse.move(box.x + box.width * .7, box.y + box.height * .4, { steps: 4 });
+    await reviewer.mouse.up();
+    await overlay.getByRole("textbox", { name: "Comment", exact: true }).fill(comment);
+    await overlay.getByRole("button", { name: "Comment", exact: true }).click();
+    const thread = overlay.locator(".thread").filter({ hasText: comment });
+    await expect(thread).toBeVisible();
+    const permalink = await thread.getByRole("link", { name: "Permanent link" }).getAttribute("href");
+    const threadId = new URL(permalink).pathname.split("/").at(-1);
+    await login(developer, permalink, ready.accounts.developer);
+    await developer.getByRole("textbox", { name: "Reply to comment" }).fill("First revision is ready for review.");
+    await developer.getByRole("button", { name: "Reply", exact: true }).click();
+    await expect(developer.locator(".reply")).toContainText("First revision");
+    await developer.getByRole("button", { name: "Request review", exact: true }).click();
+    await reviewer.goto(permalink);
+    await reviewer.getByRole("button", { name: "Request more changes", exact: true }).click();
+    await expect(reviewer.locator(".thread-status")).toHaveText("Open");
+    await developer.getByRole("button", { name: "Request review", exact: true }).click();
+    await expect(reviewer.locator(".thread-status")).toHaveText("Needs review");
+    await reviewer.locator("#inbox summary").click();
+    await expect(reviewer.locator("#notifications")).toContainText("답글을 남겼습니다");
+    await reviewer.getByRole("button", { name: "읽음으로 표시", exact: true }).first().click();
+    for (const value of contexts.splice(0)) await value.close();
+
+    restore = await restoreRuntime(demo);
+    const restored = await restore.initialize();
+    const { pool, config, evidence } = restored;
+    const saved = (await pool.query("SELECT body, status, pin_number, workflow_version FROM rt_review_threads WHERE id = $1", [threadId])).rows[0];
+    expect(saved).toMatchObject({ body: comment, status: "NEEDS_REVIEW", pin_number: 1, workflow_version: 4 });
+    const notifications = (await pool.query("SELECT reason, read_at IS NOT NULL AS is_read FROM rt_review_notifications")).rows;
+    expect(new Set(notifications.map(item => item.reason))).toEqual(new Set(["MENTION", "REPLY", "WORKFLOW_REQUEST", "WORKFLOW_RESULT"]));
+    expect(notifications.some(item => item.is_read)).toBe(true);
+    expect(notifications.some(item => !item.is_read)).toBe(true);
+    const restoredReviewer = await (await context()).newPage();
+    const restoredDeveloper = await (await context()).newPage();
+    const restoredAdmin = await (await context()).newPage();
+    const signedOut = await context();
+    const denied = await signedOut.request.get(`${restored.controlUrl}/api/reviews/comments/${threadId}`);
+    expect(denied.status()).toBe(401);
+    await login(restoredAdmin, permalink, { username: "admin", password: config.passwords.admin });
+    expect((await restoredAdmin.request.get(permalink)).status()).toBe(403);
+    await login(restoredReviewer, permalink, ready.accounts.reviewer);
+    await expect(restoredReviewer.locator(".thread")).toContainText(comment);
+    await expect(restoredReviewer.locator(".thread-status")).toHaveText("Needs review");
+    await expect(restoredReviewer.locator(".reply")).toContainText("First revision");
+    await login(restoredDeveloper, permalink, ready.accounts.developer);
+    await expect(restoredDeveloper.locator(".thread")).toContainText(comment);
+    await restoredReviewer.locator("#inbox summary").click();
+    await restoredDeveloper.locator("#inbox summary").click();
+    await expect(restoredReviewer.locator("#notifications")).toContainText("Demo developer");
+    await expect(restoredReviewer.locator("#notifications")).not.toContainText("Demo reviewer");
+    await expect(restoredDeveloper.locator("#notifications")).toContainText("Demo reviewer");
+    await expect(restoredDeveloper.locator("#notifications")).not.toContainText("Demo developer");
+    evidence.checks.freshLoginsAndRoleRecipientSeparation = true;
+    await restoredDeveloper.getByRole("textbox", { name: "Reply to comment" }).fill("A new reply after the restore.");
+    await restoredDeveloper.getByRole("button", { name: "Reply", exact: true }).click();
+    await expect(restoredReviewer.locator(".reply")).toContainText(["First revision", "A new reply after the restore."]);
+    await restoredReviewer.getByRole("button", { name: "Confirm resolved", exact: true }).click();
+    await expect(restoredDeveloper.locator(".thread-status")).toHaveText("Resolved");
+    const newShare = await restore.startShare();
+    expect(newShare).not.toBe(ready.shareUrl);
+    await login(restoredReviewer, newShare, ready.accounts.reviewer);
+    const restoredOverlay = restoredReviewer.locator("review-tunnel-overlay");
+    await restoredOverlay.getByRole("combobox", { name: "Comment status" }).selectOption("ALL");
+    await expect(restoredOverlay.locator(".thread")).toContainText(comment);
+    await expect(restoredOverlay.locator(".thread-status")).toHaveText("Resolved");
+    await expect(restoredOverlay.getByRole("button", { name: "Show pin", exact: true })).toHaveCount(0);
+    await expect(restoredOverlay.getByRole("button", { name: "Hide pin", exact: true })).toBeVisible();
+    await expect(restoredOverlay.locator(".marker.rect .marker-shape")).toHaveCount(1);
+    evidence.checks.newReplyWorkflowAndShareAfterRestore = true;
+    await writeFile(testInfo.outputPath("restore-validation.json"), `${JSON.stringify(evidence, null, 2)}\n`);
+  } catch (error) {
+    if (restore) console.error((await restore.diagnostics()).slice(-14000));
+    throw error;
+  } finally {
+    for (const value of contexts) await value.close();
+    try { await restore?.close(); }
+    finally { await demo.close(); }
+  }
+});

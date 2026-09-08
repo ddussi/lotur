@@ -84,12 +84,12 @@ jobs:
       - run: npm run test:demo
       - name: Build every production runtime image
         run: |
-          docker build --target gateway -t review-tunnel-gateway:ci .
-          docker build --target admin-cli -t review-tunnel-admin-cli:ci .
-          docker build --target client -t review-tunnel-client:ci .
-          docker build --target canary-check -t review-tunnel-canary-check:ci .
-          docker build --target db-backup -t review-tunnel-db-backup:ci .
-          docker build --target db-restore -t review-tunnel-db-restore:ci .
+          docker build --target gateway --label "org.opencontainers.image.revision=${GITHUB_SHA}" -t review-tunnel-gateway:ci .
+          docker build --target admin-cli --label "org.opencontainers.image.revision=${GITHUB_SHA}" -t review-tunnel-admin-cli:ci .
+          docker build --target client --label "org.opencontainers.image.revision=${GITHUB_SHA}" -t review-tunnel-client:ci .
+          docker build --target canary-check --label "org.opencontainers.image.revision=${GITHUB_SHA}" -t review-tunnel-canary-check:ci .
+          docker build --target db-backup --label "org.opencontainers.image.revision=${GITHUB_SHA}" -t review-tunnel-db-backup:ci .
+          docker build --target db-restore --label "org.opencontainers.image.revision=${GITHUB_SHA}" -t review-tunnel-db-restore:ci .
       - name: Smoke runtime entrypoints and fail-closed configuration
         run: |
           expect_failure() {
@@ -120,6 +120,18 @@ jobs:
           expected_version=$(node -p "require('./package.json').version")
           actual_version=$(docker run --rm review-tunnel-client:ci --version)
           test "$actual_version" = "$expected_version"
+      - name: Restore reviews into an isolated database using these exact images
+        env:
+          RESTORE_TEST_IMAGE_TAG: ci
+        run: npm run test:restore
+      - name: Retain only sanitized restoration evidence
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: restore-validation-${{ github.sha }}-${{ github.run_attempt }}
+          path: test-results/restore/**/restore-validation.json
+          if-no-files-found: error
+          retention-days: 7
       - name: Build source and installable release candidate files
         run: npm run pack:release
       - name: Retain verified candidate files for review
