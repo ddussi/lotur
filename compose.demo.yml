@@ -1,0 +1,23 @@
+# Started by the demo runner with generated, local-only credentials.
+services:
+  postgres:
+    image: postgres:17.6-bookworm@sha256:f3bd19c606e442c3d7bdfa8002e03fe260a1023351e0ea4598032022b68dd6e3
+    environment:
+      POSTGRES_DB: review_tunnel_demo
+      POSTGRES_USER: demo_migrator
+      POSTGRES_PASSWORD: ${DEMO_DATABASE_PASSWORD:?A generated local demo password is required}
+    ports:
+      - "127.0.0.1:${DEMO_DATABASE_PORT:-54339}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U demo_migrator -d review_tunnel_demo"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    labels:
+      org.review-tunnel.purpose: local-demo
+volumes:
+  postgres-data:
+    labels:
+      org.review-tunnel.purpose: local-demo
