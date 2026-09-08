@@ -31,8 +31,12 @@ try {
   const [owner, name] = context.repository.split("/");
   const kind = metadata.owner.type === "Organization" ? "orgs" : "users";
   const packageInfo = async target => {
-    const result = await run("gh", ["api", `${kind}/${owner}/packages/container/${name}-${target}`], { allowFailure: true });
-    if (result.code === 0) return JSON.parse(result.stdout);
+    const path = `${kind}/${owner}/packages/container/${name}-${target}`;
+    const result = await run("gh", ["api", path], { allowFailure: true });
+    if (result.code === 0) {
+      const versions = JSON.parse((await run("gh", ["api", `${path}/versions?per_page=1`])).stdout);
+      return { ...JSON.parse(result.stdout), latestDigest: versions[0]?.name };
+    }
     if (/\(HTTP 404\)/.test(result.stderr)) return undefined;
     throw new Error(`Cannot inspect ${target} package settings; verify the workflow's package access.`);
   };

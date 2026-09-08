@@ -10,12 +10,12 @@ const context = candidateContext(environment, event, "0.1.0-alpha.1");
 const success = stdout => ({ code: 0, stdout, stderr: "" });
 const failure = stderr => ({ code: 1, stdout: "", stderr });
 
-function registry({ visibility = "private", wrongRevision = false, existingTag = false, denied = false, smokeSuccess = false } = {}) {
+function registry({ visibility = "private", wrongRevision = false, existingTag = false, denied = false, smokeSuccess = false, wrongSource = false } = {}) {
   const operations = [];
   const packageInfo = async target => {
     operations.push(["package", target]);
     if (denied) throw new Error("package access denied");
-    return { visibility, repository: { full_name: context.repository } };
+    return { visibility, name: `project-${target}`, owner: { login: "example" }, latestDigest: `sha256:${"d".repeat(64)}` };
   };
   const docker = async args => {
     operations.push(args);
@@ -25,7 +25,7 @@ function registry({ visibility = "private", wrongRevision = false, existingTag =
       return success(JSON.stringify([{ Id: `sha256:${"b".repeat(64)}`, RepoDigests: [`${name}@sha256:${"c".repeat(64)}`],
         Os: "linux", Architecture: "amd64", Config: { Labels: {
           "org.opencontainers.image.revision": wrongRevision && args[2].includes("@") ? "d".repeat(40) : context.revision,
-          "org.opencontainers.image.source": `https://github.com/${context.repository}`,
+          "org.opencontainers.image.source": wrongSource ? "https://github.com/example/different" : `https://github.com/${context.repository}`,
           "org.opencontainers.image.version": context.version, "org.opencontainers.image.licenses": "MIT",
         } } }]));
     }
@@ -51,9 +51,9 @@ test("candidate publication requires explicit manual input and bounded GitHub id
 });
 
 test("all package destinations are checked before publication and existing tags are preserved", async () => {
-  for (const options of [{ visibility: "public" }, { denied: true }, { existingTag: true }]) {
+  for (const options of [{ visibility: "public" }, { denied: true }, { existingTag: true }, { wrongSource: true }]) {
     const runtime = registry(options);
-    await assert.rejects(publishCandidateImages(context, runtime), /visibility|access denied|already exists/);
+    await assert.rejects(publishCandidateImages(context, runtime), /visibility|access denied|already exists|different or unidentified source/);
     assert.equal(runtime.operations.filter(args => ["build", "push"].includes(args[0])).length, 0);
   }
 });
@@ -64,7 +64,7 @@ test("candidate images are checked before push and again by digest after pulling
   assert.equal(record.platform, IMAGE_PLATFORM);
   assert.deepEqual(record.images.map(image => image.target), RUNTIME_TARGETS);
   assert.equal(runtime.operations.filter(args => args[0] === "push").length, 6);
-  assert.equal(runtime.operations.filter(args => args[0] === "pull" && args.at(-1).includes("@sha256:")).length, 6);
+  assert.equal(runtime.operations.filter(args => args[0] === "pull" && args.at(-1).includes("@sha256:")).length, 12);
   assert.equal(runtime.operations.filter(args => args[0] === "run" && args.includes("--network") && args.some(arg => arg.includes("@sha256:"))).length, 7);
   assert.equal(runtime.operations.slice(0, 6).every(args => args[0] === "package"), true);
   const changed = structuredClone(record); changed.images[0].reference = changed.images[0].tag;
@@ -77,4 +77,14 @@ test("a wrong pulled source or unexpectedly successful invalid configuration can
   const runtime = registry({ smokeSuccess: true });
   await assert.rejects(publishCandidateImages(context, runtime), /smoke result/);
   assert.equal(runtime.operations.some(args => args[0] === "push"), false);
+});
+
+test("a newly created private target is checked after publication without assuming a prior image", async () => {
+  const runtime = registry();
+  const inspect = runtime.packageInfo;
+  let calls = 0;
+  runtime.packageInfo = async target => target === "client" && calls++ === 0 ? undefined : inspect(target);
+  const record = await publishCandidateImages(context, runtime);
+  assert.equal(record.images.find(image => image.target === "client").visibility, "private");
+  assert.equal(runtime.operations.filter(args => args[0] === "pull").length, 11);
 });

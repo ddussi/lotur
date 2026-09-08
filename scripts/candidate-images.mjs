@@ -13,6 +13,14 @@ const failures = {
   "db-restore": ["usage: postgres-restore", []],
 };
 
+function checkPackage(info, target, { repository, visibility }) {
+  const [owner, name] = repository.split("/");
+  if (info.visibility !== visibility || info.owner?.login?.toLowerCase() !== owner || info.name !== `${name}-${target}` ||
+      (info.repository?.full_name !== undefined && info.repository.full_name.toLowerCase() !== repository)) {
+    throw new Error(`Package ${target} must have ${visibility} visibility and the selected owner/name in ${repository}.`);
+  }
+}
+
 export function candidateContext(environment, event, version) {
   if (environment.GITHUB_ACTIONS !== "true" || environment.GITHUB_EVENT_NAME !== "workflow_dispatch" ||
       ![true, "true"].includes(event.inputs?.candidate_images)) {
@@ -55,11 +63,22 @@ export async function publishCandidateImages(context, { packageInfo, docker, log
   const existingPackages = new Set();
   for (const target of RUNTIME_TARGETS) {
     const info = await packageInfo(target);
-    if (info && (info.visibility !== visibility || info.repository?.full_name?.toLowerCase() !== repository)) {
-      throw new Error(`Package ${target} must have ${visibility} visibility and be linked to ${repository}.`);
-    }
+    if (info) checkPackage(info, target, context);
     if (!info && visibility !== "private") throw new Error(`Create and review the private ${target} package before public candidate publication.`);
     if (info) existingPackages.add(target);
+  }
+  // GHCR's REST package representation can omit `repository` even for a
+  // linked package. Check the selected package's actual previous image source.
+  for (const target of existingPackages) {
+    const info = await packageInfo(target);
+    checkPackage(info, target, context);
+    if (!digestPattern.test(info.latestDigest ?? "")) throw new Error(`Cannot identify an existing ${target} source image.`);
+    const previous = `ghcr.io/${repository}-${target}@${info.latestDigest}`;
+    await docker(["pull", "--platform", IMAGE_PLATFORM, previous]);
+    const inspected = JSON.parse((await docker(["image", "inspect", previous])).stdout)[0];
+    if (inspected.Config?.Labels?.["org.opencontainers.image.source"] !== `https://github.com/${repository}`) {
+      throw new Error(`Existing ${target} image belongs to a different or unidentified source repository.`);
+    }
   }
   const images = [];
   for (const target of RUNTIME_TARGETS) {
@@ -93,9 +112,8 @@ export async function publishCandidateImages(context, { packageInfo, docker, log
     }
     await smoke(target, reference, version, docker);
     const info = await packageInfo(target);
-    if (info?.visibility !== visibility || info.repository?.full_name?.toLowerCase() !== repository) {
-      throw new Error(`Published ${target} package visibility or repository link differs from the reviewed destination.`);
-    }
+    if (!info) throw new Error(`Published ${target} package metadata is unavailable.`);
+    checkPackage(info, target, context);
     images.push({ target, tag: image, reference, configDigest: pulled.Id, visibility: info.visibility });
   }
   return verifyImageRecord({ format: IMAGE_FORMAT, version, source: { revision }, repository,
