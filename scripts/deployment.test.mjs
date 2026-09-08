@@ -22,6 +22,7 @@ test("배포는 main 검사 성공 뒤에만 실행하고 배포 중 취소와 S
   assert.match(publication, /github\.ref == 'refs\/heads\/main'/);
   assert.match(publication, /github\.event_name == 'push'/);
   assert.match(publication, /vars\.AUTO_DEPLOY_ENABLED == 'true'/);
+  assert.match(publication, /!inputs\.candidate_images/);
   assert.match(publication, /packages: write/);
   assert.match(rollout, /needs: publish/);
   assert.match(rollout, /name: production/);
@@ -35,4 +36,14 @@ test("배포는 main 검사 성공 뒤에만 실행하고 배포 중 취소와 S
     assert.ok(rollout.includes(`secrets.${name}`), `${name} must be masked as a production environment secret`);
     assert.ok(!rollout.includes(`vars.${name}`), `${name} must not be printed as a plain Actions variable`);
   }
+});
+
+test("candidate image publication requires the full gate and an explicit manual run without production secrets", async () => {
+  const source = await readFile(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8");
+  const candidate = source.slice(source.indexOf("\n  candidate-images:"), source.indexOf("\n  publish:"));
+  assert.match(candidate, /needs: verification/);
+  assert.match(candidate, /github\.event_name == 'workflow_dispatch' && inputs\.candidate_images/);
+  assert.match(candidate, /packages: write/);
+  assert.match(candidate, /persist-credentials: false/);
+  assert.doesNotMatch(candidate, /environment:|DEPLOY_|deploy-over-ssh|contents: write/);
 });

@@ -39,7 +39,25 @@ Verification requires the exact file inventory and checks both manifest sizes/ha
 
 After the full CI gate and six image checks, CI builds the same candidate files and retains them for seven days in an artifact named for its source SHA and attempt. Pull-request checks do not upload a candidate. Only these generated distribution files are uploaded, not browser traces, account exports, or test logs. Candidate files are available to repository readers; the repository remains private during this preparation. The [GitHub artifact documentation](https://docs.github.com/en/actions/tutorials/store-and-share-data) describes access and retention.
 
+After downloading the CI artifact, pass its `<version>-<commit-prefix>/` child directory to `verify:release`, not the parent download directory.
+
 This command does not create a tag, publish a release, push an image, or deploy a Gateway. The six image targets and planned `linux/amd64` image platform are listed in the manifest; their actual publication digests belong to the separate image-release record. A package candidate without that record and the required operational validation is not a completed release.
+
+## Build candidate images
+
+Run the existing **CI** workflow manually on the selected branch with `candidate_images=true` and `candidate_visibility=private` during private preparation. For example, from an authenticated maintainer checkout:
+
+```sh
+gh workflow run ci.yml --ref <candidate-branch> -f candidate_images=true -f candidate_visibility=private
+```
+
+The full verification job must pass first. The separate candidate job checks package ownership and visibility, builds all six targets for `linux/amd64`, checks entrypoints, pushes unique `candidate-<commit>-<run-id>-<attempt>` tags, pulls each image by digest, and repeats the entrypoint checks. It verifies source/version/license labels and the image architecture. The seven-day `release-images-<commit>-<run-id>-<attempt>` artifact contains `images.json` and its checksum in a candidate subdirectory. Pair it with the successful run's source/package artifact and compare their exact source SHA and version.
+
+Existing candidate tags are not overwritten. A retry uses a new Actions attempt and therefore a new tag. A partial failure can leave candidate images in the registry, but does not produce a complete image record or release. Existing final version tags and current deployment SHA tags are untouched. This mode also skips the normal production publish/deploy jobs when manually run on `main`; normal `main` pushes retain the existing automatic deployment behavior.
+
+The candidate job uses its repository-scoped token, without production environment secrets. New packages must first be private; existing packages must be linked to the current repository and have the selected visibility. Access errors stop the build. Before choosing `public` for an already-public package, review the destination and approve its publication. The job does not change visibility. GitHub documents [package access and visibility](https://docs.github.com/en/packages/learn-github-packages/configuring-a-packages-access-control-and-visibility) separately from [GHCR publication and digest pulls](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry).
+
+The initial published image platform will be `linux/amd64` only after an actual successful candidate run. Native macOS source and package checks do not establish published `linux/arm64` images. Database restoration and hosted acceptance must use the recorded immutable references; entrypoint smoke checks alone do not establish those operational results.
 
 ## Publish
 

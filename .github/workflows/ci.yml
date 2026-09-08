@@ -4,6 +4,18 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      candidate_images:
+        description: Publish all six verified candidate images without deploying
+        type: boolean
+        default: false
+      candidate_visibility:
+        description: Required visibility of the reviewed destination packages
+        type: choice
+        options:
+          - private
+          - public
+        default: private
 
 permissions:
   contents: read
@@ -91,10 +103,39 @@ jobs:
           retention-days: 7
           compression-level: 0
 
+  candidate-images:
+    needs: verification
+    if: github.event_name == 'workflow_dispatch' && inputs.candidate_images
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Publish and pull-check the exact candidate images
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/publish-candidate-images.mjs
+      - name: Retain immutable candidate image identities
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: release-images-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: dist/image-candidates/*/
+          if-no-files-found: error
+          retention-days: 7
+
   publish:
     needs: verification
     if: >-
       github.ref == 'refs/heads/main' &&
+      !inputs.candidate_images &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
       vars.AUTO_DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
