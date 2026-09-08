@@ -9,6 +9,7 @@ Start with the current guides below. Dated plans and validation reports describe
 | Purpose / 목적 | English | 한국어 |
 | --- | --- | --- |
 | Overview / 제품 소개 | [README](../README.md) | [README](../README.ko.md) |
+| Actual demo screens / 실제 예제 화면 | [Screens and video](media/README.md) | [화면·시연](media/README.md) |
 | Local demo / 로컬 체험 | [Demo walkthrough](local-demo.en.md) | [체험 안내](local-demo.md) |
 | Install only the Client / Client만 설치 | [Client archive](client-installation.en.md) | [독립 Client 설치](client-installation.md) |
 | Share and configure reviews / 공유·연동 설정 | [Getting started](getting-started.en.md) | [시작 안내](getting-started.md) |
@@ -28,6 +29,7 @@ The local demo and archive builder run from a source checkout. A developer can i
 - [계정 운영](internal-account-operations.md)
 - [Public HTTPS verification / HTTPS 검증](public-path-testing.md)
 - [Contributing / 기여](../CONTRIBUTING.md) · [Release procedure / 릴리스 절차](releasing.md)
+- [Contributor roadmap / 작은 기여와 후속 계획](roadmap.md)
 - [오픈소스 알파 실행 계획](open-source-alpha-plan.md)
 
 Detailed operations runbooks are currently in Korean; the English getting-started guide covers Gateway initialization. The alpha preparation plan tracks the remaining release and onboarding work.

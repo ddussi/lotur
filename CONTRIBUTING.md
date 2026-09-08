@@ -53,6 +53,8 @@ CI runs the full database-backed gate, the local demo suite, audits production d
 
 ## Propose a change
 
+The [contributor roadmap](docs/roadmap.md) lists small documentation, example and test tasks with suggested completion checks. These are proposed scopes, not reserved assignments or a promise of delivery dates. Check existing issues and pull requests before starting duplicate work.
+
 Open an issue first for a protocol change, new authentication model, or substantial product feature so its scope can be discussed. Small bug fixes and documentation corrections can go directly to a pull request.
 
 - Describe the user-visible problem and the final behavior.

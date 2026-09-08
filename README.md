@@ -6,6 +6,10 @@ Share a web application running on your computer with authenticated reviewers th
 
 **Status: alpha development; no tagged release yet.** HTTP, streaming, WebSocket, accounts, and temporary sharing are implemented, together with page comments, responsive pins, filters, a persistent review inbox, internal notifications, and re-review. Per-project access lists remain unimplemented. The source package version is `0.1.0-alpha.1`; the first distributable alpha is being prepared. See the [current implementation status](docs/poc-status.md) and [documentation index](docs/documentation.md).
 
+![A numbered region pin and reviewer comment on the local Fieldnotes example](docs/media/pinned-review.png)
+
+[Watch the short review walkthrough](docs/media/review-flow.webm): place a pin, receive a developer reply, request re-review, and confirm the fix in the persistent inbox. These are actual demo captures with synthetic local data. [More screens and capture instructions](docs/media/README.md).
+
 ## How it works
 
 1. An operator deploys a Gateway with PostgreSQL, DNS, and HTTPS, then issues developer and reviewer accounts.
@@ -121,7 +125,7 @@ Bug reports and pull requests should include a minimal reproduction and relevant
 
 ## Roadmap and documentation
 
-Per-project access lists, screenshots, external email/Slack/push notifications, automatic comment carry-over between revisions, and complete edit history remain outside the current scope. The [contextual review design (Korean)](docs/contextual-review.md) describes implemented review behavior and deferred work.
+Per-project access lists, screenshot attachments to reviews, external email/Slack/push notifications, automatic comment carry-over between revisions, and complete edit history remain outside the current scope. See the [contributor roadmap](docs/roadmap.md) for scoped follow-up work. The [contextual review design (Korean)](docs/contextual-review.md) describes implemented review behavior and deferred work.
 
 - [Current guides and historical records](docs/documentation.md)
 - [Review workflow](docs/review-guide.en.md)

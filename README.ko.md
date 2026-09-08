@@ -6,6 +6,10 @@
 
 **현재 상태: 알파 개발 중, 태그 릴리스는 아직 없습니다.** HTTP·스트리밍·WebSocket 중계, 계정 관리, 임시 공유와 함께 화면 댓글·반응형 핀·필터·리뷰함·내부 알림·재검토를 구현했습니다. 프로젝트별 접근 목록은 아직 없습니다. 소스 패키지 버전은 `0.1.0-alpha.1`이며 첫 배포용 알파를 준비하고 있습니다. [현재 구현 상태](docs/poc-status.md)와 [문서 안내](docs/documentation.md)를 참고하세요.
 
+![로컬 Fieldnotes 예제에 번호가 있는 영역 핀과 검토자 댓글을 남긴 실제 화면](docs/media/pinned-review.png)
+
+[짧은 리뷰 시연 보기](docs/media/review-flow.webm): 핀을 남기고 개발자 답글과 재검토 요청을 받은 뒤, 리뷰함에서 해결을 확인합니다. 가상 계정과 데이터로 실제 실행한 화면입니다. [추가 화면과 촬영 방법](docs/media/README.md)도 확인할 수 있습니다.
+
 ## 실제 사용 흐름
 
 1. 운영자가 서버·DB·도메인·HTTPS를 준비하고 개발자와 검토자 계정을 만듭니다.
@@ -123,7 +127,7 @@ DB·Chrome까지 포함한 전체 검사는 [기여 안내](CONTRIBUTING.md)를 
 
 [문서 안내](docs/documentation.md)에서 현재 사용법과 과거 계획·검증 기록을 구분해 찾을 수 있습니다.
 
-프로젝트별 접근 목록, 스크린샷, 이메일·Slack·push 알림, 리뷰 버전 사이의 댓글 자동 이전, 전체 수정 이력은 현재 범위에 포함하지 않습니다. [화면 맥락 리뷰 설계](docs/contextual-review.md)에 구현한 내용과 이후 범위를 구분했습니다.
+프로젝트별 접근 목록, 리뷰에 스크린샷 첨부, 이메일·Slack·push 알림, 리뷰 버전 사이의 댓글 자동 이전, 전체 수정 이력은 현재 범위에 포함하지 않습니다. 작은 기여와 후속 작업은 [기여 로드맵](docs/roadmap.md)에 정리했습니다. [화면 맥락 리뷰 설계](docs/contextual-review.md)에 구현한 내용과 이후 범위를 구분했습니다.
 
 - [English setup guide](docs/getting-started.en.md)
 - [관리자 발급 계정 운영](docs/internal-account-operations.md)
