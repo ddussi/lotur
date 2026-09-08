@@ -41,7 +41,7 @@ test("배포는 main 검사 성공 뒤에만 실행하고 배포 중 취소와 S
 test("candidate image publication requires the full gate and an explicit manual run without production secrets", async () => {
   const source = await readFile(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8");
   const candidate = source.slice(source.indexOf("\n  candidate-images:"), source.indexOf("\n  publish:"));
-  assert.match(candidate, /needs: verification/);
+  assert.match(candidate, /needs: \[verification, candidate-package-inventory\]/);
   assert.match(candidate, /github\.event_name == 'workflow_dispatch' && inputs\.candidate_images/);
   assert.match(candidate, /packages: write/);
   assert.match(candidate, /persist-credentials: false/);

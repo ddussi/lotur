@@ -21,6 +21,35 @@ permissions:
   contents: read
 
 jobs:
+  candidate-package-inventory:
+    if: github.event_name == 'workflow_dispatch' && inputs.candidate_images
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Inspect only the selected package identities
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          node --input-type=module <<'JS'
+          import { execFileSync } from 'node:child_process';
+          const api = path => JSON.parse(execFileSync('gh', ['api', path], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }));
+          const repo = api(`repos/${process.env.GITHUB_REPOSITORY}`);
+          const kind = repo.owner.type === 'Organization' ? 'orgs' : 'users';
+          console.log(JSON.stringify({ repository: repo.full_name, id: repo.id }));
+          for (const target of ['gateway', 'admin-cli', 'client', 'canary-check', 'db-backup', 'db-restore']) {
+            try {
+              const item = api(`${kind}/${repo.owner.login}/packages/container/${repo.name}-${target}`);
+              console.log(JSON.stringify({ target, name: item.name, visibility: item.visibility, repository: item.repository ? { id: item.repository.id, name: item.repository.name, full_name: item.repository.full_name, html_url: item.repository.html_url } : null, repository_id: item.repository_id, fields: Object.keys(item) }));
+            } catch (error) {
+              if (String(error.stderr).includes('(HTTP 404)')) console.log(JSON.stringify({ target, state: 'not-found' }));
+              else throw new Error(`Cannot read ${target} package metadata.`);
+            }
+          }
+          JS
+
   verification:
     runs-on: ubuntu-latest
     timeout-minutes: 40
@@ -104,7 +133,7 @@ jobs:
           compression-level: 0
 
   candidate-images:
-    needs: verification
+    needs: [verification, candidate-package-inventory]
     if: github.event_name == 'workflow_dispatch' && inputs.candidate_images
     runs-on: ubuntu-latest
     timeout-minutes: 30
