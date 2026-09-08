@@ -2,7 +2,7 @@
 
 Changes awaiting a tagged release are recorded under Unreleased. The package version is currently `0.1.0`; that number alone does not establish that a release has been published.
 
-The first planned distribution is `v0.1.0-alpha.1`. The local demo runs from a source checkout; standalone Client installation remains release-preparation work until its consumer validation is recorded.
+The first planned distribution is `v0.1.0-alpha.1`. A local demo and standalone Client archive builder are available from source; versioned release publication remains in preparation.
 
 ## Unreleased
 
@@ -29,6 +29,7 @@ The first planned distribution is `v0.1.0-alpha.1`. The local demo runs from a s
 
 ### Added
 
+- A standalone Client archive builder with an installed `review-tunnel` command, `--version`, bundled ws runtime/license, offline consumer installation, and real sharing/reconnection/cleanup validation.
 - A one-command local demo with a Vite example, dedicated PostgreSQL volume, generated developer/reviewer credentials, real authentication/canary/admission, preserved reviews on restart, and explicit demo-only data deletion.
 - Responsive element-anchored pins, per-pin visibility and jump controls, server-side status/author filters, and a collapsible mobile review panel.
 - A persistent `/reviews` inbox with project/revision/path navigation, permanent comment links, offline conversation access, and links back to active shares of the same revision.

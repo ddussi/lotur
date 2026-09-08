@@ -1,3 +1,4 @@
+import manifest from "../package.json" with { type: "json" };
 import { readSecrets } from "../../../packages/cli-utils/src/secret-input.ts";
 import {
   CLIENT_USAGE,
@@ -18,8 +19,11 @@ if (
   (clientArguments[0] === "--help" || clientArguments[0] === "-h")
 ) {
   console.log(CLIENT_USAGE);
+} else if (clientArguments.length === 1 && clientArguments[0] === "--version") {
+  console.log(manifest.version);
 } else {
-  await runClient(clientArguments);
+  try { await runClient(clientArguments); }
+  catch (error) { console.error(errorMessage(error)); process.exitCode = 1; }
 }
 
 async function runClient(arguments_: readonly string[]): Promise<void> {

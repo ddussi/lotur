@@ -20,10 +20,13 @@ export type ClientOptions = Readonly<{
 }>;
 
 export const CLIENT_USAGE =
-  "Usage: npm run share -- http://127.0.0.1:3000 " +
+  "Usage: review-tunnel http://127.0.0.1:3000 " +
   "[--gateway wss://control.tunnel.example.com/_review-tunnel/carrier] " +
   "[--username developer1] " +
-  "[--review-project storefront --review-revision <commit-or-version>]";
+  "[--review-project storefront --review-revision <commit-or-version>]\n" +
+  "Source checkout: npm run share -- <origin> [options]\n" +
+  "Use --help for usage or --version for the Client version.\n" +
+  "Passwords are prompted in a terminal; automation must explicitly use --password-stdin.";
 
 const VALUE_OPTIONS = new Set([
   "--gateway",

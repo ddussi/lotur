@@ -49,7 +49,7 @@ npm run share -- http://127.0.0.1:3000 \
 
 도메인은 운영자가 알려준 주소로, `3000`은 웹앱이 실행 중인 포트로 바꿉니다. 비밀번호를 입력하면 `https://<발급된-ID>.preview.tunnel.example.com/` 형태의 공유 주소가 나옵니다. 검토자는 그 주소에서 `REVIEWER` 계정으로 로그인합니다.
 
-저장소 루트·Gateway·Client는 npm 메타데이터에서 `private`이며, 소스나 직접 빌드한 Docker 이미지로 사용합니다. 선택 기능인 `@review-tunnel/vite`·`@review-tunnel/next`는 로컬 설치용 패키지 파일로 만들 수 있습니다. npm 저장소에 이미 배포됐다고 가정하지 않습니다.
+개발자 컴퓨터에 소스 저장소를 받지 않으려면 [독립 Client 파일을 만들어 설치](docs/client-installation.md)할 수 있습니다. 실수로 npm 저장소에 게시하지 않도록 메타데이터는 private이며, 파일 설치는 지원합니다. 선택 기능인 `@review-tunnel/vite`·`@review-tunnel/next`도 로컬 설치 파일로 만들 수 있습니다. npm 저장소에 이미 배포됐다고 가정하지 않습니다.
 
 ## 화면에서 바로 리뷰하기
 

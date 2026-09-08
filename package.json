@@ -34,6 +34,7 @@
     "backup:postgres": "node scripts/postgres-backup.mjs",
     "restore:postgres": "node scripts/postgres-restore.mjs",
     "demo": "node scripts/demo.mjs",
+    "pack:client": "node scripts/pack-client.mjs",
     "test:demo": "node ./node_modules/@playwright/test/cli.js test --config tests/demo/playwright.config.mjs"
   },
   "devDependencies": {

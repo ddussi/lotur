@@ -49,7 +49,7 @@ npm run share -- http://127.0.0.1:3000 \
 
 Replace the Gateway hostname with the one provided by your operator and `3000` with your app's port. Enter your password at the prompt. Send the generated URL to a user with the `REVIEWER` role. Content URLs have the shape `https://<generated-id>.preview.tunnel.example.com/`.
 
-The root, Gateway, and Client packages are marked `private` in npm metadata. Use the source checkout or build the documented Docker targets. The optional `@review-tunnel/vite` and `@review-tunnel/next` packages can be built as local tarballs; this documentation does not assume an npm registry release.
+To use the Client without a source checkout on the developer's computer, [build and install its standalone archive](docs/client-installation.en.md). The private npm metadata prevents accidental registry publication; archive installation is supported. The optional `@review-tunnel/vite` and `@review-tunnel/next` packages can also be built as local tarballs. No npm registry release is assumed.
 
 ## Review directly on the page
 

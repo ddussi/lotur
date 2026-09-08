@@ -1,6 +1,6 @@
 # Local demo validation — 2026-09-09
 
-This record covers the one-command runner and Vite example on `codex/oss-alpha-preparation`, based on `a541f3a`. It uses synthetic accounts, isolated databases, and loopback HTTP. Linux CI validation is pending; this is not evidence of a public HTTPS rollout.
+This record covers the one-command runner and Vite example at `d67d097628cef2f420eeab2812fc1a57e46c228c` on `codex/oss-alpha-preparation`. It uses synthetic accounts, isolated databases, and loopback HTTP. macOS and Linux CI passed; this is not evidence of a public HTTPS rollout.
 
 ## Implementation
 
@@ -35,9 +35,14 @@ A quick **Request review** click immediately after **Reply** could be silently i
 
 The demo regression delays the successful reply response after its real database commit, waits for the SSE refresh, and verifies that Request review and Resolve remain disabled while the reply field remains editable. Releasing the response makes the next action available. Existing draft and workflow browser scenarios still pass.
 
+## Linux CI
+
+[Run 34251637549](https://github.com/ddussi/lotur/actions/runs/34251637549) passed at the exact commit above. The database-backed application/package suite passed 359 tests, scripts passed 64, existing browsers passed 19, and the demo passed both scenarios in 41.7 seconds. There were no test skips. Production dependency audit reported zero vulnerabilities; all six Docker runtime targets built and their entrypoint/fail-closed checks passed. Publish and deploy jobs were skipped, as intended for this preparation branch.
+
+For setup timing, `npm ci` took 12 seconds with a restored npm cache. PostgreSQL service initialization took 18 seconds including the recorded image pull and health readiness. These are separate CI setup measurements, not a promise of a fully uncached download time. Chrome/system dependency installation took another 33 seconds. The complete verification job took about 4.5 minutes.
+
 ## Remaining validation
 
-- Linux CI must run the same suite on this branch before P3 is marked complete.
 - First-download/install timing has not been measured in this cached macOS run.
 - Native Windows, Safari and Firefox have not been verified.
 - Full release-candidate checks, external Client installation, backup/restore, and a separate HTTPS candidate remain in the [alpha plan](../open-source-alpha-plan.md).

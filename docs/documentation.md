@@ -10,14 +10,15 @@ Start with the current guides below. Dated plans and validation reports describe
 | --- | --- | --- |
 | Overview / 제품 소개 | [README](../README.md) | [README](../README.ko.md) |
 | Local demo / 로컬 체험 | [Demo walkthrough](local-demo.en.md) | [체험 안내](local-demo.md) |
+| Install only the Client / Client만 설치 | [Client archive](client-installation.en.md) | [독립 Client 설치](client-installation.md) |
 | Share and configure reviews / 공유·연동 설정 | [Getting started](getting-started.en.md) | [시작 안내](getting-started.md) |
 | Pins, inbox, notifications, re-review / 리뷰 사용 | [Review guide](review-guide.en.md) | [리뷰 안내](internal-review-guide.md) |
 | Boundaries and security reports / 권한·보안 제보 | [Security policy](../SECURITY.md) | [보안 안내](../SECURITY.md#한국어-안내) |
 | Changes / 변경 사항 | [Changelog](../CHANGELOG.md) | [현재 구현 현황](poc-status.md) |
 
-The local demo runs from a source checkout. A standalone Client distribution is being prepared; the current Client guide also uses a source checkout.
+The local demo and archive builder run from a source checkout. A developer can install the resulting standalone Client archive without the repository. Tagged release downloads are still being prepared.
 
-로컬 체험은 소스 checkout에서 실행합니다. 독립 설치 Client는 준비 중이며, 현재 Client 안내도 소스 checkout을 사용합니다.
+로컬 체험과 설치 파일 생성은 소스 checkout에서 실행합니다. 생성한 독립 Client 파일은 저장소 없이 설치할 수 있습니다. 태그 릴리스 다운로드는 준비 중입니다.
 
 ## Operate and contribute / 운영·기여
 

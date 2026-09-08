@@ -40,7 +40,7 @@ Always stop the fixture after testing, including after a failed run. `check:mvp`
 | `npm test` | Application and package tests |
 | `npm run test:postgres` | Real database tests; requires an isolated `TEST_DATABASE_URL` |
 | `npm run test:frameworks` | Authenticated Vite/Next.js, production HTML, and review overlay tests |
-| `npm run test:demo` | Real local demo startup, two-user reviews, restart persistence, and interrupted account setup; requires local Docker Engine 28+ / Compose and Chrome |
+| `npm run test:demo` | Real demo lifecycle and two-user reviews; externally installed Client terminal/sharing/reconnection/cleanup checks. Requires local Docker Engine 28+ / Compose, Chrome, and Python 3.9+ on Linux/macOS |
 | `npm run test:frameworks:public` | Opt-in tests against your own deployed HTTPS Gateway |
 
 Run `npm run build` before invoking browser suites directly; their fixtures import the compiled integration packages.
