@@ -120,6 +120,16 @@ jobs:
           expected_version=$(node -p "require('./package.json').version")
           actual_version=$(docker run --rm review-tunnel-client:ci --version)
           test "$actual_version" = "$expected_version"
+      - name: Inspect retained runtime notices and installed package versions
+        run: node scripts/inspect-image-notices.mjs --tag ci
+      - name: Retain runtime notice inventories
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: image-notices-${{ github.sha }}-${{ github.run_attempt }}
+          path: dist/image-notices.json
+          if-no-files-found: error
+          retention-days: 7
       - name: Restore reviews into an isolated database using these exact images
         env:
           RESTORE_TEST_IMAGE_TAG: ci
@@ -164,6 +174,18 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/publish-candidate-images.mjs
+      - name: Inspect notices in the pulled registry candidates
+        run: |
+          for image_record in dist/image-candidates/*/images.json; do
+            node scripts/inspect-image-notices.mjs --record "$image_record"
+          done
+      - name: Retain published candidate notice inventories
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: image-notices-published-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: dist/image-notices.json
+          if-no-files-found: error
+          retention-days: 7
       - name: Retain immutable candidate image identities
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:

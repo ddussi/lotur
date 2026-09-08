@@ -2,7 +2,7 @@
 
 [한국어](upgrading.md)
 
-`v0.1.0-alpha.1` is a candidate, not a published release. This procedure describes the implemented tools and required operator checks. A candidate-specific restoration result must accompany the final release; the new image restoration drill is still pending in the [alpha plan](open-source-alpha-plan.md).
+`v0.1.0-alpha.1` is a candidate, not a published release. This procedure describes the implemented tools and required operator checks. The [isolated restoration drill](validation/database-restore-2026-09-09.md) passed on macOS and against real Linux images. The final release still needs its own selected candidate and hosted/rollback results from the [alpha plan](open-source-alpha-plan.md).
 
 ## Select and preserve the versions
 

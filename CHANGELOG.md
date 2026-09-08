@@ -29,6 +29,7 @@ The first planned distribution is `v0.1.0-alpha.1`. A local demo and standalone 
 
 ### Added
 
+- A real-image database restoration gate and six-image notice inventories, with Node.js notices preserved in PostgreSQL tool images and explicit third-party redistribution attribution.
 - Source/package candidate manifests and checksums, with an opt-in six-image GHCR candidate workflow that records immutable digests separately from production deployment.
 - Actual local review screenshots and a short walkthrough, an alpha contributor roadmap, and English/Korean upgrade and restore guidance.
 - A standalone Client archive builder with an installed `review-tunnel` command, `--version`, bundled ws runtime/license, offline consumer installation, and real sharing/reconnection/cleanup validation.

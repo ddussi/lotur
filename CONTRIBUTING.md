@@ -54,22 +54,25 @@ CI runs the full database-backed gate, the local demo suite, audits production d
 
 ## Exercise backup and restoration
 
-Build the four required images from the checkout being tested, with its source revision label. Use a clean checkout when recording release evidence. The drill checks the label and runs each inspected image by its local immutable ID:
+Build all six images from the checkout being tested, with its source revision label. Restoration uses four of them; the notice inventory checks all six. Use a clean checkout when recording release evidence. Both checks verify the label and run each inspected image by its local immutable ID:
 
 ```sh
 restore_revision=$(git rev-parse HEAD)
-for target in gateway admin-cli db-backup db-restore; do
+for target in gateway admin-cli client canary-check db-backup db-restore; do
   docker build --target "$target" \
     --label "org.opencontainers.image.revision=${restore_revision}" \
     -t "review-tunnel-${target}:restore-check" . || exit 1
 done
 npm run build
 npm run test:restore
+node scripts/inspect-image-notices.mjs --tag restore-check --output dist/image-notices-local.json
 ```
 
 The test owns a separate demo database, an empty restore database, a private backup volume and an isolated network. It does not use an existing demo state or `TEST_DATABASE_URL`; its own containers, dump and data are deleted in cleanup. It compares every table and sequence before allowing new writes, repeats migration twice, and checks fresh authentication, role restrictions, inbox recipients, a new canary/admission identity, replies, re-review and anchored pins in a new share.
 
 On Linux, the restored Gateway runs in the candidate image using host networking while binding only to loopback. On macOS, it runs the corresponding source on the host; migration, backup and restore still use the images. This does not establish Docker Desktop host-network support or an HTTPS/previous-image rollback result. CI requires the Linux image path. Only the sanitized `restore-validation.json` is uploaded; dumps, private runner logs, browser traces, sessions and account records must stay private.
+
+The notice inventory records Node.js, project, installed npm package and Debian copyright-file hashes. Existing output is preserved; choose a new `--output` path for a repeat. For registry candidates, pull all six recorded images first and use `--record <images.json>` instead of `--tag`. See the [notice inventory findings](docs/validation/runtime-notices-2026-09-09.md) for the upstream README and metadata cases. This is an inventory of included notices, not a vulnerability scan or a legal certification.
 
 ## Propose a change
 

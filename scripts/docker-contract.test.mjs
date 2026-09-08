@@ -46,6 +46,7 @@ test("Docker image는 상주 Gateway와 one-off 역할을 별도 target으로 �
   );
   assert.match(dockerfile, /FROM postgres-tools AS db-backup[\s\S]*ENTRYPOINT \["node", "scripts\/postgres-backup\.mjs"\]/);
   assert.match(dockerfile, /FROM postgres-tools AS db-restore[\s\S]*ENTRYPOINT \["node", "scripts\/postgres-restore\.mjs"\]/);
+  assert.match(dockerfile, /COPY --from=runtime-files \/usr\/local\/LICENSE \/usr\/local\/LICENSE/);
   assert.match(
     dockerfile,
     /FROM postgres:17\.11-bookworm[\s\S]*postgres-operations\.mjs[\s\S]*postgres-process\.mjs/,

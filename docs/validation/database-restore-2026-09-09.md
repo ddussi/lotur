@@ -6,7 +6,9 @@ This is a synthetic, isolated restoration drill, not an operation on the deploye
 
 The first macOS drill passed in 32.5 seconds using PostgreSQL 17.11 and the candidate application based on `f62050bded256666f6733e46c2ea03874151debc`, with the new restoration test still in the working tree. Its four locally built images were inspected for that revision and invoked by immutable local image ID. The PostgreSQL 17.11 source change separately passed the [complete Linux CI](https://github.com/ddussi/lotur/actions/runs/34259954403). That earlier CI did not contain this restoration drill.
 
-The new CI step is awaiting its first Linux result. It must run the restored Gateway image, alongside actual Admin CLI, backup and restore images, before release candidate files can be generated. The macOS run uses the Gateway source on the host to preserve the existing loopback-only HTTP authentication restriction; it does not claim a macOS Gateway container result.
+The [Linux CI for `95820aebd91f63b1fb613e34babd0b0360ad697a`](https://github.com/ddussi/lotur/actions/runs/34262542695) passed the real image restoration drill in 36.6 seconds. Its sanitized artifact identifies `gatewayMode: candidate-image` and four `linux/amd64` images. The same run passed 74 script tests, 359 application/PostgreSQL tests, 19 framework browser tests, three demo/installed-Client tests and this restoration test: 456 tests, zero skips. Production dependency audit, six image builds/smokes and release file generation passed; publication and deployment jobs were skipped.
+
+The Linux dump was 133,283 bytes and its restore command took 452 ms. Its 24 table inventories, both sequences and all eight recorded checks match the required scope. The macOS run uses the Gateway source on the host to preserve the existing loopback-only HTTP authentication restriction; it does not claim a macOS Gateway container result.
 
 ## What the drill checks
 
@@ -31,4 +33,4 @@ The first attempt stopped before backup because a local zsh command produced the
 
 Use the image build commands in [Contributing](../../CONTRIBUTING.md#exercise-backup-and-restoration), followed by `npm run test:restore`. CI uses the same test with `RESTORE_TEST_IMAGE_TAG=ci`; only its sanitized JSON evidence may be retained as an artifact. The test removes its own source and destination databases, backup volume, network and runner log. Do not publish traces or dumps.
 
-The Linux result, previous Gateway image compatibility, isolated real DNS/TLS/proxy validation, and final refreshed registry candidate remain separate required checks in the [alpha plan](../open-source-alpha-plan.md). This drill does not prove that an older pre-workflow implementation can interpret the current schema or that a database downgrade is safe. Follow the [upgrade guide](../upgrading.en.md) when planning restoration and application rollback.
+Previous Gateway image compatibility, isolated real DNS/TLS/proxy validation, and final refreshed registry candidate remain separate required checks in the [alpha plan](../open-source-alpha-plan.md). This drill does not prove that an older pre-workflow implementation can interpret the current schema or that a database downgrade is safe. Follow the [upgrade guide](../upgrading.en.md) when planning restoration and application rollback.

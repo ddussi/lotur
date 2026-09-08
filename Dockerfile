@@ -21,6 +21,7 @@ COPY --from=production-dependencies --chown=node:node /app/package.json /app/pac
 COPY --from=production-dependencies --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/dist ./dist
 COPY --from=build --chown=node:node /app/LICENSE ./LICENSE
+COPY --chown=node:node third-party-notices ./third-party-notices
 
 FROM runtime-files AS runtime-user
 USER node
@@ -46,6 +47,7 @@ FROM postgres:17.11-bookworm@sha256:051f7b7b3abdd564d5d1bd1e8c4b9c1b6e77087d1dd2
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=runtime-files /usr/local/bin/node /usr/local/bin/node
+COPY --from=runtime-files /usr/local/LICENSE /usr/local/LICENSE
 COPY --from=build --chown=postgres:postgres /app/LICENSE ./LICENSE
 COPY --from=build --chown=postgres:postgres /app/scripts/postgres-backup.mjs ./scripts/postgres-backup.mjs
 COPY --from=build --chown=postgres:postgres /app/scripts/postgres-restore.mjs ./scripts/postgres-restore.mjs
