@@ -3,6 +3,7 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -73,3 +74,89 @@ jobs:
           expect_failure "CANARY_CONTENT_URL is required" docker run --rm review-tunnel-canary-check:ci
           expect_failure "DATABASE_URL is required" docker run --rm review-tunnel-db-backup:ci
           expect_failure "usage: postgres-restore" docker run --rm review-tunnel-db-restore:ci
+
+  publish:
+    needs: verification
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      vars.AUTO_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      gateway: ${{ steps.images.outputs.gateway }}
+      admin: ${{ steps.images.outputs.admin-cli }}
+      canary: ${{ steps.images.outputs.canary-check }}
+      current: ${{ steps.current.outputs.deploy }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Publish the verified revision to GHCR
+        id: images
+        env:
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REGISTRY_USER: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
+          printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io --username "$REGISTRY_USER" --password-stdin
+          repository="${GITHUB_REPOSITORY,,}"
+          for target in gateway admin-cli canary-check; do
+            image="ghcr.io/${repository}-${target}:${GITHUB_SHA}"
+            docker build --target "$target" \
+              --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+              --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+              -t "$image" .
+            docker push "$image"
+            digest=$(docker image inspect "$image" --format '{{index .RepoDigests 0}}')
+            [[ "$digest" =~ @sha256:[a-f0-9]{64}$ ]]
+            printf '%s=%s\n' "$target" "$digest" >> "$GITHUB_OUTPUT"
+          done
+      - name: Skip a revision superseded on main
+        id: current
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          latest=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)
+          if [ "$latest" = "$GITHUB_SHA" ]; then
+            echo 'deploy=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'deploy=false' >> "$GITHUB_OUTPUT"
+            echo 'A newer main revision exists; this deployment was skipped.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  deploy:
+    needs: publish
+    if: needs.publish.outputs.current == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: production
+    concurrency:
+      group: production-deployment
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Migrate, deploy, verify and restore on failure
+        env:
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ vars.DEPLOY_PORT || '22' }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REGISTRY_USER: ${{ github.actor }}
+          GATEWAY_IMAGE: ${{ needs.publish.outputs.gateway }}
+          ADMIN_IMAGE: ${{ needs.publish.outputs.admin }}
+          CANARY_IMAGE: ${{ needs.publish.outputs.canary }}
+        run: python3 scripts/deploy-over-ssh.py

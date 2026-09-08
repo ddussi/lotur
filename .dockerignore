@@ -9,3 +9,4 @@ tests/frameworks/.runtime-*
 test-results
 coverage
 *.tgz
+**/__pycache__

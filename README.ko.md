@@ -68,7 +68,9 @@ canary.preview.tunnel.example.com      외부 연결 검사 전용 주소
 
 [처음 사용하는 사람을 위한 시작 안내](docs/getting-started.md)를 먼저 읽고, 상세한 운영 설정은 [Linux 배포 문서](docs/linux-deployment.md)를 따르세요. [.env.example](.env.example)은 설정 참고 자료이며 애플리케이션이 `.env` 파일을 자동으로 읽지는 않습니다.
 
-서버는 외부 경로 검사인 canary가 통과하고 관리자가 해당 배포를 별도로 승인한 뒤에 공유를 허용합니다.
+`main` 푸시 후 검사를 통과한 코드를 서버에 자동 반영하려면 [GitHub Actions 자동 배포](docs/automatic-deployment.md)를 설정하세요. 고정된 버전의 이미지를 GHCR에 올리고 SSH로 서버를 갱신하며, 공개 경로 검사에 실패하면 이전 컨테이너를 복구합니다.
+
+서버는 외부 경로 검사인 canary가 통과하고 관리자 또는 설정된 배포 파이프라인이 해당 배포를 별도로 승인한 뒤에 공유를 허용합니다.
 
 ## 현재 기능과 제한
 

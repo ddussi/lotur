@@ -4,7 +4,7 @@ Bug reports, documentation improvements, and focused pull requests are welcome. 
 
 ## Get a development environment
 
-Use Node.js 24+, npm, and a source checkout. Run commands from the repository root. For browser tests, install **Google Chrome**, matching `channel: "chrome"` in the Playwright configuration. On Linux, installation of browser system dependencies may require administrator privileges.
+Use Node.js 24+, npm, Python 3.9+ (`python3`), and a source checkout. Deployment script checks run on Linux or macOS; use WSL for those checks on Windows. Run commands from the repository root. For browser tests, install **Google Chrome**, matching `channel: "chrome"` in the Playwright configuration. On Linux, installation of browser system dependencies may require administrator privileges.
 
 ```sh
 npm ci
@@ -67,6 +67,6 @@ Contributions are made under this project's [MIT license](LICENSE). Include code
 
 ## 한국어 안내
 
-버그 제보·문서 수정·기능 개선은 한국어로 작성해도 됩니다. 위 명령은 저장소 루트에서 Node.js 24 이상으로 실행합니다. 전체 검사에는 임시 PostgreSQL과 Chrome이 필요합니다. DB 없이 통과한 결과를 전체 검사 통과로 적지 말아 주세요.
+버그 제보·문서 수정·기능 개선은 한국어로 작성해도 됩니다. 위 명령은 저장소 루트에서 Node.js 24 이상으로 실행합니다. 배포 스크립트 검사에는 Python 3.9 이상과 Linux·macOS 환경이 필요하며 Windows에서는 WSL을 사용합니다. 전체 검사에는 임시 PostgreSQL과 Chrome이 필요합니다. DB 없이 통과한 결과를 전체 검사 통과로 적지 말아 주세요.
 
 PR에는 문제, 수정 후 동작, 재현 방법, 실행한 검사를 적습니다. 실제 도메인·계정·비밀번호·개인 서버 정보는 예시로 사용하지 않습니다. 취약점의 상세 내용은 공개 이슈에 올리지 말고 [보안 제보 절차](SECURITY.md)를 따릅니다.

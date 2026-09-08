@@ -1,0 +1,13 @@
+{
+  "repository": "ddussi/lotur",
+  "containerName": "review-tunnel-gateway",
+  "network": "review-tunnel",
+  "port": 8787,
+  "controlUrl": "https://control.tunnel.example.com",
+  "canaryUrl": "https://canary.preview.tunnel.example.com",
+  "ingressConfigPath": "/etc/nginx/sites-enabled/review-tunnel.conf",
+  "adminUsername": "deploy-admin",
+  "memory": "1g",
+  "cpus": 1,
+  "healthTimeoutSeconds": 90
+}
