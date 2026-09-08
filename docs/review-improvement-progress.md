@@ -1,8 +1,10 @@
-**내부 팀 리뷰 개선 — 구현·검증 기록**
+# 리뷰 개선 — 통합 전 구현·검증 기록
+
+> **과거 기록:** 최신 사용 안내는 [리뷰 사용법](internal-review-guide.md), 현재 구현 상태는 [구현 현황](poc-status.md), 이후 병합·DB 변경은 [통합 기록](integration-2026-09-08.md)을 따릅니다. 아래 검사 결과는 당시 작업에만 해당합니다.
 
 기준: 2026-09-08. 승인 계획: [개선 계획](review-improvement-plan-2026-09-07.md). 사용법: [내부 리뷰 안내](internal-review-guide.md).
 
-계획의 0–3단계 기능을 작업 트리에 구현했다. 기존 핀 개선 10개 파일을 보존했다. HEAD는 e41541c이며 커밋·푸시·배포는 하지 않았다. 착수 전 변경 백업은 `/private/tmp/lotur-before-improvements-20260908.patch`다.
+계획의 0–3단계 기능을 작업 트리에 구현했다. 기존 핀 개선 10개 파일을 보존했다. 이 작업 당시 HEAD는 `e41541c`였고 변경은 아직 커밋·푸시·배포하지 않은 상태였다. 착수 전 변경 백업은 비공개 로컬 기록으로 보관했다. 이후 통합은 위 통합 기록을 참고한다.
 
 - [x] 댓글·답글 초안과 편집 DOM 보존, 경로별 초안, 인라인 편집·충돌 시 입력 유지
 - [x] 이미 불러온 댓글·답글 범위를 다시 읽어 오래된 수정·삭제 갱신
@@ -21,15 +23,17 @@
 
 **검증 결과**
 
-| 검사 | 결과 | 로그 |
+로그 이름은 당시 비공개 로컬 기록의 식별자이며, 저장소에서 내려받을 수 있는 파일이 아니다.
+
+| 검사 | 결과 | 당시 로컬 기록 |
 | --- | --- | --- |
-| `npm run check:mvp` | 스타일·타입·경계·빌드, 스크립트 51개, Node 테스트 333개, 브라우저 14개 통과 | `/private/tmp/lotur-final-check.log` |
-| `npm run test:postgres` | 실제 PostgreSQL 통합 15개 통과, 환경 미설정으로 건너뛴 항목 없음 | `/private/tmp/lotur-final-postgres.log` |
-| 선택 댓글 표시 회귀 | 같은 브라우저 시나리오 3회 통과 | `/private/tmp/lotur-focus-regression.log` |
-| 한국어 IME 조합 중 갱신 | 조합 중 입력 보존 브라우저 회귀 1개 통과 | `/private/tmp/lotur-ime-check.log` |
-| 마지막 UI 수정 검증 | 입력·처리 기록 펼침 유지·알림 수 갱신·모바일 관련 3개 통과 | `/private/tmp/lotur-final-ui-followup.log` |
-| 최종 스타일·diff 검사 | 오류 없음 | `/private/tmp/lotur-final-style.log` |
-| Docker Gateway 이미지 | 최종 빌드, 런타임 모듈 로딩·스크립트 파싱·Gateway liveness 통과 | `/private/tmp/lotur-docker-final-build.log`, `/private/tmp/lotur-docker-final-smoke.log` |
+| `npm run check:mvp` | 스타일·타입·경계·빌드, 스크립트 51개, Node 테스트 333개, 브라우저 14개 통과 | `lotur-final-check.log` |
+| `npm run test:postgres` | 실제 PostgreSQL 통합 15개 통과, 환경 미설정으로 건너뛴 항목 없음 | `lotur-final-postgres.log` |
+| 선택 댓글 표시 회귀 | 같은 브라우저 시나리오 3회 통과 | `lotur-focus-regression.log` |
+| 한국어 IME 조합 중 갱신 | 조합 중 입력 보존 브라우저 회귀 1개 통과 | `lotur-ime-check.log` |
+| 마지막 UI 수정 검증 | 입력·처리 기록 펼침 유지·알림 수 갱신·모바일 관련 3개 통과 | `lotur-final-ui-followup.log` |
+| 최종 스타일·diff 검사 | 오류 없음 | `lotur-final-style.log` |
+| Docker Gateway 이미지 | 최종 빌드, 런타임 모듈 로딩·스크립트 파싱·Gateway liveness 통과 | `lotur-docker-final-build.log`, `lotur-docker-final-smoke.log` |
 
 마지막 UI 수정은 전체 검사 이후 발견한 details 펼침 상태·IME 조합 표시 보존과 명시적 변경 후 알림 수 재조회다. 관련 브라우저 검사를 다시 수행했고 최종 운영 이미지도 다시 빌드했다. Node 전체 테스트 333개에는 PostgreSQL 통합 검사도 포함된다. 검사 수를 모두 더해 서로 다른 테스트 수라고 해석하지 않는다.
 
@@ -43,7 +47,7 @@
 - 요약 목록 최대 응답 35,962바이트. 답글 본문을 조회하지 않는지 확인했다.
 - 대표 미해결 목록 쿼리는 `rt_review_threads_revision_created_idx`를 사용했다.
 - 서버 서비스·DB 조회 측정이다. HTTP 인증, TLS, 실제 네트워크와 렌더링 시간은 포함하지 않는다. 16개 실제 브라우저 탭의 동시 수정 후 반영 p95는 아직 측정하지 않았다.
-- 원본 결과: `/private/tmp/lotur-review-load.json`, 실행 스크립트: `/private/tmp/lotur-review-load.mjs`. 측정용 schema는 실행 후 삭제했다.
+- 비공개 로컬 원본 결과: `lotur-review-load.json`, 실행 스크립트: `lotur-review-load.mjs`. 측정용 schema는 실행 후 삭제했다.
 
 **운영 시 알아둘 점**
 
@@ -53,4 +57,4 @@ migration 19–21을 적용하고 모든 Gateway를 새 상태를 읽는 버전�
 
 초안은 탭 메모리에만 있다. 새로고침·탭 종료를 넘는 초안 저장, 다른 revision으로의 자동 이전, 프로젝트별 ACL·외부 초대·외부 알림은 이번 범위에 포함하지 않는다. 활성 앱 후보는 현재 Gateway가 확인하는 세션만 보여 준다.
 
-테스트용 DB 컨테이너 `lotur-improvements-db`는 검증 후 종료·삭제했다. 로컬 검토용 운영 이미지는 `lotur-review-improvements:local`이다. 실행 중인 서비스나 공개 배포를 변경하지 않았다.
+테스트용 DB 컨테이너 `lotur-improvements-db`는 검증 후 종료·삭제했다. 로컬 검토용 운영 이미지는 `lotur-review-improvements:local`이다. 이 기록의 검증 당시에는 실행 중인 서비스나 공개 배포를 변경하지 않았다. 이후 상태는 통합 기록을 따른다.

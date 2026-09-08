@@ -4,7 +4,7 @@ English | [한국어](README.ko.md)
 
 Share a web application running on your computer with authenticated reviewers through a server and domain you operate. Reviewers use their browsers; developers keep working locally and can show changes through Vite HMR or Next.js Fast Refresh.
 
-**Status: `0.1.0` alpha.** HTTP, streaming, WebSocket, account management, and temporary sharing are implemented. Page and region comments, replies, resolution, live updates, and internal notifications are implemented. Per-project access lists remain unimplemented. See the [implementation status](docs/poc-status.md) and the earlier [public HTTPS sharing report](docs/validation/public-https-2026-09-06.md) for their respective validation scopes.
+**Status: alpha development; no tagged release yet.** HTTP, streaming, WebSocket, accounts, and temporary sharing are implemented, together with page comments, responsive pins, filters, a persistent review inbox, internal notifications, and re-review. Per-project access lists remain unimplemented. The source package version is `0.1.0`; the first distributable alpha is being prepared. See the [current implementation status](docs/poc-status.md) and [documentation index](docs/documentation.md).
 
 ## How it works
 
@@ -56,6 +56,14 @@ Use **Hide all pins** to clear the page, then **Show pin** on a comment to displ
 
 Follow the [review setup instructions](docs/getting-started.en.md#enable-page-and-region-reviews) for local package installation, Vite/Next configuration, and CSP nonce handling.
 
+## Continue in the review inbox
+
+Open `/reviews` on the control host to find feedback by project, revision, page, status, or author. Permanent comment links work after a share ends and return to the comment after sign-in. Saved comments and permitted edits remain available while the app is offline. **Open in app** finds active shares of the same revision on the current Gateway.
+
+When re-review is enabled, a developer chooses **Request review**, and the original author confirms the fix or asks for more changes. The inbox keeps processing history and combines your mention, reply, and workflow notifications across projects. Follow the [review guide](docs/review-guide.en.md) for the complete workflow and operator setup.
+
+Live updates and filter changes preserve drafts in the current tab. Reloading or closing that tab loses unsaved drafts. These saved review records and current-tab drafts have different lifetimes.
+
 ## Set up your own Gateway
 
 You need a Linux server, PostgreSQL 15+, control and wildcard DNS records, TLS certificates covering both names, and a reverse proxy that supports request streaming, SSE, and WebSocket upgrades.
@@ -104,6 +112,8 @@ Bug reports and pull requests should include a minimal reproduction and relevant
 
 Per-project access lists, screenshots, external email/Slack/push notifications, automatic comment carry-over between revisions, and complete edit history remain outside the current scope. The [contextual review design (Korean)](docs/contextual-review.md) describes implemented review behavior and deferred work.
 
+- [Current guides and historical records](docs/documentation.md)
+- [Review workflow](docs/review-guide.en.md)
 - [Account operations (Korean)](docs/internal-account-operations.md)
 - [Implementation status (Korean)](docs/poc-status.md)
 - [Code review findings (Korean)](docs/code-review-2026-09-06.md)
@@ -113,5 +123,3 @@ Per-project access lists, screenshots, external email/Slack/push notifications, 
 ## License
 
 [MIT](LICENSE). Third-party dependencies remain under their respective licenses.
-
-소규모 내부 팀의 리뷰함·재검토 사용법은 [내부 리뷰 안내](docs/internal-review-guide.md)를 참고하세요. `/reviews`에서 앱 종료 후에도 리뷰를 이어갈 수 있습니다.

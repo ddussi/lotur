@@ -100,7 +100,11 @@ If your app uses a nonce-based CSP, pass the same per-response nonce to `reviewT
 
 The sidebar supports page comments, click pins, drag-selected regions, and replies for both content roles. Authors can edit their own live text. Authors or developers can delete it, removing the text and leaving a deletion marker. Developers can resolve or reopen threads; resolved threads reject replies and edits until reopened. Concurrent updates use version/status checks and report a conflict instead of silently overwriting.
 
-Mentions notify only the project owner or existing participants in that revision. Notifications are visible only to the recipient and stay inside Review Tunnel. Review changes arrive through a separate SSE connection. Page navigation reloads feedback for the current path. Per-project membership, screenshots, external alerts, automatic revision carry-over, and complete edit history are outside this alpha.
+Mentions notify only the project owner or existing participants in that revision. Replies also notify the original author and existing reply participants, excluding the sender and duplicate mention notifications. Notifications are visible only to the recipient and stay inside Review Tunnel. Review changes arrive through a separate SSE connection. Page navigation reloads feedback for the current path. Per-project membership, screenshots, external alerts, automatic revision carry-over, and complete edit history are outside this alpha.
+
+Open `/reviews` on the control host to browse saved reviews across projects and revisions, filter by page/status/author, and see your notifications. Permanent links return to the same comment after sign-in; conversations remain available after a share ends. The [review guide](review-guide.en.md) covers inbox editing, pin controls, notifications, and optional re-review requests. Re-review requires migrations 19–21 and `REVIEW_WORKFLOW_ENABLED=true` for new requests.
+
+Live updates, filter changes, and in-app navigation preserve current-tab drafts. Reloading or closing the tab loses unsaved text. A concurrent edit shows a conflict while retaining your draft so you can compare it with the latest version.
 
 ### Pin placement and visibility
 

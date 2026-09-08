@@ -1,5 +1,7 @@
 # Review Tunnel 아키텍처 리뷰와 개선 결과
 
+> **과거 기록:** e41541c 기준으로 수행한 서버 구조 개선을 보존한 문서입니다. 당시 작업 트리·검증·배포 상태를 설명하며, 현재 상태는 [구현 현황](poc-status.md)과 [통합 기록](integration-2026-09-08.md)을 따릅니다.
+
 검토 기준은 `e41541c`, 결과는 현재 작업 트리다. 검토·구현·검증 일자는 2026-09-07이다. 이번 목표는 핵심 정확성 문제를 회귀 테스트로 고정하고, 기존 동작을 보존하면서 변경 경계를 만드는 것이었다. 커밋·push·운영 배포는 포함하지 않았다.
 
 **판단:** 프로토콜 상태 머신, 전송량 제한, 인증 버전 검증, 저장소 포트라는 기반은 유지할 가치가 있다. 가장 시급했던 문제는 기능 부족보다 요청 간 장애 전파, 최초 접근과 재검사의 정책 불일치, DB 커서와 커밋 순서의 불일치, 브라우저 서버 데이터와 작성 상태의 혼합이었다. 이를 수정하고 Gateway와 리뷰 화면의 책임을 분리했다. 운영 HTTPS와 장기 부하까지 검증한 결과로 해석해서는 안 된다.
@@ -52,10 +54,10 @@ P1은 공유 기능이나 여러 요청에 영향을 주는 문제, P2는 데이
 
 코드 근거:
 
-- 요청 격리: [gateway-streams.ts](/Users/imaruhan/Desktop/project/lotur/apps/gateway/src/gateway-streams.ts), [http-metadata.ts](/Users/imaruhan/Desktop/project/lotur/packages/protocol/src/http-metadata.ts), [request-isolation.test.ts](/Users/imaruhan/Desktop/project/lotur/apps/gateway/src/request-isolation.test.ts)
-- 접근 정책: [auth/model.ts](/Users/imaruhan/Desktop/project/lotur/packages/auth/src/model.ts), [authorization-revalidation.ts](/Users/imaruhan/Desktop/project/lotur/apps/gateway/src/authorization-revalidation.ts), [content-revalidation.test.ts](/Users/imaruhan/Desktop/project/lotur/apps/gateway/src/content-revalidation.test.ts)
-- DB 일관성: [review-event-transaction.ts](/Users/imaruhan/Desktop/project/lotur/packages/storage-postgres/src/review-event-transaction.ts), [postgres-review-repository.ts](/Users/imaruhan/Desktop/project/lotur/packages/storage-postgres/src/postgres-review-repository.ts), [PostgreSQL 통합 테스트](/Users/imaruhan/Desktop/project/lotur/packages/storage-postgres/src/postgres-review-repository.integration.test.ts)
-- 화면 상태: [page-state.ts](/Users/imaruhan/Desktop/project/lotur/apps/gateway/src/review-ui/page-state.ts), [drafts.ts](/Users/imaruhan/Desktop/project/lotur/apps/gateway/src/review-ui/drafts.ts), [view.ts](/Users/imaruhan/Desktop/project/lotur/apps/gateway/src/review-ui/view.ts), [브라우저 회귀 테스트](/Users/imaruhan/Desktop/project/lotur/tests/review/review-overlay.spec.mjs)
+- 요청 격리: [gateway-streams.ts](../apps/gateway/src/gateway-streams.ts), [http-metadata.ts](../packages/protocol/src/http-metadata.ts), [request-isolation.test.ts](../apps/gateway/src/request-isolation.test.ts)
+- 접근 정책: [auth/model.ts](../packages/auth/src/model.ts), [authorization-revalidation.ts](../apps/gateway/src/authorization-revalidation.ts), [content-revalidation.test.ts](../apps/gateway/src/content-revalidation.test.ts)
+- DB 일관성: [review-event-transaction.ts](../packages/storage-postgres/src/review-event-transaction.ts), [postgres-review-repository.ts](../packages/storage-postgres/src/postgres-review-repository.ts), [PostgreSQL 통합 테스트](../packages/storage-postgres/src/postgres-review-repository.integration.test.ts)
+- 화면 상태: [page-state.ts](../apps/gateway/src/review-ui/page-state.ts), [drafts.ts](../apps/gateway/src/review-ui/drafts.ts), [view.ts](../apps/gateway/src/review-ui/view.ts), [브라우저 회귀 테스트](../tests/review/review-overlay.spec.mjs)
 
 ## 3. 개선 후 아키텍처
 
@@ -63,20 +65,20 @@ P1은 공유 기능이나 여러 요청에 영향을 주는 문제, P2는 데이
 
 | 모듈 | 소유하는 책임·상태 | 정리·경계 |
 | --- | --- | --- |
-| [server.ts](/Users/imaruhan/Desktop/project/lotur/apps/gateway/src/server.ts) | 옵션, HTTP/Upgrade 라우팅, 인증·리뷰·전송 모듈 조합 | 모듈 종료 함수와 서버 소켓 종료를 호출한다. 기존 `createGatewayServer` 사용법을 유지한다. |
-| [gateway-session-lifecycle.ts](/Users/imaruhan/Desktop/project/lotur/apps/gateway/src/gateway-session-lifecycle.ts) | 세션 등록부, 종료 전이, 스트림 일괄 정리, 대기 중인 disposal | 외부에는 ReadonlyMap을 제공한다. 등록·삭제·종료는 소유자 함수를 거친다. 리뷰 정리는 선택적 callback으로 연결한다. |
-| [gateway-session.ts](/Users/imaruhan/Desktop/project/lotur/apps/gateway/src/gateway-session.ts) | 세션·스트림·transport epoch의 형태와 동일성 검사 | 예전 소켓에서 시작한 작업이 현재 연결에 적용되지 않게 한다. |
-| [gateway-carrier.ts](/Users/imaruhan/Desktop/project/lotur/apps/gateway/src/gateway-carrier.ts) | 한 Carrier의 수신 큐, HELLO·설정·probe·재연결·프로토콜 처리 | 세션 등록부를 직접 소유하지 않는다. 접속 admission과 세션 수명 함수를 명시적으로 받는다. |
-| [gateway-streams.ts](/Users/imaruhan/Desktop/project/lotur/apps/gateway/src/gateway-streams.ts) | 개별 HTTP·WebSocket 중계, 양방향 대기열·credit·종료 | 프로토콜과 전송 불변식을 공통 사용한다. 내부 보조 함수는 외부 API로 노출하지 않는다. |
-| [gateway-admission.ts](/Users/imaruhan/Desktop/project/lotur/apps/gateway/src/gateway-admission.ts) | credential 예약, 생성 대기 수, 인증 작업 수, rate limit | 종료 시 예약을 지운다. 취소·timeout과 실제 비동기 작업 완료를 구분하는 기존 admission 보장을 유지한다. |
-| [gateway-operations.ts](/Users/imaruhan/Desktop/project/lotur/apps/gateway/src/gateway-operations.ts) | kill switch, heartbeat·세션 만료·인증 artifact 정리 타이머 | `close()`가 타이머를 해제한다. 운영 정책은 입력 옵션으로 받는다. |
-| [authorization-revalidation.ts](/Users/imaruhan/Desktop/project/lotur/apps/gateway/src/authorization-revalidation.ts) | 열린 연결 권한 재검사, 동시 실행 한도 | 중단 함수를 반환한다. 배치·대체 조회 모두 같은 접근 조건과 transport 동일성 검사를 사용한다. |
+| [server.ts](../apps/gateway/src/server.ts) | 옵션, HTTP/Upgrade 라우팅, 인증·리뷰·전송 모듈 조합 | 모듈 종료 함수와 서버 소켓 종료를 호출한다. 기존 `createGatewayServer` 사용법을 유지한다. |
+| [gateway-session-lifecycle.ts](../apps/gateway/src/gateway-session-lifecycle.ts) | 세션 등록부, 종료 전이, 스트림 일괄 정리, 대기 중인 disposal | 외부에는 ReadonlyMap을 제공한다. 등록·삭제·종료는 소유자 함수를 거친다. 리뷰 정리는 선택적 callback으로 연결한다. |
+| [gateway-session.ts](../apps/gateway/src/gateway-session.ts) | 세션·스트림·transport epoch의 형태와 동일성 검사 | 예전 소켓에서 시작한 작업이 현재 연결에 적용되지 않게 한다. |
+| [gateway-carrier.ts](../apps/gateway/src/gateway-carrier.ts) | 한 Carrier의 수신 큐, HELLO·설정·probe·재연결·프로토콜 처리 | 세션 등록부를 직접 소유하지 않는다. 접속 admission과 세션 수명 함수를 명시적으로 받는다. |
+| [gateway-streams.ts](../apps/gateway/src/gateway-streams.ts) | 개별 HTTP·WebSocket 중계, 양방향 대기열·credit·종료 | 프로토콜과 전송 불변식을 공통 사용한다. 내부 보조 함수는 외부 API로 노출하지 않는다. |
+| [gateway-admission.ts](../apps/gateway/src/gateway-admission.ts) | credential 예약, 생성 대기 수, 인증 작업 수, rate limit | 종료 시 예약을 지운다. 취소·timeout과 실제 비동기 작업 완료를 구분하는 기존 admission 보장을 유지한다. |
+| [gateway-operations.ts](../apps/gateway/src/gateway-operations.ts) | kill switch, heartbeat·세션 만료·인증 artifact 정리 타이머 | `close()`가 타이머를 해제한다. 운영 정책은 입력 옵션으로 받는다. |
+| [authorization-revalidation.ts](../apps/gateway/src/authorization-revalidation.ts) | 열린 연결 권한 재검사, 동시 실행 한도 | 중단 함수를 반환한다. 배치·대체 조회 모두 같은 접근 조건과 transport 동일성 검사를 사용한다. |
 
 Gateway 진입 파일은 기존 3천 줄 이상의 직접 처리 코드에서 약 900줄의 조합·라우팅 코드로 줄었다. 단순히 파일을 잘게 나누는 것보다 Map, 예약, 타이머, 소켓의 소유자를 설명할 수 있게 된 점이 핵심이다. Carrier와 스트림 모듈은 여전히 크지만, 서로 다른 수명과 프로토콜 상태를 억지로 하나의 범용 서비스에 합치지 않았다.
 
 ### 리뷰 판단: 순수 정책과 저장소 효과의 분리
 
-[content-mutation-policy.ts](/Users/imaruhan/Desktop/project/lotur/packages/review/src/content-mutation-policy.ts)는 읽기·쓰기 없이 현재 값으로 `ALLOWED`, `FORBIDDEN`, `STATE_CONFLICT`, `VERSION_CONFLICT`를 판단한다. 메모리 저장소와 PostgreSQL 저장소가 같은 함수를 사용한다. PostgreSQL에서는 DB 상태를 읽고 잠근 뒤 이 판단을 호출하므로, 순수 함수 추출이 동시성 보장을 약화시키지 않는다.
+[content-mutation-policy.ts](../packages/review/src/content-mutation-policy.ts)는 읽기·쓰기 없이 현재 값으로 `ALLOWED`, `FORBIDDEN`, `STATE_CONFLICT`, `VERSION_CONFLICT`를 판단한다. 메모리 저장소와 PostgreSQL 저장소가 같은 함수를 사용한다. PostgreSQL에서는 DB 상태를 읽고 잠근 뒤 이 판단을 호출하므로, 순수 함수 추출이 동시성 보장을 약화시키지 않는다.
 
 작성자 권한 → 삭제·해결 상태 → 버전 충돌이라는 기존 결과 우선순위를 유지한다. 관리 권한이 있다고 다른 사람의 내용을 수정할 수 있게 바꾸지 않았다. 삭제와 수정의 허용 조건도 구분했다.
 
@@ -93,7 +95,7 @@ Gateway 진입 파일은 기존 3천 줄 이상의 직접 처리 코드에서 �
 
 입력 폼을 서버 데이터와 함께 파괴하지 않는다. 화면이 제거되면 AbortSignal을 통해 전역 이벤트·구독·초안·observer를 정리한다. API 조회 실패는 화면에 표시하고 성공한 것처럼 덮지 않는다.
 
-큰 문자열에 JavaScript를 직접 작성하던 bootstrap은 실제 TypeScript 모듈로 바꿨다. [build-review-ui.mjs](/Users/imaruhan/Desktop/project/lotur/scripts/build-review-ui.mjs)가 기존 bootstrap URL에서 제공할 단일 IIFE 문자열을 생성한다. 생성 파일은 직접 수정하지 않으며 소스와 생성물의 불일치를 스크립트 테스트가 잡는다. 운영 실행에는 Vite가 필요하지 않다.
+큰 문자열에 JavaScript를 직접 작성하던 bootstrap은 실제 TypeScript 모듈로 바꿨다. [build-review-ui.mjs](../scripts/build-review-ui.mjs)가 기존 bootstrap URL에서 제공할 단일 IIFE 문자열을 생성한다. 생성 파일은 직접 수정하지 않으며 소스와 생성물의 불일치를 스크립트 테스트가 잡는다. 운영 실행에는 Vite가 필요하지 않다.
 
 ## 4. 호환성과 적용 시 고려할 점
 
@@ -121,7 +123,7 @@ Gateway 진입 파일은 기존 3천 줄 이상의 직접 처리 코드에서 �
 
 ## 6. 완료조건별 검증
 
-세부 체크리스트는 [개선 목표](/Users/imaruhan/Desktop/project/lotur/docs/improvement-goal-2026-09-07.md)에 있다.
+세부 체크리스트는 [개선 목표](improvement-goal-2026-09-07.md)에 있다.
 
 | 조건 | 확인한 근거 |
 | --- | --- |
@@ -150,7 +152,7 @@ Gateway 진입 파일은 기존 3천 줄 이상의 직접 처리 코드에서 �
 | `npm run test:frameworks` | 9개 통과: 프레임워크 3개, 리뷰 오버레이 6개 |
 | `git diff --check` | 통과 |
 
-중복 없이 합산하면 자동 테스트 411개다. 최종 통과 전 병렬 실행에서는 기존 권한 만료 테스트가 실시간 60/100ms 제한에 의존해 다른 만료 사유로 실패했다. 해당 테스트를 제어 가능한 시계와 `AUTHORIZATION_EXPIRED` 이벤트 대기로 수정하고 전체 검사를 다시 통과했다. 결과 요약은 [검증 기록](/Users/imaruhan/Desktop/project/lotur/docs/validation/2026-09-07-local.json)에 보관한다.
+중복 없이 합산하면 자동 테스트 411개다. 최종 통과 전 병렬 실행에서는 기존 권한 만료 테스트가 실시간 60/100ms 제한에 의존해 다른 만료 사유로 실패했다. 해당 테스트를 제어 가능한 시계와 `AUTHORIZATION_EXPIRED` 이벤트 대기로 수정하고 전체 검사를 다시 통과했다. 결과 요약은 [검증 기록](validation/2026-09-07-local.json)에 보관한다.
 
 ### 검증 범위의 제한
 

@@ -1,5 +1,7 @@
 **Review Tunnel 개선 실행안 — 소규모 내부 팀**
 
+> **과거 기록:** 리뷰함·알림·재검토 통합 전의 구현 계획을 보존한 문서입니다. 당시 작업 트리·검증·배포 상태를 설명하며, 현재 상태는 [구현 현황](poc-status.md)과 [통합 기록](integration-2026-09-08.md)을 따릅니다.
+
 작성일: 2026-09-07. 상태: 제안 및 구현 계획. 제품 코드는 이 보고서 작성 과정에서 변경하지 않았다.
 
 사용자가 선택한 대상은 소규모 내부 팀이다. 계획은 개발자와 검토자 합계 3–8명, 동시에 검토하는 프로젝트 1–3개를 가정한다. 인원과 프로젝트 수는 일정·검증 규모를 정하기 위한 가정이며 실제 사용량 측정값은 아니다. 한 배포를 서로의 프로젝트를 열람할 수 있는 하나의 내부 팀으로 취급한다.
@@ -20,13 +22,13 @@
 
 | 확인한 현재 동작 | 계획에 미치는 영향 | 근거 |
 | --- | --- | --- |
-| Project·revision은 영속 데이터이고 binding은 임시 데이터 | 새 리뷰 데이터 모델 전체를 만들 필요는 없음 | [리뷰 스키마](/Users/ihan/Desktop/project/lotur/packages/storage-postgres/src/review-schema.ts:1) |
-| 서비스의 댓글·답글·알림 접근은 활성 binding 문맥에 의존 | 터널 없는 리뷰함에는 별도의 인증된 프로젝트 접근 경로가 필요 | [binding 확인](/Users/ihan/Desktop/project/lotur/packages/review/src/review-service.ts:45) |
-| 댓글은 경로별 최신 100개, 답글도 별도 페이지 처리 | 필터·검색을 현재 메모리 목록에만 적용하면 안 됨 | [페이지 조회](/Users/ihan/Desktop/project/lotur/packages/storage-postgres/src/postgres-review-repository.ts:685) |
-| 알림 조회는 revision·path·수신자 기준, 생성은 주로 멘션 | 다른 페이지의 새 답글 발견에는 알림 조회·생성 규칙 모두 확장이 필요 | [알림 조회](/Users/ihan/Desktop/project/lotur/packages/review/src/review-service.ts:428), [멘션 알림 생성](/Users/ihan/Desktop/project/lotur/packages/storage-postgres/src/postgres-review-repository.ts:1397) |
-| 본문 편집은 브라우저 prompt, 목록은 전체 DOM 교체 | 입력 상태와 목록 상태를 분리해야 편집 경험을 개선할 수 있음 | [목록 렌더링](/Users/ihan/Desktop/project/lotur/apps/gateway/src/review-bootstrap.ts:517), [편집](/Users/ihan/Desktop/project/lotur/apps/gateway/src/review-bootstrap.ts:548) |
-| 상태는 OPEN·RESOLVED이고 해결은 DEVELOPER 권한 | 작성자의 재검토에는 상태·권한·경합 규칙을 함께 바꿔야 함 | [상태 전이 규칙](/Users/ihan/Desktop/project/lotur/packages/review/src/model.ts:404), [역할 변환](/Users/ihan/Desktop/project/lotur/apps/gateway/src/review-http.ts:590) |
-| 현재 접근 권한은 프로젝트별 멤버십이 아닌 배포 전체의 역할 | 내부 팀의 리뷰함을 먼저 만들 수 있으나 프로젝트 비공개라는 표현은 사용하지 않음 | [현재 접근 범위](/Users/ihan/Desktop/project/lotur/docs/contextual-review.md:280) |
+| Project·revision은 영속 데이터이고 binding은 임시 데이터 | 새 리뷰 데이터 모델 전체를 만들 필요는 없음 | [리뷰 스키마](../packages/storage-postgres/src/review-schema.ts) |
+| 서비스의 댓글·답글·알림 접근은 활성 binding 문맥에 의존 | 터널 없는 리뷰함에는 별도의 인증된 프로젝트 접근 경로가 필요 | [binding 확인](../packages/review/src/review-service.ts) |
+| 댓글은 경로별 최신 100개, 답글도 별도 페이지 처리 | 필터·검색을 현재 메모리 목록에만 적용하면 안 됨 | [페이지 조회](../packages/storage-postgres/src/postgres-review-repository.ts) |
+| 알림 조회는 revision·path·수신자 기준, 생성은 주로 멘션 | 다른 페이지의 새 답글 발견에는 알림 조회·생성 규칙 모두 확장이 필요 | [알림 조회](../packages/review/src/review-service.ts), [멘션 알림 생성](../packages/storage-postgres/src/postgres-review-repository.ts) |
+| 본문 편집은 브라우저 prompt, 목록은 전체 DOM 교체 | 입력 상태와 목록 상태를 분리해야 편집 경험을 개선할 수 있음 | [목록 렌더링](../apps/gateway/src/review-bootstrap.ts), [편집](../apps/gateway/src/review-bootstrap.ts) |
+| 상태는 OPEN·RESOLVED이고 해결은 DEVELOPER 권한 | 작성자의 재검토에는 상태·권한·경합 규칙을 함께 바꿔야 함 | [상태 전이 규칙](../packages/review/src/model.ts), [역할 변환](../apps/gateway/src/review-http.ts) |
+| 현재 접근 권한은 프로젝트별 멤버십이 아닌 배포 전체의 역할 | 내부 팀의 리뷰함을 먼저 만들 수 있으나 프로젝트 비공개라는 표현은 사용하지 않음 | [현재 접근 범위](contextual-review.md) |
 
 앞선 커밋 리뷰에서는 기존 애플리케이션·DB 테스트 총 328개, 기존 리뷰 오버레이 브라우저 테스트 1개, 타입 검사를 통과했다. 별도 재현으로 초안 손실, 오래된 댓글의 갱신 누락, DB 이벤트 순서 문제, 한국어 본문의 바이트 제한 충돌을 확인했다. 이는 커밋 사본의 검증 결과이며 이번 문서 작업에서 현재 작업 트리의 전체 테스트를 다시 실행했다는 뜻은 아니다. 제품 사용 효과와 소요 시간은 아직 사용자 파일럿으로 검증하지 않았다.
 
