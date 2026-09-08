@@ -975,7 +975,7 @@ test("persistent review hub returns from login and accepts offline replies", asy
 });
 
 
-test("review workflow, mention selection, inbox and emergency read-only mode work together", async ({ page }) => {
+test("review workflow, mention selection, inbox and emergency read-only mode work together", async ({ page }, testInfo) => {
   const runtime = await startReviewRuntime();
   try {
     const overlay = await openReviewPage(page, runtime);
@@ -1009,7 +1009,7 @@ test("review workflow, mention selection, inbox and emergency read-only mode wor
     await expect(page.locator(".history")).toContainText("NEEDS_REVIEW → RESOLVED");
     await page.getByRole("button", { name: "새로고침", exact: true }).click();
     await expect(page.locator(".history")).toHaveAttribute("open", "");
-    await page.screenshot({ path: "/private/tmp/lotur-review-hub.png", fullPage: true });
+    await page.screenshot({ path: testInfo.outputPath("review-hub.png"), fullPage: true });
     runtime.setKillSwitch(true);
     await page.reload();
     await expect(page.getByText("공유 중지 상태입니다.", { exact: false })).toBeVisible();
@@ -1026,7 +1026,7 @@ test("review workflow, mention selection, inbox and emergency read-only mode wor
 });
 
 
-test("mobile review panel starts closed and leaves the app usable", async ({ page }) => {
+test("mobile review panel starts closed and leaves the app usable", async ({ page }, testInfo) => {
   const runtime = await startReviewRuntime();
   try {
     await page.setViewportSize({ width: 390, height: 844 });
@@ -1038,7 +1038,7 @@ test("mobile review panel starts closed and leaves the app usable", async ({ pag
     await expect(overlay.locator(".panel")).toBeVisible();
     await expect(page.getByRole("heading", { name: "Review fixture app" })).toBeVisible();
     await overlay.getByRole("textbox", { name: "Comment", exact: true }).fill("모바일 초안");
-    await page.screenshot({ path: "/private/tmp/lotur-review-mobile.png", fullPage: true });
+    await page.screenshot({ path: testInfo.outputPath("review-mobile.png"), fullPage: true });
     await overlay.getByRole("button", { name: "Close review panel" }).click();
     await overlay.getByRole("button", { name: "Open review panel" }).click();
     await expect(overlay.getByRole("textbox", { name: "Comment", exact: true })).toHaveValue("모바일 초안");

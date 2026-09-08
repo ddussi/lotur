@@ -41,6 +41,8 @@ Node.js 24.12.0, 격리된 PostgreSQL 17.6, 로컬 Chrome에서 실행했다.
 | 작성 상태 | 제출 중 새 입력·실패·실시간 갱신·페이지 이동·이전 답글 응답·같은 문자열로 돌아온 새 초안 보존 |
 | 권한·기능 | 로그인·권한 회수·수신자 알림·멘션·재검토·공유 중지 읽기 전용·반응형 핀·모바일 패널 |
 
+GitHub Linux 검사에서 발견한 macOS 전용 스크린샷 경로 2곳도 Playwright의 테스트별 결과 경로로 변경했다.
+
 통합 중 이벤트가 모두 정리된 feed의 cursor 보존과 필터 쿼리를 수정했다. 기존 브라우저 회귀 검사는 새 기본 미해결 필터와 workflow version에 맞춰 명시적으로 전체 필터·현재 버전을 사용한다.
 
 배포는 `main`의 동일 커밋에 대한 GitHub Actions 검사, 이미지 게시, migration, HTTPS canary, 공유 승인 순서로 진행한다. 실제 배포 완료 여부는 해당 Actions 실행과 서버의 `current-release.json`, 컨테이너 revision, readiness를 함께 확인한다. 백업과 이전 컨테이너는 자동 삭제하지 않는다.
