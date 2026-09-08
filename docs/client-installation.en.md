@@ -13,7 +13,7 @@ npm ci
 npm run pack:client
 ```
 
-The command prints the archive path, currently `dist/releases/review-tunnel-client-0.1.0.tgz`. To preserve previous files, it refuses to replace an existing archive. Use `npm run pack:client -- --output-dir dist/releases/another-build` for a separate output directory.
+The command prints the archive path, currently `dist/releases/review-tunnel-client-0.1.0-alpha.1.tgz`. To preserve previous files, it refuses to replace an existing archive. Use `npm run pack:client -- --output-dir dist/releases/another-build` for a separate output directory.
 
 The archive contains the bundled application module, a `review-tunnel` command, a pinned copy of the required `ws` JavaScript dependency, and both licenses. It includes no installation hooks, optional native add-ons, Gateway, or DB driver. Its package metadata stays private to prevent accidental registry publication; local archive installation works normally.
 
@@ -23,7 +23,7 @@ Copy the archive to that computer. In a dedicated directory outside the source c
 
 ```sh
 npm init -y
-npm install --ignore-scripts /path/to/review-tunnel-client-0.1.0.tgz
+npm install --ignore-scripts /path/to/review-tunnel-client-0.1.0-alpha.1.tgz
 npx --no-install review-tunnel --version
 npx --no-install review-tunnel --help
 ```

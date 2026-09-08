@@ -1,6 +1,6 @@
 # Standalone Client validation — 2026-09-09
 
-The Client packaging implementation follows the local demo commit `d67d097` on `codex/oss-alpha-preparation`. This record covers macOS arm64 validation; the complete release candidate and versioned publication remain pending.
+The Client packaging implementation was committed at `70035ee`, followed by packed integration browser checks at `a339774`, on `codex/oss-alpha-preparation`. This record covers macOS arm64 and Linux amd64 validation; the complete release candidate and versioned publication remain pending.
 
 `npm run pack:client` bundles the existing Client source and allowed internal modules through the repository's build dependency. It rejects unexpected external or internal modules. Only Node built-ins and the pinned `ws` runtime remain external; the archive includes an unmodified JavaScript copy of `ws` and its license. The installer executes no hooks and does not fetch an unpublished workspace package.
 
@@ -22,4 +22,6 @@ The loopback DNS preload and PTY/proxy helpers are explicit test-harness files c
 
 The standalone Vite/Next installation/import check also passed. The three framework browser scenarios now first pack the integration, install that archive into each fixture app, and verify that ESM resolves the installed file rather than the workspace package. All three passed on macOS: authenticated Vite HMR/revocation, Next RSC/Server Actions/navigation/Fast Refresh/revocation, and Next production HTML without the review bootstrap. Framework runtimes still come from the harness's pinned development dependencies; the separate outside-repository installation test verifies the integration packages' independent imports.
 
-Linux verification of the Client change, final version/checksum selection, runtime-image verification, and the full candidate gate remain outstanding. No archive has been published as a release.
+[Linux CI run 34253902398](https://github.com/ddussi/lotur/actions/runs/34253902398) passed at exact commit `a33977466ef326d91c8d5f7d14d5e9d5abd83c35`, including the outside-repository Client test, actual PTY login/reconnection/cleanup, and packed Vite/Next browser scenarios. The full database-backed gate, audit, and all six image builds/smoke checks passed. Publish and deploy jobs were skipped.
+
+Final version/checksum selection and the full release-candidate gate remain outstanding. No archive has been published as a release.

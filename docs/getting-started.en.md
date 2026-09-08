@@ -53,9 +53,9 @@ In the **web app's project directory**, install only the integration you use. Re
 
 ```sh
 # Vite app
-npm install --save-dev /path/to/review-tunnel/review-tunnel-vite-0.1.0.tgz
+npm install --save-dev /path/to/review-tunnel/review-tunnel-vite-0.1.0-alpha.1.tgz
 # Next.js app
-npm install --save-dev /path/to/review-tunnel/review-tunnel-next-0.1.0.tgz
+npm install --save-dev /path/to/review-tunnel/review-tunnel-next-0.1.0-alpha.1.tgz
 ```
 
 For Vite, add the plugin to `vite.config.ts`:

@@ -1,6 +1,6 @@
 {
   "name": "review-tunnel",
-  "version": "0.1.0",
+  "version": "0.1.0-alpha.1",
   "private": true,
   "type": "module",
   "workspaces": [
@@ -35,7 +35,10 @@
     "restore:postgres": "node scripts/postgres-restore.mjs",
     "demo": "node scripts/demo.mjs",
     "pack:client": "node scripts/pack-client.mjs",
-    "test:demo": "node ./node_modules/@playwright/test/cli.js test --config tests/demo/playwright.config.mjs"
+    "test:demo": "node ./node_modules/@playwright/test/cli.js test --config tests/demo/playwright.config.mjs",
+    "check:release-version": "node scripts/check-release-version.mjs",
+    "pack:release": "node scripts/pack-release.mjs",
+    "verify:release": "node scripts/verify-release.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.11",

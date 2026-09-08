@@ -1,14 +1,14 @@
 {
   "name": "@review-tunnel/client",
-  "version": "0.1.0",
+  "version": "0.1.0-alpha.1",
   "private": true,
   "type": "module",
   "dependencies": {
-    "@review-tunnel/cli-utils": "0.1.0",
-    "@review-tunnel/protocol": "0.1.0",
-    "@review-tunnel/proxy": "0.1.0",
-    "@review-tunnel/relay": "0.1.0",
-    "@review-tunnel/review": "0.1.0",
+    "@review-tunnel/cli-utils": "0.1.0-alpha.1",
+    "@review-tunnel/protocol": "0.1.0-alpha.1",
+    "@review-tunnel/proxy": "0.1.0-alpha.1",
+    "@review-tunnel/relay": "0.1.0-alpha.1",
+    "@review-tunnel/review": "0.1.0-alpha.1",
     "ws": "^8.21.3"
   },
   "license": "MIT"

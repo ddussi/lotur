@@ -209,9 +209,9 @@ npm pack ./apps/next-integration
 
 ```sh
 # Vite 앱
-npm install --save-dev /path/to/review-tunnel/review-tunnel-vite-0.1.0.tgz
+npm install --save-dev /path/to/review-tunnel/review-tunnel-vite-0.1.0-alpha.1.tgz
 # Next.js 앱
-npm install --save-dev /path/to/review-tunnel/review-tunnel-next-0.1.0.tgz
+npm install --save-dev /path/to/review-tunnel/review-tunnel-next-0.1.0-alpha.1.tgz
 ```
 
 Vite에서는 개발 서버 전용 plugin이 공식 HTML transform으로 bootstrap을 주입한다.

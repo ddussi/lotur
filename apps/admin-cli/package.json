@@ -1,13 +1,13 @@
 {
   "name": "@review-tunnel/admin-cli",
-  "version": "0.1.0",
+  "version": "0.1.0-alpha.1",
   "private": true,
   "type": "module",
   "dependencies": {
-    "@review-tunnel/auth": "0.1.0",
-    "@review-tunnel/cli-utils": "0.1.0",
-    "@review-tunnel/operations": "0.1.0",
-    "@review-tunnel/storage-postgres": "0.1.0",
+    "@review-tunnel/auth": "0.1.0-alpha.1",
+    "@review-tunnel/cli-utils": "0.1.0-alpha.1",
+    "@review-tunnel/operations": "0.1.0-alpha.1",
+    "@review-tunnel/storage-postgres": "0.1.0-alpha.1",
     "pg": "^8.23.0"
   },
   "license": "MIT"

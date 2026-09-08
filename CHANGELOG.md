@@ -1,6 +1,6 @@
 # Changelog
 
-Changes awaiting a tagged release are recorded under Unreleased. The package version is currently `0.1.0`; that number alone does not establish that a release has been published.
+Changes awaiting a tagged release are recorded under Unreleased. The package version is currently `0.1.0-alpha.1`; that number alone does not establish that a release has been published.
 
 The first planned distribution is `v0.1.0-alpha.1`. A local demo and standalone Client archive builder are available from source; versioned release publication remains in preparation.
 

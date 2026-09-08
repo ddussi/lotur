@@ -13,7 +13,7 @@ npm ci
 npm run pack:client
 ```
 
-완료하면 설치 파일 경로를 출력한다. 현재 버전의 기본 경로는 `dist/releases/review-tunnel-client-0.1.0.tgz`다. 기존 파일을 덮어쓰지 않으므로 다시 만들 때는 `npm run pack:client -- --output-dir dist/releases/another-build`처럼 별도 출력 폴더를 지정한다.
+완료하면 설치 파일 경로를 출력한다. 현재 버전의 기본 경로는 `dist/releases/review-tunnel-client-0.1.0-alpha.1.tgz`다. 기존 파일을 덮어쓰지 않으므로 다시 만들 때는 `npm run pack:client -- --output-dir dist/releases/another-build`처럼 별도 출력 폴더를 지정한다.
 
 파일에는 Client 코드, `review-tunnel` 명령, 버전을 고정한 필수 JavaScript 의존성 `ws`, 양쪽 라이선스가 들어간다. 설치 hook·선택적 native addon·Gateway·DB 드라이버는 포함하지 않는다. 실수로 npm 저장소에 게시하지 않도록 메타데이터는 private로 유지하며, 파일을 통한 설치는 가능하다.
 
@@ -23,7 +23,7 @@ npm run pack:client
 
 ```sh
 npm init -y
-npm install --ignore-scripts /path/to/review-tunnel-client-0.1.0.tgz
+npm install --ignore-scripts /path/to/review-tunnel-client-0.1.0-alpha.1.tgz
 npx --no-install review-tunnel --version
 npx --no-install review-tunnel --help
 ```
