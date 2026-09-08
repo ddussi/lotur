@@ -19,7 +19,6 @@ import type {
   ReviewEventType,
   ReviewMentionContentType,
   ReviewNotification,
-  ReviewPageCursor,
   ReviewProject,
   ReviewReply,
   ReviewReplyPage,
@@ -66,7 +65,11 @@ export class PostgresReviewRepository implements ReviewRepository {
   }
 
   async checkHealth(): Promise<void> {
-    await this.#database.query("SELECT 1 FROM rt_review_projects LIMIT 1");
+    // Fail readiness before serving a UI that needs an unapplied migration.
+    await this.#database.query("SELECT workflow_version FROM rt_review_threads LIMIT 1");
+    await this.#database.query("SELECT reason, source_key, workflow_version FROM rt_review_notifications LIMIT 1");
+    await this.#database.query("SELECT version FROM rt_review_workflow_history LIMIT 1");
+    await this.#database.query("SELECT trimmed_through_id FROM rt_review_event_retention LIMIT 1");
   }
 
   async migrate(): Promise<void> {
@@ -74,6 +77,66 @@ export class PostgresReviewRepository implements ReviewRepository {
       await client.query("SELECT pg_advisory_xact_lock($1)", [1_467_289_112]);
       await client.query(REVIEW_SCHEMA_SQL);
     });
+  }
+
+  async listInbox(input: Parameters<ReviewRepository["listInbox"]>[0]) {
+    const result = await this.#database.query<ReviewNotificationRow>(`${reviewNotificationSelect()}
+      WHERE recipient_account_id = $1 AND ($2::bigint IS NULL OR notification.id < $2)
+      AND (NOT $3::boolean OR read_at IS NULL) ORDER BY notification.id DESC LIMIT 51`, [input.actorAccountId, input.before ?? null, input.unreadOnly]);
+    const count = await this.#database.query<{ count: string }>("SELECT count(*)::text AS count FROM rt_review_notifications WHERE recipient_account_id = $1 AND read_at IS NULL", [input.actorAccountId]);
+    return { notifications: result.rows.slice(0, 50).map(toReviewNotification), unreadCount: Number(count.rows[0]?.count ?? 0),
+      ...(result.rows.length > 50 ? { nextCursor: result.rows[49]!.id } : {}) };
+  }
+  async findNotificationForAccount(id: string, accountId: string) {
+    const result = await this.#database.query<ReviewNotificationRow>(`${reviewNotificationSelect()} WHERE notification.id = $1::bigint AND recipient_account_id = $2`, [id, accountId]);
+    return result.rows[0] === undefined ? undefined : toReviewNotification(result.rows[0]);
+  }
+  async listMentionCandidates(revisionId: string, prefix: string) {
+    const result = await this.#database.query<{ username: string; display_name: string }>(`WITH participants(id) AS (
+      SELECT project.owner_account_id FROM rt_review_projects project JOIN rt_review_revisions revision ON revision.project_id = project.id WHERE revision.id = $1
+      UNION SELECT author_account_id FROM rt_review_threads WHERE revision_id = $1
+      UNION SELECT reply.author_account_id FROM rt_review_replies reply JOIN rt_review_threads thread ON thread.id = reply.thread_id WHERE thread.revision_id = $1
+    ) SELECT account.username, account.display_name FROM rt_accounts account JOIN participants ON participants.id = account.id
+      WHERE account.enabled AND NOT account.must_change_password AND account.roles && ARRAY['DEVELOPER','REVIEWER']::text[]
+      AND starts_with(account.username, $2) ORDER BY account.username LIMIT 20`, [revisionId, prefix]);
+    return result.rows.map(item => ({ username: item.username, displayName: item.display_name }));
+  }
+
+  async listProjects() {
+    const result = await this.#database.query<ReviewProjectRow & { open_count: string; last_activity_at: Date }>(
+      `SELECT project.*, count(thread.id) FILTER (WHERE thread.status <> 'RESOLVED' AND thread.deleted_at IS NULL)::text AS open_count,
+         GREATEST(project.created_at, max(thread.updated_at)) AS last_activity_at
+       FROM rt_review_projects project LEFT JOIN rt_review_revisions revision ON revision.project_id = project.id
+       LEFT JOIN rt_review_threads thread ON thread.revision_id = revision.id
+       GROUP BY project.id ORDER BY last_activity_at DESC, project.id`,
+    );
+    return result.rows.map(row => ({ ...toProject(row), openCount: Number(row.open_count), lastActivityAt: row.last_activity_at }));
+  }
+
+  async listRevisions(projectId: string) {
+    const result = await this.#database.query<ReviewRevisionRow & { open_count: string }>(
+      `SELECT revision.*, count(thread.id) FILTER (WHERE thread.status <> 'RESOLVED' AND thread.deleted_at IS NULL)::text AS open_count
+       FROM rt_review_revisions revision LEFT JOIN rt_review_threads thread ON thread.revision_id = revision.id
+       WHERE revision.project_id = $1 GROUP BY revision.id ORDER BY revision.created_at DESC, revision.id DESC`, [projectId],
+    );
+    return result.rows.map(row => ({ ...toRevision(row), openCount: Number(row.open_count) }));
+  }
+
+  async findRevisionContext(projectId: string | undefined, revisionId: string) {
+    const revisions = await this.#database.query<ReviewRevisionRow>(
+      "SELECT * FROM rt_review_revisions WHERE id = $1 AND ($2::text IS NULL OR project_id = $2)", [revisionId, projectId ?? null],
+    );
+    const row = revisions.rows[0];
+    if (row === undefined) return undefined;
+    const projects = await this.#database.query<ReviewProjectRow>("SELECT * FROM rt_review_projects WHERE id = $1", [row.project_id]);
+    return projects.rows[0] === undefined ? undefined : { project: toProject(projects.rows[0]), revision: toRevision(row) };
+  }
+
+  async findThread(threadId: string) {
+    const thread = await findPageCommentThreadById(this.#database, threadId, 100);
+    if (thread === undefined) return undefined;
+    const page = await this.listReplyPage({ revisionId: thread.revisionId, routePath: thread.routePath, threadId, limit: 100 });
+    return { ...thread, replies: page?.replies ?? [], replyPageInfo: page?.pageInfo ?? { hasMore: false } };
   }
 
   async bindTunnel(input: BindReviewTunnelInput): Promise<BindReviewTunnelResult> {
@@ -200,27 +263,16 @@ export class PostgresReviewRepository implements ReviewRepository {
     );
   }
 
-  async createPageComment(input: Readonly<{
-    thread: PageCommentThread;
-    actorUsername: string;
-    mentionUsernames: readonly string[];
-    actorAuthorizationVersion: number;
-    tunnelId: string;
-    sessionId: string;
-  }>): Promise<CreatePageCommentResult> {
+  async createPageComment(input: Parameters<ReviewRepository["createPageComment"]>[0]): Promise<CreatePageCommentResult> {
     return withReviewEventTransaction(this.#database, input.thread, async (client) => {
       if (!await lockCurrentAccount(
         client,
         input.thread.author.accountId,
         input.actorAuthorizationVersion,
       )) return { status: "STALE_AUTHORIZATION" } as const;
-      const binding = await client.query(
-        `SELECT 1 FROM rt_review_tunnel_bindings
-         WHERE tunnel_id = $1 AND session_id = $2 AND revision_id = $3
-         FOR SHARE`,
-        [input.tunnelId, input.sessionId, input.thread.revisionId],
-      );
-      if (binding.rowCount !== 1) return { status: "BINDING_NOT_FOUND" } as const;
+      if (!await checkReviewAccess(client, { ...input, revisionId: input.thread.revisionId })) {
+        return { status: "BINDING_NOT_FOUND" } as const;
+      }
       const pinNumber = input.thread.anchor.type === "REGION_V1"
         ? await allocateReviewPinNumber(
             client,
@@ -275,31 +327,16 @@ export class PostgresReviewRepository implements ReviewRepository {
     });
   }
 
-  async createReply(input: Readonly<{
-    reply: ReviewReply;
-    actorUsername: string;
-    mentionUsernames: readonly string[];
-    revisionId: string;
-    routePath: string;
-    actorAuthorizationVersion: number;
-    tunnelId: string;
-    sessionId: string;
-  }>): Promise<CreateReviewReplyResult> {
+  async createReply(input: Parameters<ReviewRepository["createReply"]>[0]): Promise<CreateReviewReplyResult> {
     return withReviewEventTransaction(this.#database, input, async (client) => {
       if (!await lockCurrentAccount(
         client,
         input.reply.author.accountId,
         input.actorAuthorizationVersion,
       )) return { status: "STALE_AUTHORIZATION" } as const;
-      const currentStatus = await lockBoundThreadStatus(client, {
-        threadId: input.reply.threadId,
-        revisionId: input.revisionId,
-        routePath: input.routePath,
-        tunnelId: input.tunnelId,
-        sessionId: input.sessionId,
-      });
+      const currentStatus = await lockBoundThreadStatus(client, { ...input, threadId: input.reply.threadId });
       if (currentStatus === undefined) return { status: "THREAD_NOT_FOUND" } as const;
-      if (currentStatus !== "OPEN") return { status: "STATE_CONFLICT" } as const;
+      if (currentStatus === "RESOLVED") return { status: "STATE_CONFLICT" } as const;
       await client.query(
         `INSERT INTO rt_review_replies
          (id, thread_id, body, author_account_id, created_at, updated_at)
@@ -340,34 +377,46 @@ export class PostgresReviewRepository implements ReviewRepository {
         maxEvents: this.#maxEvents,
         maxEventAgeMs: this.#maxEventAgeMs,
       });
+      const notified = await client.query<{ recipient_account_id: string }>(`WITH participants(account_id) AS (
+        SELECT author_account_id FROM rt_review_threads WHERE id = $6
+        UNION SELECT author_account_id FROM rt_review_replies WHERE thread_id = $6
+      ) INSERT INTO rt_review_notifications
+        (revision_id, route_path, thread_id, content_type, content_id, recipient_account_id, actor_account_id, created_at, reason, source_key)
+        SELECT $1, $2, $6, 'REPLY', $3, recipient.id, $4, $5, 'REPLY', 'reply:' || $3
+        FROM participants JOIN rt_accounts recipient ON recipient.id = participants.account_id
+        WHERE recipient.id <> $4 AND recipient.enabled AND NOT recipient.must_change_password
+          AND recipient.roles && ARRAY['DEVELOPER','REVIEWER']::text[]
+          AND NOT EXISTS (SELECT 1 FROM rt_review_notifications WHERE content_type = 'REPLY' AND content_id = $3 AND recipient_account_id = recipient.id)
+        ON CONFLICT (recipient_account_id, source_key) DO NOTHING
+        RETURNING recipient_account_id`, [input.revisionId, input.routePath, input.reply.id, input.reply.author.accountId, input.reply.createdAt, input.reply.threadId]);
+      for (const row of notified.rows) await recordReviewEvent(client, { revisionId: input.revisionId, routePath: input.routePath, threadId: input.reply.threadId,
+        type: "NOTIFICATION_CREATED", actorAccountId: input.reply.author.accountId, recipientAccountId: row.recipient_account_id,
+        occurredAt: input.reply.createdAt, maxEvents: this.#maxEvents, maxEventAgeMs: this.#maxEventAgeMs });
       return { status: "CREATED", reply: input.reply } as const;
     });
   }
 
-  async changePageCommentStatus(input: Readonly<{
-    threadId: string;
-    revisionId: string;
-    routePath: string;
-    expectedStatus: ReviewThreadStatus;
-    status: ReviewThreadStatus;
-    actor: ReviewIdentity;
-    actorAuthorizationVersion: number;
-    tunnelId: string;
-    sessionId: string;
-    changedAt: Date;
-  }>): Promise<ChangePageCommentStatusResult> {
+  async changePageCommentStatus(input: Parameters<ReviewRepository["changePageCommentStatus"]>[0]): Promise<ChangePageCommentStatusResult> {
     return withReviewEventTransaction(this.#database, input, async (client) => {
       if (!await lockCurrentAccount(
         client,
         input.actor.accountId,
         input.actorAuthorizationVersion,
       )) return { status: "STALE_AUTHORIZATION" } as const;
-      const currentStatus = await lockBoundThreadStatus(client, input);
-      if (currentStatus === undefined) return { status: "THREAD_NOT_FOUND" } as const;
-      if (currentStatus !== input.expectedStatus) return { status: "STATE_CONFLICT" } as const;
+      const current = await lockBoundThreadContent(client, input);
+      if (current === undefined) return { status: "THREAD_NOT_FOUND" } as const;
+      if (current.status !== input.expectedStatus || current.workflow_version !== input.expectedWorkflowVersion || current.deleted_at !== null) return { status: "STATE_CONFLICT" } as const;
+      if (!input.actorCanManageProject && !(current.author_account_id === input.actor.accountId && current.status === "NEEDS_REVIEW" && input.status !== "NEEDS_REVIEW")) return { status: "STALE_AUTHORIZATION" } as const;
+      if (input.status === "NEEDS_REVIEW") {
+        const recipient = await client.query(`SELECT id FROM rt_accounts WHERE id = $1 AND enabled AND NOT must_change_password AND roles && ARRAY['DEVELOPER','REVIEWER']::text[] FOR SHARE`, [current.author_account_id]);
+        if (!recipient.rowCount) return { status: "REVIEWER_UNAVAILABLE" } as const;
+      }
+      await client.query(`INSERT INTO rt_review_workflow_history (thread_id, version, from_status, to_status, actor_account_id, changed_at) VALUES ($1,$2,$3,$4,$5,$6)`,
+        [input.threadId, current.workflow_version + 1, current.status, input.status, input.actor.accountId, input.changedAt]);
       await client.query(
         `UPDATE rt_review_threads
          SET status = $2::text,
+             workflow_version = workflow_version + 1,
              resolved_by_account_id =
                CASE WHEN $2::text = 'RESOLVED' THEN $3::text ELSE NULL::text END,
              resolved_at =
@@ -386,6 +435,23 @@ export class PostgresReviewRepository implements ReviewRepository {
         maxEvents: this.#maxEvents,
         maxEventAgeMs: this.#maxEventAgeMs,
       });
+      if (input.status === "NEEDS_REVIEW" || current.status === "NEEDS_REVIEW") {
+        const previousRequest = input.status === "NEEDS_REVIEW" ? undefined : (await client.query<{ actor_account_id: string; version: number }>(
+          "SELECT actor_account_id, version FROM rt_review_workflow_history WHERE thread_id = $1 AND to_status = 'NEEDS_REVIEW' ORDER BY version DESC LIMIT 1", [input.threadId])).rows[0];
+        const recipientId = input.status === "NEEDS_REVIEW" ? current.author_account_id : previousRequest?.actor_account_id;
+        const requestVersion = input.status === "NEEDS_REVIEW" ? current.workflow_version + 1 : previousRequest?.version;
+        if (current.status === "NEEDS_REVIEW" && requestVersion !== undefined) {
+          await client.query("UPDATE rt_review_notifications SET read_at = COALESCE(read_at, $4) WHERE thread_id = $1 AND recipient_account_id = $2 AND workflow_version = $3 AND reason = 'WORKFLOW_REQUEST'", [input.threadId, input.actor.accountId, requestVersion, input.changedAt]);
+        }
+        if (recipientId !== undefined && recipientId !== input.actor.accountId) {
+          const notice = await client.query(`INSERT INTO rt_review_notifications (revision_id, route_path, thread_id, content_type, content_id, recipient_account_id, actor_account_id, created_at, reason, source_key, workflow_version)
+            SELECT $1,$2,$3,'COMMENT',$3,recipient.id,$5,$6,$7,$8,$9 FROM rt_accounts recipient WHERE id = $4 AND enabled AND NOT must_change_password AND roles && ARRAY['DEVELOPER','REVIEWER']::text[]
+            ON CONFLICT (recipient_account_id, source_key) DO NOTHING`, [input.revisionId, input.routePath, input.threadId, recipientId, input.actor.accountId, input.changedAt,
+              input.status === "NEEDS_REVIEW" ? "WORKFLOW_REQUEST" : "WORKFLOW_RESULT", `workflow:${input.threadId}:${current.workflow_version + 1}`, requestVersion]);
+          if (notice.rowCount) await recordReviewEvent(client, { revisionId: input.revisionId, routePath: input.routePath, threadId: input.threadId, type: "NOTIFICATION_CREATED",
+            actorAccountId: input.actor.accountId, recipientAccountId: recipientId, occurredAt: input.changedAt, maxEvents: this.#maxEvents, maxEventAgeMs: this.#maxEventAgeMs });
+        }
+      }
       const thread = await findPageCommentThreadById(client, input.threadId, 100);
       if (thread === undefined) throw new Error("updated review thread disappeared");
       return { status: "UPDATED", thread } as const;
@@ -557,30 +623,14 @@ export class PostgresReviewRepository implements ReviewRepository {
     });
   }
 
-  async listReviewEvents(input: Readonly<{
-    revisionId: string;
-    routePath: string;
-    afterId: string;
-    requireContinuity?: boolean;
-    limit: number;
-    actorAccountId: string;
-    actorAuthorizationVersion: number;
-    tunnelId: string;
-    sessionId: string;
-  }>): Promise<ListReviewEventsResult> {
+  async listReviewEvents(input: Parameters<ReviewRepository["listReviewEvents"]>[0]): Promise<ListReviewEventsResult> {
     return withTransaction(this.#database, async (client) => {
       if (!await lockCurrentAccount(
         client,
         input.actorAccountId,
         input.actorAuthorizationVersion,
       )) return { status: "STALE_AUTHORIZATION" } as const;
-      const binding = await client.query(
-        `SELECT 1 FROM rt_review_tunnel_bindings
-         WHERE tunnel_id = $1 AND session_id = $2 AND revision_id = $3
-         FOR SHARE`,
-        [input.tunnelId, input.sessionId, input.revisionId],
-      );
-      if (binding.rowCount !== 1) return { status: "BINDING_NOT_FOUND" } as const;
+      if (!await checkReviewAccess(client, input)) return { status: "BINDING_NOT_FOUND" } as const;
       const result = await client.query<(ReviewEventRow | { id: null }) & { trimmed_through_id: string }>(
         `WITH retention AS (
            SELECT COALESCE((SELECT trimmed_through_id FROM rt_review_event_retention
@@ -694,23 +744,11 @@ export class PostgresReviewRepository implements ReviewRepository {
     });
   }
 
-  async listPageCommentPage(input: Readonly<{
-    revisionId: string;
-    routePath: string;
-    before?: ReviewPageCursor;
-    limit: number;
-    replyLimit: number;
-  }>): Promise<PageCommentPage> {
+  async listPageCommentPage(input: Parameters<ReviewRepository["listPageCommentPage"]>[0]): Promise<PageCommentPage> {
     return withTransaction(this.#database, (client) => readPageCommentSnapshot(client, input), "snapshot");
   }
 
-  async listReplyPage(input: Readonly<{
-    revisionId: string;
-    routePath: string;
-    threadId: string;
-    before?: ReviewPageCursor;
-    limit: number;
-  }>): Promise<ReviewReplyPage | undefined> {
+  async listReplyPage(input: Parameters<ReviewRepository["listReplyPage"]>[0]): Promise<ReviewReplyPage | undefined> {
     const thread = await this.#database.query<{ status: ReviewThreadStatus }>(
       `SELECT status FROM rt_review_threads
        WHERE id = $1 AND revision_id = $2 AND route_path = $3`,
@@ -808,6 +846,7 @@ type PageCommentThreadRow = QueryResultRow & {
   pin_number: number | null;
   body: string | null;
   content_version: number;
+  workflow_version: number;
   status: ReviewThreadStatus;
   author_account_id: string;
   author_display_name: string;
@@ -852,6 +891,9 @@ type ReviewNotificationRow = QueryResultRow & {
   route_path: string;
   thread_id: string;
   content_type: ReviewMentionContentType;
+  reason: "MENTION" | "REPLY" | "WORKFLOW_REQUEST" | "WORKFLOW_RESULT";
+  source_key: string;
+  workflow_version: number | null;
   content_id: string;
   recipient_account_id: string;
   actor_account_id: string;
@@ -866,6 +908,7 @@ type BoundThreadStatusRow = QueryResultRow & {
 };
 
 type BoundThreadContentRow = QueryResultRow & {
+  workflow_version: number;
   status: ReviewThreadStatus;
   content_version: number;
   author_account_id: string;
@@ -897,13 +940,33 @@ async function lockCurrentAccount(
   return result.rowCount === 1;
 }
 
+async function checkReviewAccess(database: Queryable, input: Readonly<{
+  revisionId: string; tunnelId?: string; sessionId?: string; controlProjectId?: string;
+}>): Promise<boolean> {
+  if (input.controlProjectId !== undefined) {
+    if (input.tunnelId !== undefined || input.sessionId !== undefined) return false;
+    const result = await database.query(
+      "SELECT 1 FROM rt_review_revisions WHERE id = $1 AND project_id = $2 FOR SHARE",
+      [input.revisionId, input.controlProjectId],
+    );
+    return result.rowCount === 1;
+  }
+  if (input.tunnelId === undefined || input.sessionId === undefined) return false;
+  const result = await database.query(
+    `SELECT 1 FROM rt_review_tunnel_bindings WHERE tunnel_id = $1 AND session_id = $2 AND revision_id = $3 FOR SHARE`,
+    [input.tunnelId, input.sessionId, input.revisionId],
+  );
+  return result.rowCount === 1;
+}
+
 async function checkNotificationBinding(
   database: Queryable,
   input: Readonly<{
     actorAccountId: string;
     actorAuthorizationVersion: number;
-    tunnelId: string;
-    sessionId: string;
+    tunnelId?: string;
+    sessionId?: string;
+    controlProjectId?: string;
     revisionId: string;
   }>,
 ): Promise<"FOUND" | "BINDING_NOT_FOUND" | "STALE_AUTHORIZATION"> {
@@ -912,13 +975,7 @@ async function checkNotificationBinding(
     input.actorAccountId,
     input.actorAuthorizationVersion,
   )) return "STALE_AUTHORIZATION";
-  const binding = await database.query(
-    `SELECT 1 FROM rt_review_tunnel_bindings
-     WHERE tunnel_id = $1 AND session_id = $2 AND revision_id = $3
-     FOR SHARE`,
-    [input.tunnelId, input.sessionId, input.revisionId],
-  );
-  return binding.rowCount === 1 ? "FOUND" : "BINDING_NOT_FOUND";
+  return await checkReviewAccess(database, input) ? "FOUND" : "BINDING_NOT_FOUND";
 }
 
 async function lockBoundThreadStatus(
@@ -927,23 +984,20 @@ async function lockBoundThreadStatus(
     threadId: string;
     revisionId: string;
     routePath: string;
-    tunnelId: string;
-    sessionId: string;
+    tunnelId?: string;
+    sessionId?: string;
+    controlProjectId?: string;
   }>,
 ): Promise<ReviewThreadStatus | "DELETED" | undefined> {
+  if (!await checkReviewAccess(database, input)) return undefined;
   const result = await database.query<BoundThreadStatusRow>(
     `SELECT thread.status, thread.deleted_at
-     FROM rt_review_tunnel_bindings AS binding
-     JOIN rt_review_threads AS thread ON thread.revision_id = binding.revision_id
-     WHERE binding.tunnel_id = $1
-       AND binding.session_id = $2
-       AND binding.revision_id = $3
-       AND thread.id = $4
-       AND thread.route_path = $5
-     FOR UPDATE OF binding, thread`,
+     FROM rt_review_threads AS thread
+     WHERE thread.revision_id = $1
+       AND thread.id = $2
+       AND thread.route_path = $3
+     FOR UPDATE OF thread`,
     [
-      input.tunnelId,
-      input.sessionId,
       input.revisionId,
       input.threadId,
       input.routePath,
@@ -959,24 +1013,23 @@ async function lockBoundThreadContent(
     threadId: string;
     revisionId: string;
     routePath: string;
-    tunnelId: string;
-    sessionId: string;
+    tunnelId?: string;
+    sessionId?: string;
+    controlProjectId?: string;
   }>,
 ): Promise<BoundThreadContentRow | undefined> {
+  if (!await checkReviewAccess(database, input)) return undefined;
   const result = await database.query<BoundThreadContentRow>(
     `SELECT thread.status,
-            thread.content_version,
+            thread.content_version, thread.workflow_version,
             thread.author_account_id,
             thread.deleted_at
-     FROM rt_review_tunnel_bindings AS binding
-     JOIN rt_review_threads AS thread ON thread.revision_id = binding.revision_id
-     WHERE binding.tunnel_id = $1
-       AND binding.session_id = $2
-       AND binding.revision_id = $3
-       AND thread.id = $4
-       AND thread.route_path = $5
-     FOR UPDATE OF binding, thread`,
-    [input.tunnelId, input.sessionId, input.revisionId, input.threadId, input.routePath],
+     FROM rt_review_threads AS thread
+     WHERE thread.revision_id = $1
+       AND thread.id = $2
+       AND thread.route_path = $3
+     FOR UPDATE OF thread`,
+    [input.revisionId, input.threadId, input.routePath],
   );
   return result.rows[0];
 }
@@ -988,29 +1041,26 @@ async function lockBoundReplyContent(
     replyId: string;
     revisionId: string;
     routePath: string;
-    tunnelId: string;
-    sessionId: string;
+    tunnelId?: string;
+    sessionId?: string;
+    controlProjectId?: string;
   }>,
 ): Promise<BoundReplyContentRow | undefined> {
+  if (!await checkReviewAccess(database, input)) return undefined;
   const result = await database.query<BoundReplyContentRow>(
     `SELECT thread.status AS thread_status,
             thread.deleted_at AS thread_deleted_at,
             reply.content_version,
             reply.author_account_id,
             reply.deleted_at
-     FROM rt_review_tunnel_bindings AS binding
-     JOIN rt_review_threads AS thread ON thread.revision_id = binding.revision_id
+     FROM rt_review_threads AS thread
      JOIN rt_review_replies AS reply ON reply.thread_id = thread.id
-     WHERE binding.tunnel_id = $1
-       AND binding.session_id = $2
-       AND binding.revision_id = $3
-       AND thread.id = $4
-       AND thread.route_path = $5
-       AND reply.id = $6
-     FOR UPDATE OF binding, thread, reply`,
+     WHERE thread.revision_id = $1
+       AND thread.id = $2
+       AND thread.route_path = $3
+       AND reply.id = $4
+     FOR UPDATE OF thread, reply`,
     [
-      input.tunnelId,
-      input.sessionId,
       input.revisionId,
       input.threadId,
       input.routePath,
@@ -1143,7 +1193,7 @@ async function findPageCommentThreadById(
             thread.anchor,
             thread.pin_number,
             thread.body,
-            thread.content_version,
+            thread.content_version, thread.workflow_version,
             thread.status,
             thread.author_account_id,
             account.display_name AS author_display_name,
@@ -1169,7 +1219,10 @@ async function findPageCommentThreadById(
     [{ id: threadId, status: row.status }],
     replyLimit,
   );
-  return toPageCommentThread(row, replyPages.get(threadId)?.replies ?? []);
+  const history = await database.query<{ version: number; from_status: ReviewThreadStatus; to_status: ReviewThreadStatus; actor_account_id: string; display_name: string; changed_at: Date }>(
+    `SELECT history.*, account.display_name FROM (SELECT * FROM rt_review_workflow_history WHERE thread_id = $1 ORDER BY version DESC LIMIT 100) history JOIN rt_accounts account ON account.id = history.actor_account_id ORDER BY version`, [threadId]);
+  const thread = toPageCommentThread(row, replyPages.get(threadId)?.replies ?? []);
+  return { ...thread, workflowHistory: history.rows.map(item => ({ version: item.version, from: item.from_status, to: item.to_status, actor: { accountId: item.actor_account_id, displayName: item.display_name }, changedAt: item.changed_at })) };
 }
 
 async function findReviewReplyById(
@@ -1382,9 +1435,12 @@ async function syncReviewMentions(
          AND account.id <> $3
          AND account.enabled = true
          AND account.must_change_password = false
+         AND account.roles && ARRAY['DEVELOPER','REVIEWER']::text[]
        ORDER BY account.id`,
       [input.revisionId, input.mentionUsernames, input.actorAccountId],
     );
+  const contentVersion = (await database.query<{ content_version: number }>(input.contentType === "COMMENT" ? "SELECT content_version FROM rt_review_threads WHERE id = $1" : "SELECT content_version FROM rt_review_replies WHERE id = $1", [input.contentId])).rows[0]?.content_version ?? 1;
+  const sourceKey = `mention:${input.contentType}:${input.contentId}:${contentVersion}`;
   await deleteReviewMentions(database, input.contentType, input.contentId);
   for (const { account_id: recipientAccountId } of eligibleResult.rows) {
     await database.query(
@@ -1406,8 +1462,8 @@ async function syncReviewMentions(
     await database.query(
       `INSERT INTO rt_review_notifications
        (revision_id, route_path, thread_id, content_type, content_id,
-        recipient_account_id, actor_account_id, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        recipient_account_id, actor_account_id, created_at, source_key)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT (recipient_account_id, source_key) DO NOTHING`,
       [
         input.revisionId,
         input.routePath,
@@ -1417,6 +1473,7 @@ async function syncReviewMentions(
         recipientAccountId,
         input.actorAccountId,
         input.occurredAt,
+        sourceKey,
       ],
     );
     await recordReviewEvent(database, {
@@ -1438,7 +1495,7 @@ function reviewNotificationSelect(): string {
                  notification.revision_id,
                  notification.route_path,
                  notification.thread_id,
-                 notification.content_type,
+                 notification.content_type, notification.reason, notification.source_key, notification.workflow_version,
                  notification.content_id,
                  notification.recipient_account_id,
                  notification.actor_account_id,
@@ -1456,6 +1513,9 @@ function toReviewNotification(row: ReviewNotificationRow): ReviewNotification {
     routePath: row.route_path,
     threadId: row.thread_id,
     contentType: row.content_type,
+    reason: row.reason,
+    sourceKey: row.source_key,
+    ...(row.workflow_version === null ? {} : { workflowVersion: row.workflow_version }),
     contentId: row.content_id,
     recipientAccountId: row.recipient_account_id,
     actor: {
@@ -1566,6 +1626,7 @@ function toPageCommentThread(
       : {}),
     body: row.body,
     version: row.content_version,
+    workflowVersion: row.workflow_version,
     status: row.status,
     author: {
       accountId: row.author_account_id,
@@ -1604,20 +1665,18 @@ function toReviewReply(row: ReviewReplyRow): ReviewReply {
   };
 }
 
-async function readPageCommentSnapshot(
-  database: Queryable,
-  input: Parameters<ReviewRepository["listPageCommentPage"]>[0],
-): Promise<PageCommentPage> {
+async function readPageCommentSnapshot(database: Queryable,
+  input: Parameters<ReviewRepository["listPageCommentPage"]>[0]): Promise<PageCommentPage> {
     const eventCursorResult = await database.query<{ event_cursor: string }>(
       `SELECT GREATEST(COALESCE(max(id), 0), COALESCE((
-         SELECT trimmed_through_id FROM rt_review_event_retention
-         WHERE revision_id = $1 AND route_path = $2
+         SELECT max(trimmed_through_id) FROM rt_review_event_retention
+         WHERE revision_id = $1 AND ($2::text IS NULL OR route_path = $2)
        ), 0))::text AS event_cursor
        FROM rt_review_events
-       WHERE revision_id = $1 AND route_path = $2`,
-      [input.revisionId, input.routePath],
+       WHERE revision_id = $1 AND ($2::text IS NULL OR route_path = $2)`,
+      [input.revisionId, input.routePath ?? null],
     );
-    const [result, openCountResult] = await Promise.all([
+    const [result, openCountResult, filteredCountResult] = await Promise.all([
       database.query<PageCommentThreadRow>(
       `SELECT thread.id,
               thread.revision_id,
@@ -1626,7 +1685,7 @@ async function readPageCommentSnapshot(
               thread.anchor,
               thread.pin_number,
               thread.body,
-              thread.content_version,
+              thread.content_version, thread.workflow_version,
               thread.status,
               thread.author_account_id,
               account.display_name AS author_display_name,
@@ -1643,7 +1702,9 @@ async function readPageCommentSnapshot(
        LEFT JOIN rt_accounts AS resolver ON resolver.id = thread.resolved_by_account_id
        LEFT JOIN rt_accounts AS deleter ON deleter.id = thread.deleted_by_account_id
        WHERE thread.revision_id = $1
-         AND thread.route_path = $2
+         AND ($2::text IS NULL OR thread.route_path = $2)
+         AND ($6::text IS NULL OR ($6 = 'OPEN' AND thread.status <> 'RESOLVED') OR thread.status = $6)
+         AND ($7::text IS NULL OR thread.author_account_id = $7)
          AND (
            $3::timestamptz IS NULL
            OR (thread.created_at, thread.id) < ($3::timestamptz, $4::text)
@@ -1652,24 +1713,33 @@ async function readPageCommentSnapshot(
        LIMIT $5`,
         [
           input.revisionId,
-          input.routePath,
+          input.routePath ?? null,
           input.before?.createdAt ?? null,
           input.before?.id ?? null,
           input.limit + 1,
+          input.status ?? null,
+          input.authorAccountId ?? null,
         ],
       ),
       database.query<{ open_count: string }>(
          `SELECT count(*)::text AS open_count
          FROM rt_review_threads
          WHERE revision_id = $1
-           AND route_path = $2
-           AND status = 'OPEN'
+           AND ($2::text IS NULL OR route_path = $2)
+           AND status <> 'RESOLVED'
            AND deleted_at IS NULL`,
-        [input.revisionId, input.routePath],
+        [input.revisionId, input.routePath ?? null],
+      ),
+      database.query<{ count: string }>(
+        `SELECT count(*)::text AS count FROM rt_review_threads
+         WHERE revision_id = $1 AND ($2::text IS NULL OR route_path = $2)
+           AND ($3::text IS NULL OR ($3 = 'OPEN' AND status <> 'RESOLVED') OR status = $3)
+           AND ($4::text IS NULL OR author_account_id = $4)`,
+        [input.revisionId, input.routePath ?? null, input.status ?? null, input.authorAccountId ?? null],
       ),
     ]);
     const selected = result.rows.slice(0, input.limit);
-    const replies = await listReplyPagesForThreads(
+    const replies = input.summaryOnly ? new Map<string, ReviewReplyPage>() : await listReplyPagesForThreads(
       database,
       selected.map((row) => ({ id: row.id, status: row.status })),
       input.replyLimit,
@@ -1683,6 +1753,7 @@ async function readPageCommentSnapshot(
         };
       }),
       openCount: Number.parseInt(openCountResult.rows[0]?.open_count ?? "0", 10),
+      filteredCount: Number(filteredCountResult.rows[0]?.count ?? "0"),
       eventCursor: eventCursorResult.rows[0]?.event_cursor ?? "0",
       pageInfo: reviewPageInfo(result.rows.length > input.limit, selected.at(-1)),
     };

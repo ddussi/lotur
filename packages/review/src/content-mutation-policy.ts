@@ -20,7 +20,7 @@ export function checkContentMutation(
     return "FORBIDDEN";
   if (
     input.content.deleted ||
-    (input.action === "UPDATE" && (input.thread.status !== "OPEN" || input.thread.deleted))
+    (input.action === "UPDATE" && (input.thread.status === "RESOLVED" || input.thread.deleted))
   )
     return "STATE_CONFLICT";
   if (input.content.version !== input.expectedVersion) return "VERSION_CONFLICT";

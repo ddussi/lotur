@@ -22,6 +22,7 @@ export type GatewayConfig = Readonly<{
   authSessionHmacPreviousKeys?: readonly Uint8Array[];
   secureCookies: boolean;
   autoMigrate: boolean;
+  reviewWorkflowEnabled?: boolean;
   initialKillSwitch: boolean;
   gatewayAdmissionReady: boolean;
   metricsBearerToken?: string;
@@ -527,6 +528,7 @@ export function readGatewayConfig(
     contentDomain,
     ...(publicContentOrigin === undefined ? {} : { publicContentOrigin }),
     secureCookies: databaseUrl !== undefined && !insecureHttpAuth,
+    ...(environment.REVIEW_WORKFLOW_ENABLED === undefined ? {} : { reviewWorkflowEnabled: strictBoolean(environment.REVIEW_WORKFLOW_ENABLED, "REVIEW_WORKFLOW_ENABLED", false) }),
     autoMigrate: strictBoolean(environment.AUTO_MIGRATE, "AUTO_MIGRATE", false),
     initialKillSwitch: databaseUrl === undefined && strictBoolean(
       environment.KILL_SWITCH_ENABLED,

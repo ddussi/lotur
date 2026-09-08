@@ -18,6 +18,16 @@ test("reply drafts are scoped to routes and survive failed or superseded submiss
   assert.equal(drafts.read("/two", "thread"), "another route");
 });
 
+test("a submission cannot clear a newer draft that returns to the same text", () => {
+  const drafts = createDraftStore();
+  drafts.write("/", "thread", "same text");
+  const submitted = drafts.capture("/", "thread");
+  drafts.write("/", "thread", "changed while saving");
+  drafts.write("/", "thread", "same text");
+  assert.equal(drafts.acknowledge(submitted), false);
+  assert.equal(drafts.read("/", "thread"), "same text");
+});
+
 test("refresh revalidates every loaded comment and reply range instead of retaining stale records", async () => {
   const old = comment("old");
   const latest = comment("latest");

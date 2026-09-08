@@ -74,16 +74,21 @@ test("Shadow DOM review overlay works with strict nonce CSP and survives API fai
     await expect(homeThread.locator(".reply")).toContainText("reviewer reply");
     expect(await page.evaluate(() => window.reviewTunnelReplyXss)).toBeUndefined();
 
-    page.once("dialog", (dialog) => dialog.accept("edited home feedback"));
     await homeThread.getByRole("button", { name: "Edit comment" }).click();
+    await homeThread.getByRole("textbox", { name: "Edit comment", exact: true }).fill("edited home feedback");
+    await homeThread.locator(".edit-form").getByRole("button", { name: "Save changes" }).click();
     await expect(homeThread).toContainText("edited home feedback");
     runtime.conflictNextContentMutation();
-    page.once("dialog", (dialog) => dialog.accept("stale home feedback"));
     await homeThread.getByRole("button", { name: "Edit comment" }).click();
+    await homeThread.getByRole("textbox", { name: "Edit comment", exact: true }).fill("stale home feedback");
+    await homeThread.locator(".edit-form").getByRole("button", { name: "Save changes" }).click();
     await expect(overlay.getByRole("status")).toContainText("REVIEW_VERSION_CONFLICT");
+    await expect(homeThread.getByRole("textbox", { name: "Edit comment", exact: true })).toHaveValue("stale home feedback");
+    await homeThread.getByRole("button", { name: "Cancel edit" }).click();
 
-    page.once("dialog", (dialog) => dialog.accept("edited reviewer reply"));
     await homeThread.getByRole("button", { name: "Edit reply" }).click();
+    await homeThread.getByRole("textbox", { name: "Edit reply", exact: true }).fill("edited reviewer reply");
+    await homeThread.locator(".edit-form").getByRole("button", { name: "Save changes" }).click();
     await expect(homeThread.locator(".reply")).toContainText("edited reviewer reply");
     page.once("dialog", (dialog) => dialog.accept());
     await homeThread.getByRole("button", { name: "Delete reply" }).click();
@@ -132,6 +137,7 @@ test("Shadow DOM review overlay works with strict nonce CSP and survives API fai
     await expect(notificationPanel.locator(".notification")).toContainText("Reviewer mentioned you");
     await notificationPanel.getByRole("button", { name: "Mark read" }).click();
     await expect(notificationPanel.locator("summary")).toHaveText("Notifications (0 unread)");
+    await developerOverlay.getByRole("combobox", { name: "Comment status" }).selectOption("ALL");
     const developerThread = developerOverlay.locator(".thread").first();
     await developerThread.getByRole("button", { name: "Resolve" }).click();
     await expect(developerThread.locator(".thread-status")).toHaveText("Resolved");
@@ -230,6 +236,8 @@ test("loaded older comments and replies stay current while pagination and peer e
     await page.context().addCookies([{ name: "rt_session_dev", value: runtime.contentSessionToken, url: runtime.shareUrl }]);
     await page.goto(runtime.shareUrl);
     const overlay = page.locator("review-tunnel-overlay");
+    // Follow status changes across both groups now that the default filter is unresolved.
+    await overlay.getByRole("combobox", { name: "Comment status" }).selectOption("ALL");
     await expect(overlay.locator(".thread")).toHaveCount(100);
     const activeDraft = overlay.locator(".thread").last().getByRole("textbox", { name: "Reply to comment" });
     await activeDraft.fill("draft during pagination");
@@ -249,9 +257,9 @@ test("loaded older comments and replies stay current while pagination and peer e
     await expect(thread.locator(".reply").first()).toContainText("oldest reply edited remotely");
     await runtime.service.deleteReply({ ...base, commentId: oldest.id, replyId: oldestReply.id, expectedVersion: 2 });
     await expect(thread.locator(".reply").first()).toContainText("Deleted reply");
-    await runtime.service.changePageCommentStatus({ ...base, actor: runtime.developerActor, commentId: oldest.id, expectedStatus: "OPEN", status: "RESOLVED" });
+    await runtime.service.changePageCommentStatus({ ...base, actor: runtime.developerActor, commentId: oldest.id, expectedStatus: "OPEN", expectedWorkflowVersion: 1, status: "RESOLVED" });
     await expect(thread.locator(".thread-status")).toHaveText("Resolved");
-    await runtime.service.changePageCommentStatus({ ...base, actor: runtime.developerActor, commentId: oldest.id, expectedStatus: "RESOLVED", status: "OPEN" });
+    await runtime.service.changePageCommentStatus({ ...base, actor: runtime.developerActor, commentId: oldest.id, expectedStatus: "RESOLVED", expectedWorkflowVersion: 2, status: "OPEN" });
     await expect(thread.locator(".thread-status")).toHaveText("Open");
     await expect(draft).toHaveValue("draft during live refresh");
     await runtime.service.deleteComment({ ...base, commentId: oldest.id, expectedVersion: 2 });
@@ -363,7 +371,199 @@ test("reply submission preserves newer typing and storage failures preserve the 
   } finally { await runtime.close(); }
 });
 
-async function startReviewRuntime() {
+const responsiveFixture = `
+  <style nonce="review-tunnel-test">
+    body { margin: 20px; }
+    .fixture-grid { display: flex; gap: 20px; width: 760px; }
+    .review-card { box-sizing: border-box; width: 340px; height: 200px; flex: none; padding: 20px; background: #dfefff; }
+    .fixture-spacer { width: 340px; height: 100px; flex: none; background: #eee; }
+    @media (max-width: 1000px) {
+      .fixture-grid { width: 280px; flex-direction: column; }
+      .review-card { order: 2; width: 280px; height: 260px; }
+      .fixture-spacer { height: 350px; width: 280px; }
+    }
+  </style>
+  <div class="fixture-grid">
+    <section class="review-card" id="card" data-review-id="checkout:primary">
+      <h2>Checkout card</h2><button id="checkout-action">Buy item</button>
+    </section>
+    <div class="fixture-spacer">Responsive sibling</div>
+  </div>`;
+
+async function openReviewPage(page, runtime) {
+  await page.context().addCookies([{
+    name: "rt_session_dev", value: runtime.contentSessionToken, url: runtime.shareUrl,
+  }]);
+  await page.goto(runtime.shareUrl);
+  const overlay = page.locator("review-tunnel-overlay");
+  await expect(overlay.getByRole("heading", { name: "Page review" })).toBeVisible();
+  return overlay;
+}
+
+async function pinCard(page, overlay, body, point = false) {
+  const box = await page.locator("#card").boundingBox();
+  await overlay.getByRole("button", { name: "Select area or pin" }).click();
+  await page.mouse.move(box.x + box.width * .1, box.y + box.height * .1);
+  await page.mouse.down();
+  if (!point) await page.mouse.move(box.x + box.width * .8, box.y + box.height * .8, { steps: 4 });
+  await page.mouse.up();
+  await overlay.getByRole("textbox", { name: "Comment", exact: true }).fill(body);
+  await overlay.getByRole("button", { name: "Comment", exact: true }).click();
+  await expect(overlay.locator(".thread").filter({ hasText: body })).toBeVisible();
+}
+
+async function expectCardPinAligned(page) {
+  await expect.poll(() => page.evaluate(() => {
+    const card = document.querySelector("#card").getBoundingClientRect();
+    const marker = document.querySelector("review-tunnel-overlay").shadowRoot.querySelector(".marker.rect .marker-shape");
+    return Math.max(
+      Math.abs(Number(marker.getAttribute("x")) - (card.x + card.width * .1)),
+      Math.abs(Number(marker.getAttribute("y")) - (card.y + card.height * .1)),
+      Math.abs(Number(marker.getAttribute("width")) - card.width * .7),
+      Math.abs(Number(marker.getAttribute("height")) - card.height * .7),
+    );
+  })).toBeLessThan(1);
+}
+
+test("pin visibility supports all-off, individual toggles, live updates and reload", async ({ page }, testInfo) => {
+  const runtime = await startReviewRuntime(responsiveFixture);
+  try {
+    const overlay = await openReviewPage(page, runtime);
+    await pinCard(page, overlay, "card area");
+    await page.evaluate(() => document.querySelector("#card").removeAttribute("data-review-id"));
+    await pinCard(page, overlay, "card point", true);
+    const pointAnchor = await page.evaluate(async () =>
+      (await (await fetch("/_review-tunnel/review/comments?path=/")).json()).comments.find((item) => item.body === "card point").anchor);
+    expect(pointAnchor.element).toMatchObject({ attribute: "id", value: "card" });
+    await page.evaluate(() => document.querySelector("#card").setAttribute("data-review-id", "checkout:primary"));
+    const area = overlay.locator(".thread").filter({ hasText: "card area" });
+    const point = overlay.locator(".thread").filter({ hasText: "card point" });
+    await expect(overlay.locator(".marker:not([hidden])")).toHaveCount(2);
+    await page.screenshot({ path: testInfo.outputPath("pin-controls.png") });
+    // The region interior must not intercept interaction with the reviewed app.
+    await page.evaluate(() => document.querySelector("#checkout-action").addEventListener("click", () => { window.checkoutClicked = true; }));
+    await page.getByRole("button", { name: "Buy item" }).click();
+    expect(await page.evaluate(() => window.checkoutClicked)).toBe(true);
+
+    await overlay.getByRole("button", { name: "Hide all pins" }).click();
+    await expect(overlay.locator(".marker:not([hidden])")).toHaveCount(0);
+    await expect(overlay.getByRole("button", { name: "Open pin 1 comment" })).toHaveCount(0);
+    await expect(overlay.locator(".thread")).toHaveCount(2);
+    await area.getByRole("button", { name: "Show pin", exact: true }).click();
+    await expect(overlay.locator(".marker:not([hidden])")).toHaveCount(1);
+    await expect(overlay.locator(".marker.rect")).toBeVisible();
+    await area.getByRole("button", { name: "Hide pin", exact: true }).click();
+    await expect(overlay.locator(".marker:not([hidden])")).toHaveCount(0);
+    await area.getByRole("button", { name: "Go to pin 1", exact: true }).click();
+    await expect(overlay.locator(".marker.rect")).toBeVisible();
+    await expect(area).toHaveClass(/active/);
+    await area.getByRole("button", { name: "Go to pin 1", exact: true }).click();
+    await expect(overlay.locator(".marker.rect")).toBeVisible();
+    await overlay.getByRole("button", { name: "Hide all pins" }).click();
+    await overlay.getByRole("button", { name: "Show all pins" }).click();
+    await point.getByRole("button", { name: "Hide pin", exact: true }).click();
+    await expect(overlay.locator(".marker.point")).toBeHidden();
+
+    const peer = await page.context().newPage();
+    const peerOverlay = await openReviewPage(peer, runtime);
+    await expect(peerOverlay.locator(".marker:not([hidden])")).toHaveCount(2);
+    await peerOverlay.getByRole("textbox", { name: "Comment", exact: true }).fill("live update");
+    await peerOverlay.getByRole("button", { name: "Comment", exact: true }).click();
+    await expect(overlay.locator(".thread").filter({ hasText: "live update" })).toBeVisible();
+    await expect(overlay.locator(".marker.point")).toBeHidden();
+    await overlay.getByRole("button", { name: "Hide all pins" }).click();
+    await page.reload();
+    await expect(overlay.getByRole("button", { name: "Show all pins" })).toBeVisible();
+    await expect(overlay.locator(".marker")).toHaveCount(2);
+    await expect(overlay.locator(".marker:not([hidden])")).toHaveCount(0);
+    await expect(peerOverlay.locator(".marker:not([hidden])")).toHaveCount(2);
+    await peer.close();
+  } finally {
+    await page.close();
+    await runtime.close();
+  }
+});
+
+test("element pins follow responsive reflow and hide missing, duplicate or invisible targets", async ({ page }) => {
+  const runtime = await startReviewRuntime(responsiveFixture);
+  try {
+    const overlay = await openReviewPage(page, runtime);
+    await pinCard(page, overlay, "responsive area");
+    const marker = overlay.locator(".marker.rect");
+    await expectCardPinAligned(page);
+    const stored = await page.evaluate(async () => (await (await fetch("/_review-tunnel/review/comments?path=/")).json()).comments[0].anchor);
+    expect(stored.element).toMatchObject({ attribute: "data-review-id", value: "checkout:primary" });
+    const peer = await page.context().newPage();
+    await peer.setViewportSize({ width: 900, height: 800 });
+    const peerOverlay = await openReviewPage(peer, runtime);
+    await expect(peerOverlay.locator(".marker.rect")).toBeVisible();
+    await expectCardPinAligned(peer);
+    await peer.close();
+
+    for (const width of [900, 600, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expectCardPinAligned(page);
+    }
+    await page.evaluate(() => { document.querySelector("#card").hidden = true; });
+    await expect(marker).toBeHidden();
+    await expect(overlay.locator(".anchor-state")).toContainText("Target hidden");
+    await page.evaluate(() => { document.querySelector("#card").hidden = false; });
+    await expect(marker).toBeVisible();
+    await page.evaluate(() => {
+      const clone = document.querySelector("#card").cloneNode(true);
+      clone.id = "duplicate-card";
+      document.querySelector(".fixture-grid").append(clone);
+    });
+    await expect(marker).toBeHidden();
+    await expect(overlay.locator(".anchor-state")).toContainText("not unique");
+    await page.evaluate(() => document.querySelector("#duplicate-card").remove());
+    await expect(marker).toBeVisible();
+    await page.evaluate(() => { window.savedCard = document.querySelector("#card"); window.savedCard.remove(); });
+    await expect(marker).toBeHidden();
+    await page.evaluate(() => document.querySelector(".fixture-grid").prepend(window.savedCard));
+    await expect(marker).toBeVisible();
+    await page.evaluate(() => { document.querySelector("#card").style.marginTop = "240px"; });
+    await expectCardPinAligned(page);
+    await page.reload();
+    await expect(marker).toBeVisible();
+    await expectCardPinAligned(page);
+  } finally {
+    await page.close();
+    await runtime.close();
+  }
+});
+
+test("coordinate-only pins disclose capture size and disappear when page geometry differs", async ({ page }) => {
+  const runtime = await startReviewRuntime();
+  try {
+    const overlay = await openReviewPage(page, runtime);
+    await overlay.getByRole("button", { name: "Select area or pin" }).click();
+    await page.mouse.click(150, 200);
+    await overlay.getByRole("textbox", { name: "Comment", exact: true }).fill("coordinate pin");
+    await overlay.getByRole("button", { name: "Comment", exact: true }).click();
+    const marker = overlay.locator(".marker.point");
+    await expect(marker).toBeVisible();
+    await expect(overlay.locator(".anchor-state")).toContainText("Approximate page coordinates · Captured at 1280 × 720");
+    await page.setViewportSize({ width: 900, height: 720 });
+    await expect(marker).toBeHidden();
+    await expect(overlay.locator(".anchor-state")).toContainText("Page layout differs");
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await expect(marker).toBeVisible();
+    await page.evaluate(() => { document.body.style.height = "2000px"; });
+    await expect(marker).toBeHidden();
+    await page.evaluate(() => { document.body.style.height = ""; });
+    await expect(marker).toBeVisible();
+    runtime.failCommentReads();
+    await page.evaluate(() => history.pushState({}, "", "/failed-route"));
+    await expect(overlay.getByRole("status")).toContainText("Review unavailable:");
+    await expect(overlay.locator(".marker")).toHaveCount(0);
+  } finally {
+    await page.close();
+    await runtime.close();
+  }
+});
+
+async function startReviewRuntime(fixture = "") {
   const authService = new AuthService({
     repository: new InMemoryAuthRepository(),
     passwordHasher: new TestHasher(),
@@ -430,6 +630,7 @@ async function startReviewRuntime() {
     response.end(`<!doctype html>
       <html><body>
         <h1>Review fixture app</h1>
+        ${fixture}
         <script type="module" nonce="review-tunnel-test" src="/_review-tunnel/review/bootstrap.js"></script>
       </body></html>`);
   });
@@ -547,6 +748,11 @@ async function startReviewRuntime() {
     },
     developerActor: reviewActorFromPrincipal(developer.principal),
     shareUrl: active.shareUrl,
+    controlUrl: `http://control.localhost:${gatewayPort}`,
+    controlSessionToken: reviewer.sessionToken,
+    developerControlSessionToken: developer.sessionToken,
+    async stopTunnel() { await client.close(); },
+    setKillSwitch: enabled => gateway.setKillSwitch(enabled),
     contentSessionToken: content.sessionToken,
     developerContentSessionToken: developerContent.sessionToken,
     localPaths,
@@ -616,3 +822,225 @@ function sendControl(port, tunnelId, sessionToken) {
     outgoing.end(body);
   });
 }
+
+test("review regression: live refresh preserves an unsent reply", async ({ page }) => {
+  const runtime = await startReviewRuntime();
+  try {
+    await page.context().addCookies([{ name: "rt_session_dev", value: runtime.contentSessionToken, url: runtime.shareUrl }]);
+    const api = new URL("/_review-tunnel/review/comments", runtime.shareUrl).href;
+    const headers = { origin: new URL(runtime.shareUrl).origin };
+    const created = await page.request.post(api, { headers, data: { path: "/", body: "original thread" } });
+    expect(created.status()).toBe(201);
+    await page.goto(runtime.shareUrl);
+    const overlay = page.locator("review-tunnel-overlay");
+    await expect(overlay.locator(".thread")).toHaveCount(1);
+    await overlay.getByRole("textbox", { name: "Reply to comment" }).fill("unsent reply draft");
+    const event = await page.request.post(api, { headers, data: { path: "/", body: "another comment" } });
+    expect(event.status()).toBe(201);
+    await expect(overlay.locator(".thread")).toHaveCount(2);
+    const actual = await overlay.locator(".thread").first().getByRole("textbox", { name: "Reply to comment" }).inputValue();
+    await expect(overlay.locator(".thread").first().getByRole("textbox", { name: "Reply to comment" })).toBeFocused();
+    expect(actual).toBe("unsent reply draft");
+    const editor = overlay.locator(".thread").first().getByRole("textbox", { name: "Reply to comment" });
+    await editor.evaluate(input => {
+      input.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
+      input.value = "조합 중인 글";
+    });
+    const refresh = await page.request.post(api, { headers, data: { path: "/", body: "refresh during composition" } });
+    expect(refresh.status()).toBe(201);
+    await expect(overlay.locator(".thread")).toHaveCount(3);
+    await expect(editor).toHaveValue("조합 중인 글");
+    await editor.evaluate(input => {
+      input.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true }));
+      input.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    });
+  } finally { await page.close(); await runtime.close(); }
+});
+
+test("review regression: deletion updates an older loaded comment", async ({ page }) => {
+  const runtime = await startReviewRuntime();
+  try {
+    await page.context().addCookies([{ name: "rt_session_dev", value: runtime.contentSessionToken, url: runtime.shareUrl }]);
+    const api = new URL("/_review-tunnel/review/comments", runtime.shareUrl).href;
+    const headers = { origin: new URL(runtime.shareUrl).origin };
+    let oldest;
+    for (let i = 0; i < 101; i++) {
+      const created = await page.request.post(api, { headers, data: { path: "/", body: `comment ${i}` } });
+      expect(created.status()).toBe(201);
+      if (i === 0) oldest = (await created.json()).comment;
+    }
+    await page.goto(runtime.shareUrl);
+    const overlay = page.locator("review-tunnel-overlay");
+    await expect(overlay.locator(".thread")).toHaveCount(100);
+    await overlay.getByRole("button", { name: "Load older comments" }).click();
+    await expect(overlay.locator(".thread")).toHaveCount(101);
+    const oldRow = overlay.locator(` .thread[data-review-thread-id="${oldest.id}"]`);
+    await expect(oldRow.locator(".comment-body")).toHaveText("comment 0");
+    const mutationComplete = page.waitForResponse(response => response.request().method() === "DELETE");
+    page.once("dialog", dialog => dialog.accept());
+    await oldRow.getByRole("button", { name: "Delete comment" }).click();
+    expect((await mutationComplete).status()).toBe(200);
+    await expect(overlay.getByRole("status")).toHaveText("100 open · 101 loaded");
+    const actual = await oldRow.locator(".comment-body").textContent();
+    expect(actual).toBe("Deleted comment");
+  } finally { await page.close(); await runtime.close(); }
+});
+
+test("review regression: a valid 4000-character Korean comment is accepted", async ({ page }) => {
+  const runtime = await startReviewRuntime();
+  try {
+    await page.context().addCookies([{ name: "rt_session_dev", value: runtime.contentSessionToken, url: runtime.shareUrl }]);
+    const body = "가".repeat(4000);
+    const response = await page.request.post(new URL("/_review-tunnel/review/comments", runtime.shareUrl).href, {
+      headers: { origin: new URL(runtime.shareUrl).origin }, data: { path: "/", body },
+    });
+    expect(response.status()).toBe(201);
+  } finally { await page.close(); await runtime.close(); }
+});
+
+test("review panel, server filters and inline drafts survive navigation and live refresh", async ({ page }) => {
+  const runtime = await startReviewRuntime();
+  try {
+    const overlay = await openReviewPage(page, runtime);
+    await overlay.getByRole("textbox", { name: "Comment", exact: true }).fill("A comment draft");
+    await overlay.getByRole("button", { name: "Close review panel" }).click();
+    await expect(overlay.locator(".panel")).toBeHidden();
+    await page.getByRole("heading", { name: "Review fixture app" }).click();
+    await overlay.getByRole("button", { name: "Open review panel" }).click();
+    await expect(overlay.getByRole("textbox", { name: "Comment", exact: true })).toHaveValue("A comment draft");
+    await page.evaluate(() => history.pushState({}, "", "/elsewhere"));
+    await expect(overlay.getByRole("textbox", { name: "Comment", exact: true })).toHaveValue("");
+    await page.goBack();
+    await expect(overlay.getByRole("textbox", { name: "Comment", exact: true })).toHaveValue("A comment draft");
+    await overlay.getByRole("button", { name: "Comment", exact: true }).click();
+    const thread = overlay.locator(".thread").first();
+    await thread.getByRole("textbox", { name: "Reply to comment" }).fill("Preserved across filters");
+    await overlay.getByRole("combobox", { name: "Comment status" }).selectOption("RESOLVED");
+    await expect(overlay.locator(".thread")).toHaveCount(0);
+    await overlay.getByRole("combobox", { name: "Comment status" }).selectOption("OPEN");
+    await expect(thread.getByRole("textbox", { name: "Reply to comment" })).toHaveValue("Preserved across filters");
+    await thread.getByRole("button", { name: "Edit comment" }).click();
+    const editor = thread.getByRole("textbox", { name: "Edit comment", exact: true });
+    await editor.fill("My new draft");
+    const id = await thread.getAttribute("data-review-thread-id");
+    const response = await page.request.patch(new URL(`/_review-tunnel/review/comments/${id}`, runtime.shareUrl).href, {
+      headers: { origin: new URL(runtime.shareUrl).origin }, data: { path: "/", body: "Other window edit", expectedVersion: 1 },
+    });
+    expect(response.status()).toBe(200);
+    await expect(thread.locator(".comment-body")).toHaveText("Other window edit");
+    await expect(editor).toHaveValue("My new draft");
+    await expect(editor).toBeFocused();
+    await expect(thread.getByRole("button", { name: "Save changes" })).toBeDisabled();
+    await thread.getByRole("button", { name: "Use latest version and keep draft" }).click();
+    await thread.getByRole("button", { name: "Save changes" }).click();
+    await expect(thread.locator(".comment-body")).toHaveText("My new draft");
+  } finally { await page.close(); await runtime.close(); }
+});
+
+
+test("persistent review hub returns from login and accepts offline replies", async ({ page }) => {
+  const runtime = await startReviewRuntime();
+  try {
+    await page.context().addCookies([{ name: "rt_session_dev", value: runtime.contentSessionToken, url: runtime.shareUrl }]);
+    await page.goto(runtime.shareUrl);
+    const overlay = page.locator("review-tunnel-overlay");
+    await overlay.getByRole("textbox", { name: "Comment", exact: true }).fill("Offline hub thread");
+    await overlay.getByRole("button", { name: "Comment", exact: true }).click();
+    const permanent = overlay.getByRole("link", { name: "Permanent link" });
+    await expect(permanent).toBeVisible();
+    const href = await permanent.getAttribute("href");
+    await page.goto(href);
+    await expect(page.getByRole("heading", { name: "Review Tunnel 로그인" })).toBeVisible();
+    await page.getByLabel("아이디").fill("reviewer");
+    await page.getByLabel("비밀번호", { exact: true }).fill("reviewer-password-2026");
+    await page.getByRole("button", { name: "로그인" }).click();
+    await expect(page).toHaveURL(href);
+    await expect(page.locator(".thread")).toContainText("Offline hub thread");
+    await page.getByRole("link", { name: "앱에서 보기", exact: false }).click();
+    await expect(page).toHaveURL(runtime.shareUrl);
+    await expect(page.locator("review-tunnel-overlay .thread.active")).toContainText("Offline hub thread");
+    expect(runtime.localPaths.every(path => !path.startsWith("/_review-tunnel/"))).toBe(true);
+    await page.goto(href);
+    await runtime.stopTunnel();
+    await page.getByRole("button", { name: "새로고침" }).click();
+    await expect(page.getByText("이 버전의 앱이 꺼져 있습니다.", { exact: false })).toBeVisible();
+    await page.getByRole("textbox", { name: "Reply to comment" }).fill("터널 종료 후 답글");
+    await page.getByRole("button", { name: "Reply", exact: true }).click();
+    await expect(page.locator(".reply")).toContainText("터널 종료 후 답글");
+    await page.reload();
+    await expect(page.locator(".reply")).toContainText("터널 종료 후 답글");
+    await page.getByRole("link", { name: "리뷰함", exact: true }).click();
+    await expect(page.getByRole("link", { name: "storefront" })).toBeVisible();
+  } finally { await page.close(); await runtime.close(); }
+});
+
+
+test("review workflow, mention selection, inbox and emergency read-only mode work together", async ({ page }) => {
+  const runtime = await startReviewRuntime();
+  try {
+    const overlay = await openReviewPage(page, runtime);
+    const input = overlay.getByRole("textbox", { name: "Comment", exact: true });
+    await input.fill("@dev");
+    await expect(overlay.getByRole("option", { name: /developer/ })).toBeVisible();
+    await input.press("Enter");
+    await expect(input).toHaveValue("@developer ");
+    await input.fill("@developer 버튼을 고쳐 주세요");
+    await overlay.getByRole("button", { name: "Comment", exact: true }).click();
+    const permalink = overlay.getByRole("link", { name: "Permanent link" });
+    await expect(permalink).toBeVisible();
+    const href = await permalink.getAttribute("href");
+    await page.context().addCookies([{ name: "rt_control_dev", value: runtime.developerControlSessionToken, url: runtime.controlUrl }]);
+    await page.goto(href);
+    await page.getByRole("textbox", { name: "Reply to comment" }).fill("수정했습니다");
+    await page.getByRole("button", { name: "Reply", exact: true }).click();
+    await expect(page.locator(".reply")).toContainText("수정했습니다");
+    await page.getByRole("button", { name: "Request review", exact: true }).click();
+    await expect(page.locator(".thread-status")).toHaveText("Needs review");
+    await page.context().addCookies([{ name: "rt_control_dev", value: runtime.controlSessionToken, url: runtime.controlUrl }]);
+    await page.reload();
+    await expect(page.locator("#inbox summary")).toContainText("읽지 않음 2개");
+    await page.locator("#inbox summary").click();
+    await expect(page.locator("#notifications")).toContainText("답글을 남겼습니다");
+    await page.getByRole("button", { name: "읽음으로 표시", exact: true }).last().click();
+    await expect(page.locator("#inbox summary")).toContainText("읽지 않음 1개");
+    await page.getByRole("button", { name: "Confirm resolved", exact: true }).click();
+    await expect(page.locator(".thread-status")).toHaveText("Resolved");
+    await page.locator(".history summary").click();
+    await expect(page.locator(".history")).toContainText("NEEDS_REVIEW → RESOLVED");
+    await page.getByRole("button", { name: "새로고침", exact: true }).click();
+    await expect(page.locator(".history")).toHaveAttribute("open", "");
+    await page.screenshot({ path: "/private/tmp/lotur-review-hub.png", fullPage: true });
+    runtime.setKillSwitch(true);
+    await page.reload();
+    await expect(page.getByText("공유 중지 상태입니다.", { exact: false })).toBeVisible();
+    const id = href.split("/").at(-1);
+    const write = await page.request.post(runtime.controlUrl + "/api/reviews/comments/" + id + "/replies", {
+      headers: { origin: runtime.controlUrl }, data: { path: "/", body: "blocked" },
+    });
+    expect(write.status()).toBe(503);
+    const foreign = await page.request.patch(runtime.controlUrl + "/api/reviews/comments/" + id, {
+      headers: { origin: "http://foreign.invalid" }, data: { path: "/", body: "forged", expectedVersion: 1 },
+    });
+    expect(foreign.status()).toBe(403);
+  } finally { await page.close(); await runtime.close(); }
+});
+
+
+test("mobile review panel starts closed and leaves the app usable", async ({ page }) => {
+  const runtime = await startReviewRuntime();
+  try {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.context().addCookies([{ name: "rt_session_dev", value: runtime.contentSessionToken, url: runtime.shareUrl }]);
+    await page.goto(runtime.shareUrl);
+    const overlay = page.locator("review-tunnel-overlay");
+    await expect(overlay.locator(".panel")).toBeHidden();
+    await overlay.getByRole("button", { name: "Open review panel" }).click();
+    await expect(overlay.locator(".panel")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Review fixture app" })).toBeVisible();
+    await overlay.getByRole("textbox", { name: "Comment", exact: true }).fill("모바일 초안");
+    await page.screenshot({ path: "/private/tmp/lotur-review-mobile.png", fullPage: true });
+    await overlay.getByRole("button", { name: "Close review panel" }).click();
+    await overlay.getByRole("button", { name: "Open review panel" }).click();
+    await expect(overlay.getByRole("textbox", { name: "Comment", exact: true })).toHaveValue("모바일 초안");
+  } finally { await page.close(); await runtime.close(); }
+});

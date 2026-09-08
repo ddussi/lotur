@@ -5,6 +5,8 @@ import { createGatewaySessions } from "./gateway-session-lifecycle.ts";
 import { startAuthorizationRevalidation } from "./authorization-revalidation.ts";
 import type { GatewaySession } from "./gateway-session.ts";
 import { handleReviewerRequest, handleReviewerUpgrade } from "./gateway-streams.ts";
+import { reviewActorFromPrincipal } from "./review-http.ts";
+import { createReviewControlHandler } from "./review-control.ts";
 import {
   writeRawError,
   writeGatewayError,
@@ -202,6 +204,11 @@ export function createGatewayServer(options: GatewayServerOptions = {}): Gateway
       : createReviewHttpHandler({
           service: options.reviewService,
           resolveTunnel: resolveReviewTunnel,
+          controlOrigin(tunnel) {
+            const origin = new URL(tunnel.publicOrigin);
+            origin.hostname = options.controlHost ?? `control.${contentDomain}`;
+            return origin.origin;
+          },
           ...(options.reviewEventStreamPolicy === undefined
             ? {}
             : { eventStreamPolicy: options.reviewEventStreamPolicy }),
@@ -260,7 +267,25 @@ export function createGatewayServer(options: GatewayServerOptions = {}): Gateway
           },
           ...(reviewHttp === undefined
             ? {}
-            : { clientControlExtension: reviewHttp.clientControlExtension }),
+            : { clientControlExtension: reviewHttp.clientControlExtension,
+                reviewControlExtension: createReviewControlHandler({
+                  service: options.reviewService!,
+                  isReadOnly: () => operations.isKillSwitchEnabled(),
+                  async activeTargets(principal, revisionId, threadId) {
+                    const targets: { url: string; label: string }[] = [];
+                    for (const session of sessions.values()) {
+                      const target = resolveReviewTunnel(session.tunnelId);
+                      if (!target?.active) continue;
+                      try {
+                        const context = await options.reviewService!.getContext({
+                          actor: reviewActorFromPrincipal(principal), tunnelId: target.tunnelId, sessionId: target.sessionId,
+                        });
+                        if (context.revision.id === revisionId) targets.push({ url: `${target.publicOrigin}/_review-tunnel/review/focus?thread=${encodeURIComponent(threadId)}`, label: `앱에서 보기 · ${target.tunnelId}` });
+                      } catch { /* A session may close while the list is being built. */ }
+                    }
+                    return targets;
+                  },
+                }) }),
           reserveCarrierCredential: admission.reserveCarrierCredential,
           admitLoginIntent(remoteAddress, _targetHost) {
             return loginIntentLimiter.admit(remoteAddress);

@@ -27,16 +27,16 @@ export function operationsPage(killSwitchEnabled: boolean): string {
   );
 }
 
-export function loginPage(intent: string | null, error: string | undefined): string {
-  return page("Review Tunnel 로그인", `${error === undefined ? "" : `<p class="error">${escapeHtml(error)}</p>`}<p>관리자가 발급한 계정으로 로그인하세요.</p><form method="post" action="/login"><input type="hidden" name="intent" value="${escapeHtml(intent ?? "")}"><label>아이디 <input name="username" autocomplete="username" required></label><label>비밀번호 <input type="password" name="password" autocomplete="current-password" required></label><button type="submit">로그인</button></form>`);
+export function loginPage(intent: string | null, error: string | undefined, returnTo = ""): string {
+  return page("Review Tunnel 로그인", `${error === undefined ? "" : `<p class="error">${escapeHtml(error)}</p>`}<p>관리자가 발급한 계정으로 로그인하세요.</p><form method="post" action="/login${returnTo === "" ? "" : `?returnTo=${encodeURIComponent(returnTo)}`}"><input type="hidden" name="intent" value="${escapeHtml(intent ?? "")}"><label>아이디 <input name="username" autocomplete="username" required></label><label>비밀번호 <input type="password" name="password" autocomplete="current-password" required></label><button type="submit">로그인</button></form>`);
 }
 
-export function passwordChangePage(intent: string | null, error: string | undefined): string {
-  return page("비밀번호 변경", `${error === undefined ? "" : `<p class="error">${escapeHtml(error)}</p>`}<p>임시 비밀번호를 15자 이상의 새 비밀번호로 변경하세요.</p><form method="post" action="/account/change-password"><input type="hidden" name="intent" value="${escapeHtml(intent ?? "")}"><label>현재 비밀번호 <input type="password" name="currentPassword" autocomplete="current-password" required></label><label>새 비밀번호 <input type="password" name="newPassword" autocomplete="new-password" minlength="15" maxlength="128" required></label><label>새 비밀번호 확인 <input type="password" name="confirmation" autocomplete="new-password" minlength="15" maxlength="128" required></label><button type="submit">변경</button></form>`);
+export function passwordChangePage(intent: string | null, error: string | undefined, returnTo = ""): string {
+  return page("비밀번호 변경", `${error === undefined ? "" : `<p class="error">${escapeHtml(error)}</p>`}<p>임시 비밀번호를 15자 이상의 새 비밀번호로 변경하세요.</p><form method="post" action="/account/change-password${returnTo === "" ? "" : `?returnTo=${encodeURIComponent(returnTo)}`}"><input type="hidden" name="intent" value="${escapeHtml(intent ?? "")}"><label>현재 비밀번호 <input type="password" name="currentPassword" autocomplete="current-password" required></label><label>새 비밀번호 <input type="password" name="newPassword" autocomplete="new-password" minlength="15" maxlength="128" required></label><label>새 비밀번호 확인 <input type="password" name="confirmation" autocomplete="new-password" minlength="15" maxlength="128" required></label><button type="submit">변경</button></form>`);
 }
 
 export function accountPage(principal: Principal): string {
-  return page("내 계정", `<p>${escapeHtml(principal.displayName)} (${escapeHtml(principal.username)})</p><p>권한: ${principal.roles.map(escapeHtml).join(", ")}</p><p><a href="/account/change-password">비밀번호 변경</a></p><form method="post" action="/logout"><button type="submit">로그아웃</button></form>`);
+  return page("내 계정", `<p>${escapeHtml(principal.displayName)} (${escapeHtml(principal.username)})</p><p>권한: ${principal.roles.map(escapeHtml).join(", ")}</p><p><a href="/reviews">리뷰함</a> · <a href="/account/change-password">비밀번호 변경</a></p><form method="post" action="/logout"><button type="submit">로그아웃</button></form>`);
 }
 
 export function usersPage(

@@ -37,6 +37,7 @@ control.tunnel.example.com         -> 로그인, 관리자 UI, Client API와 Car
 | `DATABASE_URL` | PostgreSQL 연결 문자열. secret manager에서 주입 |
 | `AUTH_SESSION_HMAC_KEY` | canonical base64url로 인코딩한 32~128바이트 active key |
 | `AUTH_SESSION_HMAC_KEY_PREVIOUS` | 회전 overlap 동안만 쓰는 서로 다른 이전 key의 쉼표 구분 목록. 최대 3개이며 active key와 중복 금지 |
+| `REVIEW_WORKFLOW_ENABLED` | 기본 `false`. DB migration 19–21과 모든 Gateway 교체 후 `true`로 새 재검토 요청 활성화. 기존 상태 읽기와 확인은 유지 |
 | `AUTO_MIGRATE` | 기본 `false`. Gateway 시작 시 migration이 필요한 예외 환경에서만 명시적으로 `true` |
 | `DEPLOYMENT_ID` | 배포 파이프라인이 발급한 1~128자 release ID |
 | `DEPLOYMENT_CONFIG_DIGEST` | image·Ingress·운영 설정 묶음의 `sha256:<64 lowercase hex>` digest |

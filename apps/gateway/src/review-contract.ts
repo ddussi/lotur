@@ -36,12 +36,15 @@ export function publicComment(
     body: comment.body,
     version: comment.version,
     status: comment.status,
+    workflowVersion: comment.workflowVersion ?? 1,
+    ...(comment.workflowHistory === undefined ? {} : { workflowHistory: comment.workflowHistory }),
+    canVerify: actor.capabilities.canComment && actor.accountId === comment.author.accountId && comment.status === "NEEDS_REVIEW",
     author: comment.author,
     ...resolution,
     ...deletion,
     canEdit:
       comment.body !== null &&
-      comment.status === "OPEN" &&
+      comment.status !== "RESOLVED" &&
       canEditReviewContent(actor, comment.author.accountId),
     canDelete: comment.body !== null && canDeleteReviewContent(actor, comment.author.accountId),
     replies: comment.replies.map((reply) => publicReply(reply, actor, comment.status)),
@@ -74,7 +77,7 @@ export function publicReply(
     ...deletion,
     canEdit:
       reply.body !== null &&
-      threadStatus === "OPEN" &&
+      threadStatus !== "RESOLVED" &&
       canEditReviewContent(actor, reply.author.accountId),
     canDelete: reply.body !== null && canDeleteReviewContent(actor, reply.author.accountId),
     createdAt: reply.createdAt.toISOString(),
@@ -98,6 +101,9 @@ export function publicNotification(notification: ReviewNotification) {
     threadId: notification.threadId,
     contentType: notification.contentType,
     contentId: notification.contentId,
+    routePath: notification.routePath,
+    reason: notification.reason ?? "MENTION",
+    ...(notification.workflowVersion === undefined ? {} : { workflowVersion: notification.workflowVersion }),
     actor: notification.actor,
     readAt: notification.readAt?.toISOString() ?? null,
     createdAt: notification.createdAt.toISOString(),

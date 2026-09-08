@@ -1,4 +1,5 @@
-export const REVIEW_SCHEMA_SQL = `
+-- Historical schema captured before integration; keep unchanged for upgrade tests.
+
 CREATE TABLE IF NOT EXISTS rt_review_projects (
   id text PRIMARY KEY,
   owner_account_id text NOT NULL REFERENCES rt_accounts(id) ON DELETE RESTRICT,
@@ -405,30 +406,6 @@ CREATE INDEX IF NOT EXISTS rt_review_events_recipient_id_idx
   ON rt_review_events(recipient_account_id, id)
   WHERE recipient_account_id IS NOT NULL;
 
--- Local pre-integration releases also used 18 for workflow changes. Detect the
--- retention table itself so those databases get the same safe cursor baseline.
-DO $$
-DECLARE initialize_retention boolean := to_regclass('rt_review_event_retention') IS NULL
-  OR NOT EXISTS (SELECT 1 FROM rt_schema_migrations WHERE version = 18);
-BEGIN
-CREATE TABLE IF NOT EXISTS rt_review_event_retention (
-  revision_id text NOT NULL REFERENCES rt_review_revisions(id) ON DELETE CASCADE,
-  route_path text NOT NULL,
-  trimmed_through_id bigint NOT NULL CHECK (trimmed_through_id >= 0),
-  PRIMARY KEY (revision_id, route_path)
-);
-
--- Legacy evictions have no per-feed history. On the first upgrade, force old
--- cursors through a fresh snapshot without deleting comments or retained events.
--- The sequence also covers feeds whose entire event history was already pruned.
-INSERT INTO rt_review_event_retention (revision_id, route_path, trimmed_through_id)
-SELECT DISTINCT revision_id, route_path,
-  (SELECT CASE WHEN is_called THEN last_value ELSE 0 END FROM rt_review_events_id_seq)
-FROM rt_review_threads
-WHERE initialize_retention
-ON CONFLICT (revision_id, route_path) DO NOTHING;
-END $$;
-
 INSERT INTO rt_schema_migrations(version) VALUES (9)
 ON CONFLICT (version) DO NOTHING;
 INSERT INTO rt_schema_migrations(version) VALUES (10)
@@ -446,8 +423,6 @@ ON CONFLICT (version) DO NOTHING;
 INSERT INTO rt_schema_migrations(version) VALUES (16)
 ON CONFLICT (version) DO NOTHING;
 INSERT INTO rt_schema_migrations(version) VALUES (17)
-ON CONFLICT (version) DO NOTHING;
-INSERT INTO rt_schema_migrations(version) VALUES (18)
 ON CONFLICT (version) DO NOTHING;
 
 ALTER TABLE rt_review_threads ADD COLUMN IF NOT EXISTS workflow_version integer NOT NULL DEFAULT 1 CHECK (workflow_version > 0);
@@ -468,11 +443,11 @@ CREATE TABLE IF NOT EXISTS rt_review_workflow_history (
   PRIMARY KEY (thread_id, version)
 );
 CREATE INDEX IF NOT EXISTS rt_review_threads_revision_created_idx ON rt_review_threads(revision_id, created_at DESC, id DESC);
-INSERT INTO rt_schema_migrations(version) VALUES (19) ON CONFLICT (version) DO NOTHING;
+INSERT INTO rt_schema_migrations(version) VALUES (18) ON CONFLICT (version) DO NOTHING;
 ALTER TABLE rt_review_notifications ADD COLUMN IF NOT EXISTS reason text NOT NULL DEFAULT 'MENTION' CHECK (reason IN ('MENTION', 'REPLY'));
 CREATE INDEX IF NOT EXISTS rt_review_notifications_recipient_id_idx ON rt_review_notifications(recipient_account_id, id DESC);
 CREATE INDEX IF NOT EXISTS rt_review_notifications_unread_idx ON rt_review_notifications(recipient_account_id, id DESC) WHERE read_at IS NULL;
-INSERT INTO rt_schema_migrations(version) VALUES (20) ON CONFLICT (version) DO NOTHING;
+INSERT INTO rt_schema_migrations(version) VALUES (19) ON CONFLICT (version) DO NOTHING;
 ALTER TABLE rt_review_notifications DROP CONSTRAINT IF EXISTS rt_review_notifications_reason_check;
 ALTER TABLE rt_review_notifications ADD CONSTRAINT rt_review_notifications_reason_check CHECK (reason IN ('MENTION', 'REPLY', 'WORKFLOW_REQUEST', 'WORKFLOW_RESULT'));
 ALTER TABLE rt_review_notifications ADD COLUMN IF NOT EXISTS source_key text;
@@ -480,5 +455,4 @@ UPDATE rt_review_notifications SET source_key = 'legacy:' || id WHERE source_key
 ALTER TABLE rt_review_notifications ALTER COLUMN source_key SET NOT NULL;
 ALTER TABLE rt_review_notifications ADD COLUMN IF NOT EXISTS workflow_version integer;
 CREATE UNIQUE INDEX IF NOT EXISTS rt_review_notifications_source_unique ON rt_review_notifications(recipient_account_id, source_key);
-INSERT INTO rt_schema_migrations(version) VALUES (21) ON CONFLICT (version) DO NOTHING;
-`;
+INSERT INTO rt_schema_migrations(version) VALUES (20) ON CONFLICT (version) DO NOTHING;

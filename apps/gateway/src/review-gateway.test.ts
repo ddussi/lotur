@@ -202,9 +202,12 @@ test("authenticated review APIs bind stable revisions and never reach the local 
     });
     assert.equal(context.status, 200);
     assert.deepEqual(JSON.parse(context.body), {
-      project: { slug: "storefront", displayName: "storefront" },
-      revision: { key: "commit-a" },
+      project: { id: JSON.parse(context.body).project.id, slug: "storefront", displayName: "storefront" },
+      revision: { id: JSON.parse(context.body).revision.id, key: "commit-a" },
+      controlOrigin: `http://control.localhost:${gatewayPort}`,
+      features: { workflowVersion: 1, canRequestReview: true },
       principal: {
+        accountId: reviewer.principal.accountId,
         username: "reviewer",
         displayName: "Reviewer",
         canComment: true,
@@ -627,6 +630,7 @@ test("authenticated review APIs bind stable revisions and never reach the local 
         body: JSON.stringify({
           path: "/products",
           expectedStatus: "RESOLVED",
+          expectedWorkflowVersion: 2,
           status: "OPEN",
         }),
       },
@@ -692,6 +696,7 @@ test("authenticated review APIs bind stable revisions and never reach the local 
     assert.deepEqual(JSON.parse(otherPath.body), {
       comments: [],
       openCount: 0,
+      filteredCount: 0,
       eventCursor: "0",
       pageInfo: { hasMore: false },
     });

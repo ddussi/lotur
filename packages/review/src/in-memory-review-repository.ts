@@ -37,6 +37,58 @@ export class InMemoryReviewRepository implements ReviewRepository {
 
   async checkHealth(): Promise<void> {}
 
+  async listInbox(input: Parameters<ReviewRepository["listInbox"]>[0]) {
+    const own = this.notifications.filter(item => item.recipientAccountId === input.actorAccountId);
+    const rows = own.filter(item => (!input.unreadOnly || item.readAt === undefined) && (input.before === undefined || BigInt(item.id) < BigInt(input.before)))
+      .sort((a, b) => Number(BigInt(b.id) - BigInt(a.id)));
+    return { notifications: rows.slice(0, 50), unreadCount: own.filter(item => item.readAt === undefined).length,
+      ...(rows.length > 50 ? { nextCursor: rows[49]!.id } : {}) };
+  }
+  async findNotificationForAccount(id: string, accountId: string) {
+    return this.notifications.find(item => item.id === id && item.recipientAccountId === accountId);
+  }
+  async listMentionCandidates(revisionId: string, prefix: string) {
+    const participants = new Map<string, string>();
+    const project = this.projects.get(this.revisions.get(revisionId)?.projectId ?? "");
+    if (project) participants.set(project.ownerAccountId, this.accountUsernames.get(project.ownerAccountId) ?? "");
+    for (const thread of this.threads.values()) {
+      if (thread.revisionId !== revisionId) continue;
+      for (const item of [thread, ...thread.replies]) participants.set(item.author.accountId, item.author.displayName);
+    }
+    return [...participants].map(([id, displayName]) => ({ username: this.accountUsernames.get(id) ?? "", displayName }))
+      .filter(item => item.username && item.username.startsWith(prefix)).sort((a, b) => a.username.localeCompare(b.username)).slice(0, 20);
+  }
+
+  async listProjects() {
+    return [...this.projects.values()].map(project => {
+      const revisions = new Set([...this.revisions.values()].filter(value => value.projectId === project.id).map(value => value.id));
+      const threads = [...this.threads.values()].filter(value => revisions.has(value.revisionId));
+      return { ...project, openCount: threads.filter(isOpenReviewThread).length,
+        lastActivityAt: new Date(Math.max(project.createdAt.getTime(), ...threads.map(value => value.updatedAt.getTime()))) };
+    }).sort((left, right) => right.lastActivityAt.getTime() - left.lastActivityAt.getTime());
+  }
+
+  async listRevisions(projectId: string) {
+    return [...this.revisions.values()].filter(value => value.projectId === projectId).map(revision => ({
+      ...revision,
+      openCount: [...this.threads.values()].filter(value => value.revisionId === revision.id && isOpenReviewThread(value)).length,
+    })).sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime() || right.id.localeCompare(left.id));
+  }
+
+  async findRevisionContext(projectId: string | undefined, revisionId: string) {
+    const revision = this.revisions.get(revisionId);
+    if (revision === undefined || (projectId !== undefined && revision.projectId !== projectId)) return undefined;
+    const project = this.projects.get(revision.projectId);
+    return project === undefined ? undefined : { project, revision };
+  }
+
+  async findThread(threadId: string) {
+    const thread = this.threads.get(threadId);
+    if (thread === undefined) return undefined;
+    const replies = selectReviewPage(thread.replies, undefined, 100);
+    return { ...thread, replies: replies.items, replyPageInfo: replies.pageInfo };
+  }
+
   async bindTunnel(input: BindReviewTunnelInput): Promise<BindReviewTunnelResult> {
     for (const [tunnelId, binding] of this.bindings) {
       if (binding.expiresAt.getTime() <= input.binding.createdAt.getTime()) {
@@ -102,21 +154,9 @@ export class InMemoryReviewRepository implements ReviewRepository {
     if (binding?.sessionId === input.sessionId) this.bindings.delete(input.tunnelId);
   }
 
-  async createPageComment(input: Readonly<{
-    thread: PageCommentThread;
-    actorUsername: string;
-    mentionUsernames: readonly string[];
-    actorAuthorizationVersion: number;
-    tunnelId: string;
-    sessionId: string;
-  }>) {
+  async createPageComment(input: Parameters<ReviewRepository["createPageComment"]>[0]) {
     const { thread } = input;
-    const binding = this.bindings.get(input.tunnelId);
-    if (
-      binding === undefined ||
-      binding.sessionId !== input.sessionId ||
-      binding.revisionId !== thread.revisionId
-    ) return { status: "BINDING_NOT_FOUND" } as const;
+    if (!this.#hasAccess({ ...input, revisionId: thread.revisionId })) return { status: "BINDING_NOT_FOUND" } as const;
     if (this.threads.has(thread.id)) throw new Error("review comment id already exists");
     this.accountUsernames.set(thread.author.accountId, input.actorUsername);
     const storedThread: PageCommentThread = thread.anchor.type === "REGION_V1"
@@ -140,27 +180,24 @@ export class InMemoryReviewRepository implements ReviewRepository {
     return { status: "CREATED", thread: storedThread } as const;
   }
 
-  async listPageCommentPage(input: Readonly<{
-    revisionId: string;
-    routePath: string;
-    before?: ReviewPageCursor;
-    limit: number;
-    replyLimit: number;
-  }>): Promise<PageCommentPage> {
+  async listPageCommentPage(input: Parameters<ReviewRepository["listPageCommentPage"]>[0]): Promise<PageCommentPage> {
     const eventCursor = this.events
       .filter((event) =>
-        event.revisionId === input.revisionId && event.routePath === input.routePath
+        event.revisionId === input.revisionId && (input.routePath === undefined || event.routePath === input.routePath)
       )
       .at(-1)?.id ?? "0";
     const scoped = [...this.threads.values()]
       .filter(
         (thread) =>
-          thread.revisionId === input.revisionId && thread.routePath === input.routePath,
+          thread.revisionId === input.revisionId && (input.routePath === undefined || thread.routePath === input.routePath),
       );
-    const selected = selectReviewPage(scoped, input.before, input.limit);
+    const filtered = scoped.filter(thread =>
+      (input.status === undefined || (input.status === "OPEN" ? thread.status !== "RESOLVED" : thread.status === input.status)) &&
+      (input.authorAccountId === undefined || thread.author.accountId === input.authorAccountId));
+    const selected = selectReviewPage(filtered, input.before, input.limit);
     return {
       comments: selected.items.map((thread) => {
-        const replyPage = selectReviewPage(thread.replies, undefined, input.replyLimit);
+        const replyPage = input.summaryOnly ? { items: [], pageInfo: { hasMore: false } } : selectReviewPage(thread.replies, undefined, input.replyLimit);
         return {
         ...thread,
           replies: replyPage.items,
@@ -168,18 +205,13 @@ export class InMemoryReviewRepository implements ReviewRepository {
         };
       }),
       openCount: scoped.filter(isOpenReviewThread).length,
+      filteredCount: filtered.length,
       eventCursor,
       pageInfo: selected.pageInfo,
     };
   }
 
-  async listReplyPage(input: Readonly<{
-    revisionId: string;
-    routePath: string;
-    threadId: string;
-    before?: ReviewPageCursor;
-    limit: number;
-  }>): Promise<ReviewReplyPage | undefined> {
+  async listReplyPage(input: Parameters<ReviewRepository["listReplyPage"]>[0]): Promise<ReviewReplyPage | undefined> {
     const thread = this.threads.get(input.threadId);
     if (
       thread === undefined ||
@@ -190,25 +222,10 @@ export class InMemoryReviewRepository implements ReviewRepository {
     return { replies: page.items, threadStatus: thread.status, pageInfo: page.pageInfo };
   }
 
-  async createReply(input: Readonly<{
-    reply: ReviewReply;
-    actorUsername: string;
-    mentionUsernames: readonly string[];
-    revisionId: string;
-    routePath: string;
-    actorAuthorizationVersion: number;
-    tunnelId: string;
-    sessionId: string;
-  }>) {
-    const thread = this.#findBoundThread({
-      threadId: input.reply.threadId,
-      revisionId: input.revisionId,
-      routePath: input.routePath,
-      tunnelId: input.tunnelId,
-      sessionId: input.sessionId,
-    });
+  async createReply(input: Parameters<ReviewRepository["createReply"]>[0]) {
+    const thread = this.#findBoundThread({ ...input, threadId: input.reply.threadId });
     if (thread === undefined) return { status: "THREAD_NOT_FOUND" } as const;
-    if (thread.status !== "OPEN" || thread.deletedAt !== undefined) {
+    if (thread.status === "RESOLVED" || thread.deletedAt !== undefined) {
       return { status: "STATE_CONFLICT" } as const;
     }
     this.accountUsernames.set(input.reply.author.accountId, input.actorUsername);
@@ -227,19 +244,31 @@ export class InMemoryReviewRepository implements ReviewRepository {
       actor: input.reply.author,
       occurredAt: input.reply.createdAt,
     });
+    const recipients = new Set([thread.author.accountId, ...thread.replies.map(reply => reply.author.accountId)]);
+    for (const recipientAccountId of recipients) {
+      if (recipientAccountId === input.reply.author.accountId || this.notifications.some(item => item.contentId === input.reply.id && item.recipientAccountId === recipientAccountId)) continue;
+      this.notifications.push({ id: String(this.#nextNotificationId++), revisionId: thread.revisionId, routePath: thread.routePath,
+        threadId: thread.id, contentType: "REPLY", contentId: input.reply.id, reason: "REPLY", sourceKey: "reply:" + input.reply.id, recipientAccountId,
+        actor: input.reply.author, createdAt: input.reply.createdAt });
+      this.#recordEvent("NOTIFICATION_CREATED", thread, input.reply.author, input.reply.createdAt, recipientAccountId);
+    }
     return { status: "CREATED", reply: input.reply } as const;
   }
 
   async changePageCommentStatus(input: Parameters<ReviewRepository["changePageCommentStatus"]>[0]) {
     const thread = this.#findBoundThread(input);
     if (thread === undefined) return { status: "THREAD_NOT_FOUND" } as const;
-    if (thread.status !== input.expectedStatus || thread.deletedAt !== undefined) {
+    if (thread.status !== input.expectedStatus || (thread.workflowVersion ?? 1) !== input.expectedWorkflowVersion || thread.deletedAt !== undefined) {
       return { status: "STATE_CONFLICT" } as const;
     }
+    if (!input.actorCanManageProject && !(thread.author.accountId === input.actor.accountId && thread.status === "NEEDS_REVIEW" && input.status !== "NEEDS_REVIEW")) return { status: "STALE_AUTHORIZATION" } as const;
+    const workflowVersion = (thread.workflowVersion ?? 1) + 1;
+    const workflowHistory = [...(thread.workflowHistory ?? []), { version: workflowVersion, from: thread.status, to: input.status, actor: input.actor, changedAt: input.changedAt }];
     const { resolvedBy: _resolvedBy, resolvedAt: _resolvedAt, ...base } = thread;
     const changed: PageCommentThread = input.status === "RESOLVED"
       ? {
           ...base,
+          workflowVersion, workflowHistory,
           status: "RESOLVED",
           resolvedBy: input.actor,
           resolvedAt: input.changedAt,
@@ -247,30 +276,32 @@ export class InMemoryReviewRepository implements ReviewRepository {
         }
       : {
           ...base,
-          status: "OPEN",
+          workflowVersion, workflowHistory,
+          status: input.status,
           updatedAt: input.changedAt,
         };
     this.threads.set(thread.id, changed);
     this.#recordEvent("THREAD_STATUS_CHANGED", changed, input.actor, input.changedAt);
+    const request = [...(thread.workflowHistory ?? [])].reverse().find(item => item.to === "NEEDS_REVIEW");
+    if (thread.status === "NEEDS_REVIEW" && request) {
+      for (let index = 0; index < this.notifications.length; index++) {
+        const notice = this.notifications[index]!;
+        if (notice.threadId === thread.id && notice.recipientAccountId === input.actor.accountId && notice.reason === "WORKFLOW_REQUEST" && notice.workflowVersion === request.version) this.notifications[index] = { ...notice, readAt: notice.readAt ?? input.changedAt };
+      }
+    }
+    const recipientAccountId = input.status === "NEEDS_REVIEW" ? thread.author.accountId : thread.status === "NEEDS_REVIEW" ? request?.actor.accountId : undefined;
+    if (recipientAccountId !== undefined && recipientAccountId !== input.actor.accountId) {
+      this.notifications.push({ id: String(this.#nextNotificationId++), revisionId: thread.revisionId, routePath: thread.routePath,
+        threadId: thread.id, contentType: "COMMENT", contentId: thread.id, recipientAccountId, actor: input.actor, createdAt: input.changedAt,
+        reason: input.status === "NEEDS_REVIEW" ? "WORKFLOW_REQUEST" : "WORKFLOW_RESULT", workflowVersion: input.status === "NEEDS_REVIEW" ? workflowVersion : request?.version ?? workflowVersion,
+        sourceKey: "workflow:" + thread.id + ":" + workflowVersion });
+      this.#recordEvent("NOTIFICATION_CREATED", thread, input.actor, input.changedAt, recipientAccountId);
+    }
     return { status: "UPDATED", thread: changed } as const;
   }
 
-  async listReviewEvents(input: Readonly<{
-    revisionId: string;
-    routePath: string;
-    afterId: string;
-    limit: number;
-    actorAccountId: string;
-    actorAuthorizationVersion: number;
-    tunnelId: string;
-    sessionId: string;
-  }>) {
-    const binding = this.bindings.get(input.tunnelId);
-    if (
-      binding === undefined ||
-      binding.sessionId !== input.sessionId ||
-      binding.revisionId !== input.revisionId
-    ) return { status: "BINDING_NOT_FOUND" } as const;
+  async listReviewEvents(input: Parameters<ReviewRepository["listReviewEvents"]>[0]) {
+    if (!this.#hasAccess(input)) return { status: "BINDING_NOT_FOUND" } as const;
     const afterId = BigInt(input.afterId);
     return {
       status: "FOUND",
@@ -403,12 +434,7 @@ export class InMemoryReviewRepository implements ReviewRepository {
   }
 
   async listNotifications(input: Parameters<ReviewRepository["listNotifications"]>[0]) {
-    const binding = this.bindings.get(input.tunnelId);
-    if (
-      binding === undefined ||
-      binding.sessionId !== input.sessionId ||
-      binding.revisionId !== input.revisionId
-    ) return { status: "BINDING_NOT_FOUND" } as const;
+    if (!this.#hasAccess(input)) return { status: "BINDING_NOT_FOUND" } as const;
     return {
       status: "FOUND",
       notifications: this.notifications
@@ -423,12 +449,7 @@ export class InMemoryReviewRepository implements ReviewRepository {
   }
 
   async setNotificationRead(input: Parameters<ReviewRepository["setNotificationRead"]>[0]) {
-    const binding = this.bindings.get(input.tunnelId);
-    if (
-      binding === undefined ||
-      binding.sessionId !== input.sessionId ||
-      binding.revisionId !== input.revisionId
-    ) return { status: "BINDING_NOT_FOUND" } as const;
+    if (!this.#hasAccess(input)) return { status: "BINDING_NOT_FOUND" } as const;
     const index = this.notifications.findIndex((notification) =>
       notification.id === input.notificationId &&
       notification.revisionId === input.revisionId &&
@@ -438,13 +459,16 @@ export class InMemoryReviewRepository implements ReviewRepository {
     if (index < 0) return { status: "NOTIFICATION_NOT_FOUND" } as const;
     const current = this.notifications[index]!;
     const readAt = input.read ? { readAt: current.readAt ?? input.changedAt } : {};
+    const { readAt: _previousReadAt, ...retained } = current;
     const changed: ReviewNotification = {
+      ...retained,
       id: current.id,
       revisionId: current.revisionId,
       routePath: current.routePath,
       threadId: current.threadId,
       contentType: current.contentType,
       contentId: current.contentId,
+      ...(current.reason === undefined ? {} : { reason: current.reason }),
       recipientAccountId: current.recipientAccountId,
       actor: current.actor,
       ...readAt,
@@ -463,23 +487,22 @@ export class InMemoryReviewRepository implements ReviewRepository {
     return { status: "UPDATED", notification: changed } as const;
   }
 
+  #hasAccess(input: Readonly<{
+    revisionId: string; tunnelId?: string; sessionId?: string; controlProjectId?: string;
+  }>): boolean {
+    if (input.controlProjectId !== undefined) return input.tunnelId === undefined &&
+      input.sessionId === undefined && this.revisions.get(input.revisionId)?.projectId === input.controlProjectId;
+    const binding = input.tunnelId === undefined ? undefined : this.bindings.get(input.tunnelId);
+    return binding !== undefined && binding.sessionId === input.sessionId && binding.revisionId === input.revisionId;
+  }
+
   #findBoundThread(input: Readonly<{
-    threadId: string;
-    revisionId: string;
-    routePath: string;
-    tunnelId: string;
-    sessionId: string;
+    threadId: string; revisionId: string; routePath: string;
+    tunnelId?: string; sessionId?: string; controlProjectId?: string;
   }>): PageCommentThread | undefined {
-    const binding = this.bindings.get(input.tunnelId);
     const thread = this.threads.get(input.threadId);
-    return binding !== undefined &&
-        binding.sessionId === input.sessionId &&
-        binding.revisionId === input.revisionId &&
-        thread !== undefined &&
-        thread.revisionId === input.revisionId &&
-        thread.routePath === input.routePath
-      ? thread
-      : undefined;
+    return this.#hasAccess(input) && thread?.revisionId === input.revisionId && thread.routePath === input.routePath
+      ? thread : undefined;
   }
 
   #replaceReply(thread: PageCommentThread, reply: ReviewReply, changedAt: Date): void {

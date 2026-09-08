@@ -17,15 +17,14 @@ async function readJson<T>(response: Response): Promise<T> {
   return value as T;
 }
 
-export function createReviewApi() {
-  const read = async <T>(path: string): Promise<T> =>
-    readJson<T>(
-      await fetch(REVIEW_API + path, {
-        credentials: "same-origin",
-        headers: { accept: "application/json" },
-      }),
-    );
+export function createReviewApi(onDenied?: () => void) {
+  const read = async <T>(path: string): Promise<T> => {
+    const response = await fetch(REVIEW_API + path, { credentials: "same-origin", headers: { accept: "application/json" } });
+    if (response.status === 401 || response.status === 403) onDenied?.();
+    return readJson<T>(response);
+  };
   return {
+    read,
     context: () => read<ReviewContext>("/context"),
     page: (path: string, before?: string) =>
       read<CommentPage>(
@@ -39,15 +38,16 @@ export function createReviewApi() {
       read<{ notifications: PublicNotification[] }>(
         `/notifications?path=${encodeURIComponent(path)}`,
       ),
-    mutate: async (path: string, method: "POST" | "PATCH" | "DELETE", command: unknown) =>
-      readJson<unknown>(
-        await fetch(REVIEW_API + path, {
-          method,
-          credentials: "same-origin",
-          headers: { "content-type": "application/json", accept: "application/json" },
-          body: JSON.stringify(command),
-        }),
-      ),
+    mutate: async (path: string, method: "POST" | "PATCH" | "DELETE", command: unknown) => {
+      const response = await fetch(REVIEW_API + path, {
+        method,
+        credentials: "same-origin",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify(command),
+      });
+      if (response.status === 401 || response.status === 403) onDenied?.();
+      return readJson<unknown>(response);
+    },
   };
 }
 

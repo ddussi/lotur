@@ -52,6 +52,8 @@ npm run share -- http://127.0.0.1:3000 \
 
 The URL is printed only after the tunnel and review binding both succeed. Page comments, numbered region pins, replies, resolution, author edits, deletion markers, participant mentions, and recipient-only internal notifications live in a sidebar. PostgreSQL preserves feedback for the same owner, project, and revision when a new share is opened. Live updates use a separate review SSE connection.
 
+Use **Hide all pins** to clear the page, then **Show pin** on a comment to display just that pin. New pins follow a uniquely identified element (`data-review-id`, or `id`) when the selection fits inside it. The sidebar explains when a target is unavailable or a coordinate-only pin cannot be placed at the current screen size. See [pin placement and visibility](docs/getting-started.en.md#pin-placement-and-visibility) for setup and limitations.
+
 Follow the [review setup instructions](docs/getting-started.en.md#enable-page-and-region-reviews) for local package installation, Vite/Next configuration, and CSP nonce handling.
 
 ## Set up your own Gateway
@@ -111,3 +113,5 @@ Per-project access lists, screenshots, external email/Slack/push notifications, 
 ## License
 
 [MIT](LICENSE). Third-party dependencies remain under their respective licenses.
+
+소규모 내부 팀의 리뷰함·재검토 사용법은 [내부 리뷰 안내](docs/internal-review-guide.md)를 참고하세요. `/reviews`에서 앱 종료 후에도 리뷰를 이어갈 수 있습니다.
