@@ -1,10 +1,8 @@
 # Changelog
 
-Changes awaiting a tagged release are recorded under Unreleased. The package version is currently `0.1.0-alpha.1`; that number alone does not establish that a release has been published.
+Release contents are grouped by version below. Check [GitHub Releases](https://github.com/ddussi/lotur/releases) for publication status, dates and verified downloads; this source file does not establish that a release has been published.
 
-The first planned distribution is `v0.1.0-alpha.1`. A local demo and standalone Client archive builder are available from source; versioned release publication remains in preparation.
-
-## Unreleased
+## 0.1.0-alpha.1
 
 ### Fixed
 
@@ -30,6 +28,7 @@ The first planned distribution is `v0.1.0-alpha.1`. A local demo and standalone 
 ### Added
 
 - A real-image database restoration gate and six-image notice inventories, with Node.js notices preserved in PostgreSQL tool images and explicit third-party redistribution attribution.
+- Exact candidate-to-version image promotion with a dry run, digest verification and refusal to overwrite a different existing version.
 - Source/package candidate manifests and checksums, with an opt-in six-image GHCR candidate workflow that records immutable digests separately from production deployment.
 - Actual local review screenshots and a short walkthrough, an alpha contributor roadmap, and English/Korean upgrade and restore guidance.
 - A standalone Client archive builder with an installed `review-tunnel` command, `--version`, bundled ws runtime/license, offline consumer installation, and real sharing/reconnection/cleanup validation.

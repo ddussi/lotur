@@ -2,7 +2,7 @@
 
 [English](upgrading.en.md)
 
-`v0.1.0-alpha.1`은 아직 게시하지 않은 후보입니다. 아래는 구현된 도구와 운영자가 확인할 절차입니다. [격리 DB 복원 검사](validation/database-restore-2026-09-09.md)는 macOS와 실제 Linux 이미지에서 통과했습니다. 최종 릴리스에는 선택한 최종 후보와 HTTPS·이전 이미지 호환성 검증이 추가로 필요하며 [알파 계획](open-source-alpha-plan.md)에서 관리합니다.
+`v0.1.0-alpha.1`은 아직 게시하지 않은 후보입니다. 아래는 구현된 도구와 운영자가 확인할 절차입니다. [격리 DB 복원 검사](validation/database-restore-2026-09-09.md)는 macOS와 실제 Linux 이미지에서 통과했습니다. 최종 후보 검토와 공개 후 검사는 [알파 계획](open-source-alpha-plan.md)에서 관리합니다. 새 개발서버나 DNS·TLS 설정은 준비 조건이 아닙니다. 기존 서비스의 HTTPS는 승인된 배포 후 기존 주소에서 확인합니다. 이전 앱 이미지의 새 데이터 처리 호환성은 아직 검증하지 않았습니다.
 
 ## 버전과 기존 상태 보관
 
@@ -88,4 +88,4 @@ ALTER DEFAULT PRIVILEGES FOR ROLE review_tunnel_migrator IN SCHEMA public
 
 DB 복구는 선택한 백업을 대체 DB에 복원하고 검증된 설치를 그 DB로 전환하는 일입니다. 백업 이후의 쓰기는 따로 대조·이관하지 않으면 포함되지 않습니다. 실패한 DB를 바로 덮어쓰지 말고 비공개로 보관해 비교합니다. 복원으로 과거 실행 중이던 공유 URL이 살아나지는 않습니다.
 
-현재 자동 배포의 실패 복구는 이전 컨테이너를 다시 시작하지만 **이미 적용한 DB 변경을 되돌리지는 않습니다.** 후보 검사에서 이전 이미지의 호환성을 확인해야 합니다. [자동 배포](automatic-deployment.md)와 [Linux 백업·복원](linux-deployment.md#postgresql-백업과-복구-훈련) 안내를 함께 따릅니다.
+현재 자동 배포의 실패 복구는 이전 컨테이너를 다시 시작하지만 **이미 적용한 DB 변경을 되돌리지는 않습니다.** DB 변경이 있는 배포에서는 이전 이미지의 호환성을 먼저 확인하거나, 쓰기를 멈춘 시점의 검증된 백업을 새 DB에 복원하는 복구 계획을 준비해야 합니다. [자동 배포](automatic-deployment.md)와 [Linux 백업·복원](linux-deployment.md#postgresql-백업과-복구-훈련) 안내를 함께 따릅니다.

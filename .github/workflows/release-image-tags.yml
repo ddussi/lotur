@@ -1,0 +1,85 @@
+name: Release image tags
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_run:
+        description: Successful manual CI candidate run ID for this exact source revision
+        required: true
+        type: string
+      publish:
+        description: Apply the reviewed final version tags (false only checks the plan)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: release-image-tags
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Require a successful candidate from this exact commit and workflow
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CANDIDATE_RUN: ${{ inputs.candidate_run }}
+        run: |
+          node --input-type=module <<'JS'
+          import { execFileSync } from 'node:child_process';
+          const { GITHUB_REPOSITORY: repo, GITHUB_SHA: sha, CANDIDATE_RUN: id } = process.env;
+          if (!/^[1-9][0-9]*$/.test(id)) throw new Error('Invalid candidate run ID.');
+          const api = path => JSON.parse(execFileSync('gh', ['api', path], { encoding: 'utf8' }));
+          const run = api(`repos/${repo}/actions/runs/${id}`);
+          if (run.repository.full_name !== repo || run.head_repository.full_name !== repo || run.head_sha !== sha ||
+              run.event !== 'workflow_dispatch' || run.path !== '.github/workflows/ci.yml' || run.conclusion !== 'success') {
+            throw new Error('Select a successful manual CI candidate from this repository and exact commit.');
+          }
+          const { jobs } = api(`repos/${repo}/actions/runs/${id}/attempts/${run.run_attempt}/jobs?per_page=100`);
+          for (const name of ['verification', 'candidate-package-inventory', 'candidate-images']) {
+            if (!jobs.some(job => job.name === name && job.conclusion === 'success')) throw new Error(`Missing successful ${name}.`);
+          }
+          for (const [name, dir] of [
+            [`release-images-${sha}-${id}-${run.run_attempt}`, 'dist/promotion-images'],
+            [`release-files-${sha}-${run.run_attempt}`, 'dist/promotion-files'],
+          ]) execFileSync('gh', ['run', 'download', id, '--repo', repo, '--name', name, '--dir', dir], { stdio: 'inherit' });
+          JS
+      - name: Verify the source and installable file manifest
+        run: |
+          set -euo pipefail
+          candidates=(dist/promotion-files/*/)
+          test "${#candidates[@]}" -eq 1
+          node scripts/verify-release.mjs "${candidates[0]}" --commit "$GITHUB_SHA"
+      - name: Check or apply the immutable image mapping
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PUBLISH: ${{ inputs.publish }}
+        run: |
+          set -euo pipefail
+          records=(dist/promotion-images/*/images.json)
+          test "${#records[@]}" -eq 1
+          mode=--dry-run
+          if [ "$PUBLISH" = true ]; then mode=--publish; fi
+          node scripts/promote-release-images.mjs "$mode" "${records[0]}"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: release-image-tags-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: dist/release-image-tags.json
+          if-no-files-found: error
+          retention-days: 7

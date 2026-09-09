@@ -2,7 +2,11 @@
 
 [한국어](client-installation.md) · [Getting started](getting-started.en.md)
 
-The Client can be installed from a generated `.tgz` without the source checkout, server code, PostgreSQL, or development dependencies. Node.js 24+ is required. There is no tagged release or npm registry publication yet; the following path builds a local archive from this source revision.
+The Client can be installed from a generated `.tgz` without the source checkout, server code, PostgreSQL, or development dependencies. Node.js 24+ is required. Download the Client archive for a published version from [GitHub Releases](https://github.com/ddussi/lotur/releases), or build it from a selected source revision below. These instructions use archive installation, not npm registry publication.
+
+## Download a published version
+
+Open the selected release and download its `review-tunnel-client-<version>.tgz` and `SHA256SUMS` assets from that same official page. Compute the archive hash with `shasum -a 256 <archive>` on macOS or `sha256sum <archive>` on Linux and compare it with the exact filename in `SHA256SUMS` before installation. Use the release's actual version in the commands below. If no version is published, build from source; private candidate references are not public downloads.
 
 ## Build the archive once
 
@@ -46,4 +50,4 @@ The complete loopback origin is shared. A URL appears after activation and optio
 
 Reinstall a newer verified archive in the same dedicated directory and check `--version`. The Client's source, compiled Docker entrypoint, and standalone archive use the version from the same Client package manifest.
 
-The [consumer validation record](validation/client-package-2026-09-09.md) describes the isolated installation and real Gateway checks. Versioned release downloads, checksums, and upgrade guarantees remain part of release preparation; an archive built locally is not automatically a published release.
+The [consumer validation record](validation/client-package-2026-09-09.md) describes the isolated installation and real Gateway checks. Use the selected release's checksums and [upgrade guide](upgrading.en.md) for updates. An archive built locally is not automatically a published release.

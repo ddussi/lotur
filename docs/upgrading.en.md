@@ -2,7 +2,7 @@
 
 [한국어](upgrading.md)
 
-`v0.1.0-alpha.1` is a candidate, not a published release. This procedure describes the implemented tools and required operator checks. The [isolated restoration drill](validation/database-restore-2026-09-09.md) passed on macOS and against real Linux images. The final release still needs its own selected candidate and hosted/rollback results from the [alpha plan](open-source-alpha-plan.md).
+`v0.1.0-alpha.1` is a candidate, not a published release. This procedure describes the implemented tools and required operator checks. The [isolated restoration drill](validation/database-restore-2026-09-09.md) passed on macOS and against real Linux images. Final candidate review and post-publication checks follow the [alpha plan](open-source-alpha-plan.md). A new development server, DNS records or certificate is not a preparation requirement. Check the existing service's HTTPS route after an approved rollout. Compatibility of previous application images with new data has not yet been verified.
 
 ## Select and preserve the versions
 
@@ -80,7 +80,7 @@ ALTER DEFAULT PRIVILEGES FOR ROLE review_tunnel_migrator IN SCHEMA public
 
 Replace these example role names with the actual owner/runtime roles. The runtime role must not own the schema or have schema-creation privileges. Run migration again after restoration and verify existing migration timestamps, reviews, anchor coordinates/pin numbers, replies, workflow history, notifications/read state, application account roles, and operational/audit records. Check content as well as row counts.
 
-Inspect the restored kill switch before starting shares. Use a new candidate deployment identity: old canary/admission rows do not approve it. Complete the new DNS/TLS/proxy canary, record its result and approve that exact identity separately. Test fresh login, admin-only content denial, recipient separation and a new share with dedicated accounts. Do not expose a restored production dump to unrelated test users. Record restore duration and the backup point; a small synthetic drill does not establish production RTO/RPO.
+Inspect the restored kill switch before starting shares. Use a new candidate deployment identity: old canary/admission rows do not approve it. Complete the canary through the deployment's configured DNS/TLS/proxy route, record its result and approve that exact identity separately. Test fresh login, admin-only content denial, recipient separation and a new share with dedicated accounts. Do not expose a restored production dump to unrelated test users. Record restore duration and the backup point; a small synthetic drill does not establish production RTO/RPO.
 
 ## Roll back the application or recover the database
 
@@ -88,4 +88,4 @@ Application rollback means running a previously validated image against a compat
 
 Database recovery means restoring a selected backup into a replacement database and switching the validated deployment to it. Data written after that backup point is absent unless separately reconciled. Retain the failed database privately for comparison; do not overwrite it as the first recovery action. Restoring data does not recreate live share URLs.
 
-The existing automatic deployment restores the previous container after a failed rollout; it does **not** reverse already-applied DB changes. Candidate testing must establish that previous image's compatibility. See the [automatic deployment runbook](automatic-deployment.md) and [Linux operations guide](linux-deployment.md#postgresql-백업과-복구-훈련).
+The existing automatic deployment restores the previous container after a failed rollout; it does **not** reverse already-applied DB changes. For a rollout with database changes, first establish the previous image's compatibility or prepare recovery into a replacement database from a validated backup taken while writes are stopped. See the [automatic deployment runbook](automatic-deployment.md) and [Linux operations guide](linux-deployment.md#postgresql-백업과-복구-훈련).

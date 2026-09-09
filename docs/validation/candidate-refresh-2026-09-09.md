@@ -27,7 +27,11 @@ The prefix is `ghcr.io/ddussi/lotur-<target>@sha256:`. These private references 
 
 The candidate tag is `candidate-e3b78262d1dcb638a0ae399fc36256e338d7654d-34264348717-1`. Reviewed copies of all five CI artifacts were retained privately before the seven-day Actions retention expires. Checksums establish the selected files' integrity; their trusted provenance is the identified repository run, not the checksum alone.
 
-## Remaining acceptance
+## Scope update after this run
+
+The user subsequently excluded a separate development server and new DNS/TLS configuration. The authorization request described below is withdrawn. The [current plan](../open-source-alpha-plan.md#사용자-확인에-따른-범위-정정--2026-09-09) uses local/CI candidate validation and checks the existing HTTPS route after an approved rollout. Previous-image compatibility remains unverified, as described in the [upgrade guide](../upgrading.en.md). The following paragraphs preserve the situation when this run was recorded.
+
+## Remaining acceptance at the time of this record
 
 Version-tag promotion, isolated real DNS/TLS/proxy acceptance, actual previous-image compatibility and final disclosure/release review remain required. The publication mapping has been prepared; no final version tag or release has been created.
 

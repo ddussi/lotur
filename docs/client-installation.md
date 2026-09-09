@@ -2,7 +2,11 @@
 
 [English](client-installation.en.md) · [시작 안내](getting-started.md)
 
-생성한 `.tgz` 파일로 Client만 설치할 수 있다. 사용하는 컴퓨터에는 Node.js 24 이상이 필요하며, 소스 저장소·서버 코드·PostgreSQL·개발 의존성은 필요 없다. 태그 릴리스와 npm 저장소 게시는 아직 없으므로, 아래는 현재 소스에서 로컬 설치 파일을 만드는 방법이다.
+생성한 `.tgz` 파일로 Client만 설치할 수 있다. 사용하는 컴퓨터에는 Node.js 24 이상이 필요하며, 소스 저장소·서버 코드·PostgreSQL·개발 의존성은 필요 없다. [GitHub Releases](https://github.com/ddussi/lotur/releases)에 게시된 버전의 Client 파일을 받거나 아래 방법으로 선택한 소스에서 직접 만든다. npm 저장소 게시를 전제로 하지 않는 파일 설치 방식이다.
+
+## 게시된 버전 받기
+
+선택한 공식 릴리스 페이지에서 `review-tunnel-client-<version>.tgz`와 `SHA256SUMS`를 함께 받는다. 설치 전 macOS에서는 `shasum -a 256 <설치파일>`, Linux에서는 `sha256sum <설치파일>`로 계산한 값을 `SHA256SUMS`의 같은 파일명 항목과 비교한다. 아래 명령의 버전은 실제 받은 버전으로 바꾼다. 게시된 릴리스가 없으면 소스에서 만든다. 비공개 후보 이미지 주소는 공개 다운로드 주소가 아니다.
 
 ## 설치 파일 만들기
 
@@ -46,4 +50,4 @@ npx --no-install review-tunnel http://127.0.0.1:3000 \
 
 새로 검증한 설치 파일을 같은 전용 폴더에 설치하고 `--version`으로 확인한다. 소스 실행·컴파일된 Docker 진입점·독립 파일은 같은 Client 메타데이터의 버전을 사용한다.
 
-[소비자 검증 기록](validation/client-package-2026-09-09.md)에 저장소 밖 설치와 실제 Gateway 검사를 기록했다. 버전별 릴리스 다운로드·체크섬·업그레이드 보장은 별도 준비 중이다. 로컬에서 생성한 파일을 게시된 릴리스로 간주하지 않는다.
+[소비자 검증 기록](validation/client-package-2026-09-09.md)에 저장소 밖 설치와 실제 Gateway 검사를 기록했다. 업데이트에는 선택한 릴리스의 체크섬과 [업그레이드 안내](upgrading.md)를 따른다. 로컬에서 생성한 파일을 게시된 릴리스로 간주하지 않는다.
