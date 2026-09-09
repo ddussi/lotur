@@ -119,7 +119,7 @@ TEST_DATABASE_URL=<isolated-test-database-url> npm run check:mvp
 npm audit --omit=dev
 ```
 
-`check:mvp`는 typecheck·build·architecture·script·단위·실제 PostgreSQL·프레임워크 검증을 한 번에 실행한다. `test:frameworks`는 Playwright의 `channel: "chrome"`에 맞춰 설치한 Google Chrome에서 Vite 8.2.2와 Next.js 16.3.2·React 19.2.8 fixture를 실제 Tunnel에 연결한다. 저장소의 CI workflow도 같은 완료 게이트를 실행하고 PostgreSQL 테스트를 skip하지 않으며, 여섯 production target을 실제 build한 뒤 각 entrypoint가 예상한 설정 오류로 fail-closed하는지 smoke 검증한다.
+`check:mvp`는 typecheck·build·architecture·script·단위·실제 PostgreSQL·프레임워크 검증을 한 번에 실행한다. `test:frameworks`는 Playwright의 `channel: "chrome"`에 맞춰 설치한 Google Chrome에서 Vite 8.2.2와 Next.js 16.3.3·React 19.2.8 fixture를 실제 Tunnel에 연결한다. 저장소의 CI workflow도 같은 완료 게이트를 실행하고 PostgreSQL 테스트를 skip하지 않으며, 여섯 production target을 실제 build한 뒤 각 entrypoint가 예상한 설정 오류로 fail-closed하는지 smoke 검증한다.
 
 역할별 image는 같은 소스 revision에서 명시적으로 빌드한다. target을 생략한 기본 image도 Gateway지만 배포 파이프라인에서는 target 이름을 고정한다.
 

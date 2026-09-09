@@ -52,6 +52,7 @@ Release contents are grouped by version below. Check [GitHub Releases](https://g
 
 ### Changed
 
+- Update the Next.js fixture and integration minimum to 16.3.3, and lock sharp to 0.35.4, addressing the upstream [Next.js AVIF advisory](https://github.com/vercel/next.js/security/advisories/GHSA-2xp9-vwfh-vxw4), [Windows advisory](https://github.com/vercel/next.js/security/advisories/GHSA-p293-qw3h-jr36), and [sharp/libheif advisory](https://github.com/lovell/sharp/security/advisories/GHSA-rgj7-g3m4-5g8c). Gateway runtime images do not include Next.js or sharp; keep the web apps being shared updated separately.
 - Pin the demo, CI database and backup/restore tools to PostgreSQL 17.11, which includes the [August 2026 security fixes](https://www.postgresql.org/about/news/postgresql-186-1711-1615-1519-1424-and-19-beta-3-released-3365/). Existing installations require their own planned database update.
 - Read deployment connection settings from production environment Secrets so future Actions logs mask them; historical logs require separate review.
 - Extract local-origin resolution and WebSocket Upgrade validation from the Client transport.
