@@ -1,4 +1,4 @@
-import { createDraftStore } from "./drafts.ts";
+import { createDraftStore, reviewDraftScope } from "./drafts.ts";
 import type { ReviewApi } from "./api.ts";
 import type { CommentPage, PublicComment, PublicReply, ReplyPage, ReviewContext } from "./contracts.ts";
 type ThreadViewOptions = {
@@ -16,12 +16,17 @@ type ThreadViewOptions = {
   afterRender(): void;
 };
 export const createThreadView = ({ container, getPage, getContext, getRoutePath, read, mutate, reload, replacePage, showStatus, showPin, togglePin, afterRender }: ThreadViewOptions) => {
-  const drafts = createDraftStore();
+  const drafts = createDraftStore({ channel: "replies" });
+  const editDrafts = createDraftStore({ channel: "edits" });
   const edits = new Map<string, { body: string; version: number; draftVersion: number }>();
   let draftVersion = 0;
   const pending = new Set<string>();
   const localActions = new Set(["edit", "cancel-edit", "rebase-edit", "show-pin", "toggle-pin"]);
   const key = (id: string) => location.pathname + ":" + id;
+  const saveEditDraft = (id: string) => {
+    const edit = edits.get(key(id));
+    if (edit) editDrafts.write(location.pathname, id, edit.body, { baseVersion: edit.version });
+  };
   const node = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string, id?: string) => {
     const value = document.createElement(tag);
     if (className) value.className = className;
@@ -60,6 +65,13 @@ export const createThreadView = ({ container, getPage, getContext, getRoutePath,
   };
   const content = (parent: HTMLElement, item: PublicComment | PublicReply, thread: PublicComment, isReply: boolean) => {
     const label = isReply ? "reply" : "comment";
+    const saved = editDrafts.get(location.pathname, item.id);
+    if (!edits.has(key(item.id)) && saved && item.canEdit) {
+      const data = saved.data;
+      if (data && typeof data === "object" && "baseVersion" in data && typeof data.baseVersion === "number" && Number.isSafeInteger(data.baseVersion) && data.baseVersion > 0) {
+        edits.set(key(item.id), { body: saved.text, version: data.baseVersion, draftVersion: ++draftVersion });
+      }
+    }
     const state = edits.get(key(item.id));
     parent.dataset.contentId = item.id;
     parent.append(node("div", "author", item.author.displayName, "author"));
@@ -95,6 +107,11 @@ export const createThreadView = ({ container, getPage, getContext, getRoutePath,
     }
   };
   const render = () => {
+    const context = getContext();
+    if (!context) return;
+    const scope = reviewDraftScope(context);
+    if (drafts.setScope(scope)) edits.clear();
+    editDrafts.setScope(scope);
     const fresh = document.createDocumentFragment();
     for (const item of getPage().comments) {
       const row = node("li", "thread comment", undefined, item.id);
@@ -181,7 +198,7 @@ export const createThreadView = ({ container, getPage, getContext, getRoutePath,
     if (event.target.dataset.draft === "reply") drafts.write(location.pathname, item.id, event.target.value);
     if (event.target.dataset.draft === "edit") {
       const edit = edits.get(key(value.id));
-      if (edit) { edit.body = event.target.value; edit.draftVersion = ++draftVersion; }
+      if (edit) { edit.body = event.target.value; edit.draftVersion = ++draftVersion; saveEditDraft(value.id); }
       const count = event.target.form?.querySelector("[data-counter]");
       if (count) count.textContent = event.target.value.length + " / 4000";
     }
@@ -195,9 +212,9 @@ export const createThreadView = ({ container, getPage, getContext, getRoutePath,
     const threadKey = key(item.id);
     const endpoint = "/comments/" + encodeURIComponent(item.id);
     const contentEndpoint = value.id === item.id ? endpoint : endpoint + "/replies/" + encodeURIComponent(value.id);
-    if (action === "edit") { edits.set(draftKey, { body: value.body ?? "", version: value.version, draftVersion: ++draftVersion }); render(); return; }
-    if (action === "cancel-edit") { edits.delete(draftKey); render(); return; }
-    if (action === "rebase-edit") { const edit = edits.get(draftKey); if (edit) edit.version = value.version; render(); return; }
+    if (action === "edit") { edits.set(draftKey, { body: value.body ?? "", version: value.version, draftVersion: ++draftVersion }); saveEditDraft(value.id); render(); return; }
+    if (action === "cancel-edit") { edits.delete(draftKey); editDrafts.remove(pageLocation, value.id); render(); return; }
+    if (action === "rebase-edit") { const edit = edits.get(draftKey); if (edit) { edit.version = value.version; saveEditDraft(value.id); } render(); return; }
     if (action === "show-pin") { showPin?.(item); return; }
     if (action === "toggle-pin") { togglePin?.(item); return; }
     if (pending.has(threadKey)) return;
@@ -226,11 +243,13 @@ export const createThreadView = ({ container, getPage, getContext, getRoutePath,
           if (!state) return;
           const sentBody = state.body;
           const sentVersion = state.draftVersion;
+          const submitted = editDrafts.capture(pageLocation, value.id);
           await mutate(contentEndpoint, "PATCH", { path, body: sentBody, expectedVersion: state.version });
-          if (edits.get(draftKey)?.draftVersion === sentVersion) edits.delete(draftKey);
+          if (edits.get(draftKey)?.draftVersion === sentVersion) { edits.delete(draftKey); editDrafts.acknowledge(submitted); }
         } else if (action === "delete") {
           await mutate(contentEndpoint, "DELETE", { path, expectedVersion: value.version });
           edits.delete(draftKey);
+          editDrafts.remove(pageLocation, value.id);
         } else if (["status", "verify", "request-changes", "request-review"].includes(action)) {
           const next = action === "request-review" ? "NEEDS_REVIEW" : action === "request-changes" ? "OPEN" : action === "verify" ? "RESOLVED" : item.status === "RESOLVED" ? "OPEN" : "RESOLVED";
           await mutate(endpoint + "/status", "PATCH", { path, expectedWorkflowVersion: item.workflowVersion ?? 1, expectedStatus: item.status, status: next });
@@ -255,5 +274,5 @@ export const createThreadView = ({ container, getPage, getContext, getRoutePath,
     const button = event.submitter instanceof HTMLButtonElement ? event.submitter : event.target.querySelector<HTMLButtonElement>("button[type=submit]");
     if (button) void act(button, event.target.dataset.action ?? "");
   });
-  return { render, clear() { drafts.clear(); edits.clear(); } };
+  return { render, clear() { drafts.clear(); editDrafts.clear(); edits.clear(); }, dispose() { drafts.dispose(); editDrafts.dispose(); edits.clear(); } };
 };

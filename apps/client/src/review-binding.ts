@@ -2,12 +2,14 @@ export async function bindReviewOrClose(input: Readonly<{
   review?: Readonly<{
     projectSlug: string;
     revisionKey: string;
+    workingTree?: "clean" | "modified" | "unknown";
   }>;
   tunnelId: string;
   bindReview(review: Readonly<{
     tunnelId: string;
     projectSlug: string;
     revisionKey: string;
+    workingTree?: "clean" | "modified" | "unknown";
   }>): Promise<void>;
   closeTunnel(): Promise<unknown>;
 }>): Promise<void> {
@@ -17,6 +19,7 @@ export async function bindReviewOrClose(input: Readonly<{
       tunnelId: input.tunnelId,
       projectSlug: input.review.projectSlug,
       revisionKey: input.review.revisionKey,
+      ...(input.review.workingTree === undefined ? {} : { workingTree: input.review.workingTree }),
     });
   } catch (error) {
     try {

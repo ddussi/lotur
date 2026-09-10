@@ -15,6 +15,7 @@ export type CarrierAuthentication = Readonly<{
     tunnelId: string;
     projectSlug: string;
     revisionKey: string;
+    workingTree?: "clean" | "modified" | "unknown";
   }>, signal?: AbortSignal): Promise<void>;
   close(signal?: AbortSignal): Promise<void>;
 }>;
@@ -82,6 +83,7 @@ export async function createCarrierAuthentication(input: Readonly<{
           {
             projectSlug: binding.projectSlug,
             revisionKey: binding.revisionKey,
+            ...(binding.workingTree === undefined ? {} : { workingTree: binding.workingTree }),
           },
           sessionToken,
           signal,

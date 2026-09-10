@@ -16,6 +16,7 @@ export type ClientOptions = Readonly<{
   review?: Readonly<{
     projectSlug: string;
     revisionKey: string;
+    workingTree?: "clean" | "modified" | "unknown";
   }>;
 }>;
 
@@ -24,7 +25,10 @@ export const CLIENT_USAGE =
   "[--gateway wss://control.tunnel.example.com/_review-tunnel/carrier] " +
   "[--username developer1] " +
   "[--review-project storefront --review-revision <commit-or-version>]\n" +
+  "[--review-changes clean|modified|unknown] (developer-reported at share start; default unknown)\n" +
   "Source checkout: npm run share -- <origin> [options]\n" +
+  "Diagnose: review-tunnel doctor <origin> [--gateway <url>] [--username <name>]\n" +
+  "Source diagnosis: npm run share -- doctor <origin> [options]\n" +
   "Use --help for usage or --version for the Client version.\n" +
   "Passwords are prompted in a terminal; automation must explicitly use --password-stdin.";
 
@@ -35,6 +39,7 @@ const VALUE_OPTIONS = new Set([
   "--username",
   "--review-project",
   "--review-revision",
+  "--review-changes",
 ]);
 const FLAG_OPTIONS = new Set(["--password-stdin"]);
 
@@ -116,6 +121,9 @@ export function parseClientArguments(
   }
   const reviewProject = values.get("--review-project");
   const reviewRevision = values.get("--review-revision");
+  const workingTree = values.get("--review-changes");
+  if (workingTree !== undefined && !["clean", "modified", "unknown"].includes(workingTree)) throw new Error("--review-changes must be clean, modified, or unknown");
+  if (workingTree !== undefined && reviewProject === undefined) throw new Error("--review-changes requires --review-project and --review-revision");
   if ((reviewProject === undefined) !== (reviewRevision === undefined)) {
     throw new Error("--review-project and --review-revision must be provided together");
   }
@@ -127,6 +135,7 @@ export function parseClientArguments(
     : {
         projectSlug: normalizeProjectSlug(reviewProject),
         revisionKey: normalizeRevisionKey(reviewRevision),
+        ...(workingTree === undefined ? {} : { workingTree: workingTree as "clean" | "modified" | "unknown" }),
       };
   if (username !== undefined) {
     if (gateway.host !== control.host) {

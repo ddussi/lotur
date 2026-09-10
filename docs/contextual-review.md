@@ -247,6 +247,8 @@ Tunnel과 리뷰 데이터의 수명주기를 분리한다.
 
 `revision_key`의 기본 후보는 Git commit SHA다. 현재 CLI는 `--review-project`와 `--review-revision`을 함께 받은 경우에만 review mode를 켜며 revision 값을 자동 생성하지 않는다. Git 정보를 사용할 수 없으면 개발자가 변경되지 않는 opaque revision ID를 명시한다. Branch 이름만으로는 시간이 지나면서 내용이 바뀌므로 단독 revision key로 사용하지 않는다.
 
+리뷰 창은 프로젝트·기준 버전을 별도 줄로 표시한다. `--review-changes clean|modified|unknown`은 기준 버전 이후의 추가 수정 여부를 공유 시작 시 개발자가 입력하는 선택 옵션이며 기본값은 `unknown`이다. 이 보고는 활성 Tunnel session에만 보관하고 역사적 revision 기록을 변경하지 않는다. Git 자동 감지와 고정 스냅샷을 제공하지 않으며 이후 화면 내용이 바뀔 수 있음을 함께 표시한다.
+
 `Comment thread`는 `PAGE` 또는 `REGION_V1` anchor를 가지며 `OPEN`·`NEEDS_REVIEW`·`RESOLVED`를 전이한다. Reply는 별도 테이블에 저장한다. 댓글·답글 삭제는 row를 제거하지 않고 본문을 비운 tombstone으로 보존한다. 이벤트와 알림은 콘텐츠 mutation transaction에서 함께 기록한다.
 
 Anchor 예시:

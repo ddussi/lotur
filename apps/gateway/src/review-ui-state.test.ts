@@ -4,6 +4,63 @@ import { createDraftStore } from "./review-ui/drafts.ts";
 import { refreshLoadedPage } from "./review-ui/page-state.ts";
 import type { CommentPage, PublicComment } from "./review-ui/contracts.ts";
 
+function draftStorage() {
+  const values = new Map<string, string>();
+  return { get length() { return values.size; }, key: (i: number) => [...values.keys()][i] ?? null,
+    getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => { values.set(key, value); }, removeItem: (key: string) => { values.delete(key); } };
+}
+const draftScope = (session = "session-one", revision = "revision-one") => JSON.stringify([session, "account", "project", revision]);
+
+test("drafts restore text and anchor data after reload, isolate revisions and expire", () => {
+  const storage = draftStorage();
+  let now = 100;
+  const original = createDraftStore({ storage, now: () => now });
+  original.setScope(draftScope());
+  original.write("/one", "", "page draft", { anchor: "saved area" });
+  original.dispose();
+  const restored = createDraftStore({ storage, now: () => now });
+  restored.setScope(draftScope());
+  assert.equal(restored.read("/one", ""), "page draft");
+  assert.deepEqual(restored.get("/one", "")?.data, { anchor: "saved area" });
+  assert.equal(restored.read("/other", ""), "");
+  const submitted = restored.capture("/one", "");
+  restored.setScope(draftScope("session-one", "revision-two"));
+  restored.write("/one", "", "other revision");
+  assert.equal(restored.acknowledge(submitted), false);
+  restored.setScope(draftScope());
+  assert.equal(restored.read("/one", ""), "page draft");
+  now += 13 * 60 * 60_000;
+  const expired = createDraftStore({ storage, now: () => now });
+  expired.setScope(draftScope());
+  assert.equal(expired.read("/one", ""), "");
+});
+
+test("a new login purges old drafts; successful submissions and access denial remove saved copies", () => {
+  const storage = draftStorage();
+  const original = createDraftStore({ storage }); original.setScope(draftScope());
+  original.write("/", "reply", "private draft");
+  const next = createDraftStore({ storage }); next.setScope(draftScope("new-session"));
+  assert.equal(next.read("/", "reply"), "");
+  assert.equal(storage.length, 0);
+  next.write("/", "reply", "new reply");
+  next.acknowledge(next.capture("/", "reply"));
+  assert.equal(storage.length, 0);
+  next.write("/", "reply", "discard on denied access");
+  next.clear();
+  assert.equal(storage.length, 0);
+});
+
+test("corrupt or unavailable browser storage leaves an editable in-memory draft", () => {
+  const storage = draftStorage();
+  const store = createDraftStore({ storage }); store.setScope(draftScope()); store.write("/", "", "old");
+  storage.setItem(storage.key(0)!, "{broken");
+  const restored = createDraftStore({ storage }); restored.setScope(draftScope());
+  assert.equal(restored.read("/", ""), "");
+  storage.setItem = () => { throw new Error("quota"); };
+  restored.write("/", "", "still editable");
+  assert.equal(restored.read("/", ""), "still editable");
+});
+
 test("reply drafts are scoped to routes and survive failed or superseded submissions", () => {
   const drafts = createDraftStore();
   drafts.write("/one", "thread", "first draft");

@@ -82,7 +82,7 @@ export const REVIEW_CONTROL_SOURCE = REVIEW_CONTROL_SHARED_SOURCE + `
           }
           page = { ...ReviewTunnelUi.emptyCommentPage(), comments: [detail.comment] };
           heading.replaceChildren(link(detail.project.slug, "/reviews/projects/" + detail.project.id + "?revision=" + detail.revision.id),
-            node("p", detail.revision.key + " · " + detail.comment.routePath, "context"));
+            node("p", "기준 버전: " + detail.revision.key + " · " + detail.comment.routePath, "context"));
           if (detail.readOnly) heading.append(node("p", "공유 중지 상태입니다. 저장된 리뷰를 읽을 수 있습니다.", "notice"));
           else if (!detail.targets.length) heading.append(node("p", "이 버전의 앱이 꺼져 있습니다. 댓글과 답글은 계속 사용할 수 있습니다.", "context"));
           for (const target of detail.targets) heading.append(link(target.label, target.url));
@@ -93,7 +93,7 @@ export const REVIEW_CONTROL_SOURCE = REVIEW_CONTROL_SHARED_SOURCE + `
         getRoutePath: item => item.routePath, read, mutate, reload, replacePage: value => { page = value; view.render(); }, showStatus,
         afterRender() {} });
       clearDrafts = view.clear;
-      lifetime.signal.addEventListener("abort", () => view.clear(), { once: true });
+      lifetime.signal.addEventListener("abort", () => view.dispose(), { once: true });
       await reload();
       const notification = new URLSearchParams(location.search).get("notification");
       if (notification && !detail.readOnly) { await mutate("/notifications/" + encodeURIComponent(notification), "PATCH", { read: true, threadId: parts[3] }); await loadInbox(); }

@@ -12,22 +12,36 @@ import {
   type CarrierAuthentication,
 } from "./control-client.ts";
 import { bindReviewOrClose } from "./review-binding.ts";
+import { diagnoseClient, explainClientFailure } from "./diagnostics.ts";
+import { parseLoopbackOrigin, resolveAndProbeLocalOrigin } from "./local-origin.ts";
 
 const clientArguments = process.argv.slice(2);
 if (
-  clientArguments.length === 1 &&
-  (clientArguments[0] === "--help" || clientArguments[0] === "-h")
+  (clientArguments.length === 1 && (clientArguments[0] === "--help" || clientArguments[0] === "-h")) ||
+  (clientArguments.length === 2 && clientArguments[0] === "doctor" && ["--help", "-h"].includes(clientArguments[1]!))
 ) {
   console.log(CLIENT_USAGE);
 } else if (clientArguments.length === 1 && clientArguments[0] === "--version") {
   console.log(manifest.version);
 } else {
-  try { await runClient(clientArguments); }
+  try {
+    if (clientArguments[0] === "doctor") {
+      const options = parseClientArguments(clientArguments.slice(1));
+      const passed = await diagnoseClient({ options,
+        readPassword: async () => (await readSecrets(["Review Tunnel password: "], options.passwordStdin))[0] ?? "",
+        report: check => console.log(`${check.status === "pass" ? "✓" : check.status === "fail" ? "✗" : "–"} ${check.name}: ${check.message}`),
+      });
+      console.log("진단은 공유를 시작하지 않습니다. 실제 터널·화면·리뷰 동작은 공유 후 확인하세요.");
+      if (!passed) process.exitCode = 1;
+    } else await runClient(clientArguments);
+  }
   catch (error) { console.error(errorMessage(error)); process.exitCode = 1; }
 }
 
 async function runClient(arguments_: readonly string[]): Promise<void> {
   const options = parseClientArguments(arguments_);
+  try { await resolveAndProbeLocalOrigin(parseLoopbackOrigin(options.localOrigin)); }
+  catch (error) { throw new Error(explainClientFailure(error, "local")); }
   const authentication = options.username === undefined
     ? undefined
     : await loginForCarrier(options);
@@ -67,7 +81,9 @@ async function runClient(arguments_: readonly string[]): Promise<void> {
   process.once("SIGINT", shutdown);
   process.once("SIGTERM", shutdown);
   try {
-    const activation = await client.ready;
+    const activation = await client.ready.catch(error => {
+      throw new Error(explainClientFailure(error, "tunnel"));
+    });
     await bindReviewOrClose({
       ...(options.review === undefined ? {} : { review: options.review }),
       tunnelId: activation.tunnelId,
@@ -86,6 +102,7 @@ async function runClient(arguments_: readonly string[]): Promise<void> {
       console.log(
         `Review: project=${options.review.projectSlug} revision=${options.review.revisionKey}`,
       );
+      console.log(`Changes at share start (developer-reported): ${options.review.workingTree ?? "unknown"}; live code can change after this report.`);
     }
     console.log(
       `Forwarding the complete origin ${safeLocalOriginForDisplay(options.localOrigin)}; ` +
@@ -109,7 +126,7 @@ async function loginForCarrier(options: ClientOptions): Promise<CarrierAuthentic
     controlUrl: options.controlUrl,
     username: options.username ?? "",
     password: password ?? "",
-  });
+  }).catch(error => { throw new Error(explainClientFailure(error, "account")); });
 }
 
 function errorMessage(value: unknown): string {

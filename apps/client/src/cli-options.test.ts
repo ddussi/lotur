@@ -3,6 +3,16 @@ import test from "node:test";
 
 import { parseClientArguments, safeLocalOriginForDisplay } from "./cli-options.ts";
 
+test("review changes are explicit metadata and require a review binding", () => {
+  const base = ["http://127.0.0.1:3000", "--username", "developer", "--review-project", "storefront", "--review-revision", "commit-a"];
+  assert.equal(parseClientArguments(base, {}).review?.workingTree, undefined);
+  for (const state of ["clean", "modified", "unknown"]) {
+    assert.equal(parseClientArguments([...base, "--review-changes", state], {}).review?.workingTree, state);
+  }
+  assert.throws(() => parseClientArguments([...base, "--review-changes", "auto"], {}), /clean, modified, or unknown/);
+  assert.throws(() => parseClientArguments(["http://127.0.0.1:3000", "--review-changes", "clean"], {}), /requires/);
+});
+
 test("실제로 사용하는 client 옵션만 strict하게 파싱한다", () => {
   const options = parseClientArguments([
     "http://127.0.0.1:3000",

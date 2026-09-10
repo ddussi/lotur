@@ -1,6 +1,7 @@
 import { publicComment, publicReply, publicEvent, publicNotification } from "./review-contract.ts";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { randomBytes } from "node:crypto";
+import { reviewDraftSession } from "./review-draft-session.ts";
 
 import {
   ReviewError,
@@ -79,6 +80,8 @@ export function createReviewHttpHandler(input: Readonly<{
     }
   }
   const eventSubscriptions = new Set<ReviewEventSubscription>();
+  const workingTrees = new Map<string, { state: "clean" | "modified" | "unknown"; reportedAt: string }>();
+  const bindingKey = (tunnel: { tunnelId: string; sessionId: string }) => JSON.stringify([tunnel.tunnelId, tunnel.sessionId]);
   const eventAdmission = createReviewEventAdmission(eventStreamPolicy);
 
   const closeEventSubscription = (
@@ -269,7 +272,9 @@ export function createReviewHttpHandler(input: Readonly<{
             throw new ReviewError("NOT_FOUND", "active Tunnel was not found");
           }
           const form = await readForm(extension.request, MAX_CONTROL_FORM_BYTES);
-          requireExactFormFields(form, ["projectSlug", "revisionKey"]);
+          requireExactFormFields(form, ["projectSlug", "revisionKey", ...(form.has("workingTree") ? ["workingTree"] : [])]);
+          const workingTree = form.get("workingTree") ?? "unknown";
+          if (workingTree !== "clean" && workingTree !== "modified" && workingTree !== "unknown") throw new ReviewError("INVALID_INPUT", "workingTree is invalid");
           const context = await input.service.bindTunnel({
             actor: reviewActorFromPrincipal(extension.principal),
             tunnelOwnerAccountId: tunnel.ownerAccountId,
@@ -279,6 +284,9 @@ export function createReviewHttpHandler(input: Readonly<{
             projectSlug: requiredFormValue(form, "projectSlug"),
             revisionKey: requiredFormValue(form, "revisionKey"),
           });
+          const currentTunnel = input.resolveTunnel(tunnel.tunnelId);
+          if (!currentTunnel?.active || currentTunnel.sessionId !== tunnel.sessionId) throw new ReviewError("NOT_FOUND", "Tunnel closed during binding");
+          workingTrees.set(bindingKey(tunnel), { state: workingTree, reportedAt: new Date().toISOString() });
           writeJson(extension.response, 200, {
             project: {
               slug: context.project.slug,
@@ -322,7 +330,7 @@ export function createReviewHttpHandler(input: Readonly<{
             actor,
             tunnelId: tunnel.tunnelId,
             sessionId: tunnel.sessionId,
-          }), controlOrigin: input.controlOrigin?.(tunnel) });
+          }), controlOrigin: input.controlOrigin?.(tunnel), draftSession: reviewDraftSession(extension.principal), workingTree: workingTrees.get(bindingKey(tunnel)) });
           return;
         }
         if (request.method === "GET" && url.pathname === `${REVIEW_PREFIX}/mentions`) {
@@ -594,6 +602,7 @@ export function createReviewHttpHandler(input: Readonly<{
     },
 
     async disposeBinding(tunnel: Readonly<{ tunnelId: string; sessionId: string }>): Promise<void> {
+      workingTrees.delete(bindingKey(tunnel));
       for (const subscription of eventSubscriptions) {
         if (
           subscription.tunnel.tunnelId === tunnel.tunnelId &&
@@ -608,6 +617,7 @@ export function createReviewHttpHandler(input: Readonly<{
     },
 
     close(): void {
+      workingTrees.clear();
       clearInterval(eventPollTimer);
       for (const subscription of eventSubscriptions) closeEventSubscription(subscription);
     },

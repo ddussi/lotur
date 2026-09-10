@@ -48,6 +48,10 @@ The complete loopback origin is shared. A URL appears after activation and optio
 
 ## Validate or update
 
+Run `npx --no-install review-tunnel doctor http://127.0.0.1:3000 --gateway wss://control.tunnel.example.com/_review-tunnel/carrier --username developer1` to diagnose connection problems. It checks the local port, server readiness, login, and developer credential issuance without starting a share. Omit `--username` to skip the account check. Verify actual tunnel and page behavior after sharing.
+
+Add `--review-changes modified` to a review share to report changes beyond its reference revision, or `clean` to report none. Omitting it means `unknown`. This is a manual report at share start, without Git detection or tracking subsequent changes.
+
 Reinstall a newer verified archive in the same dedicated directory and check `--version`. The Client's source, compiled Docker entrypoint, and standalone archive use the version from the same Client package manifest.
 
 The [consumer validation record](validation/client-package-2026-09-09.md) describes the isolated installation and real Gateway checks. Use the selected release's checksums and [upgrade guide](upgrading.en.md) for updates. An archive built locally is not automatically a published release.

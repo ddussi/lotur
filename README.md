@@ -53,6 +53,8 @@ npm run share -- http://127.0.0.1:3000 \
 
 Replace the Gateway hostname with the one provided by your operator and `3000` with your app's port. Enter your password at the prompt. Send the generated URL to a user with the `REVIEWER` role. Content URLs have the shape `https://<generated-id>.preview.tunnel.example.com/`.
 
+If a connection fails, insert `doctor` before the app address: `npm run share -- doctor http://127.0.0.1:3000 --gateway wss://control.tunnel.example.com/_review-tunnel/carrier --username developer1`. It checks the local port, server readiness, and login/credential issuance, with guidance for failures. It closes its temporary login without starting a share. Check the actual WebSocket tunnel and page behavior after sharing.
+
 To use the Client without a source checkout on the developer's computer, [build and install its standalone archive](docs/client-installation.en.md). The private npm metadata prevents accidental registry publication; archive installation is supported. The optional `@review-tunnel/vite` and `@review-tunnel/next` packages can also be built as local tarballs. No npm registry release is assumed.
 
 ## Review directly on the page
@@ -67,6 +69,8 @@ npm run share -- http://127.0.0.1:3000 \
 
 The URL is printed only after the tunnel and review binding both succeed. Page comments, numbered region pins, replies, resolution, author edits, deletion markers, participant mentions, and recipient-only internal notifications live in a sidebar. PostgreSQL preserves feedback for the same owner, project, and revision when a new share is opened. Live updates use a separate review SSE connection.
 
+The panel shows the project and reference revision. Add `--review-changes modified` if the app has additional changes beyond that revision, or `--review-changes clean` if it does not. The default is `unknown`. This is **developer-reported at share start**, without automatic Git detection; the running app can change afterward.
+
 Use **Hide all pins** to clear the page, then **Show pin** on a comment to display just that pin. New pins follow a uniquely identified element (`data-review-id`, or `id`) when the selection fits inside it. The sidebar explains when a target is unavailable or a coordinate-only pin cannot be placed at the current screen size. See [pin placement and visibility](docs/getting-started.en.md#pin-placement-and-visibility) for setup and limitations.
 
 Follow the [review setup instructions](docs/getting-started.en.md#enable-page-and-region-reviews) for local package installation, Vite/Next configuration, and CSP nonce handling.
@@ -77,7 +81,7 @@ Open `/reviews` on the control host to find feedback by project, revision, page,
 
 When re-review is enabled, a developer chooses **Request review**, and the original author confirms the fix or asks for more changes. The inbox keeps processing history and combines your mention, reply, and workflow notifications across projects. Follow the [review guide](docs/review-guide.en.md) for the complete workflow and operator setup.
 
-Live updates and filter changes preserve drafts in the current tab. Reloading or closing that tab loses unsaved drafts. These saved review records and current-tab drafts have different lifetimes.
+Live updates and filter changes preserve drafts in the current tab. When browser tab storage is available, new comments, replies, edits, and selected pins also survive reloads. Recent drafts are kept for 12 hours within the same origin, tab, login, project, and revision; a new login does not restore previous drafts. Saving or cancelling removes the corresponding draft. Drafts do not sync between tabs or devices, and recovery after closing a tab is not guaranteed. If storage is blocked, drafts remain only in the current page's memory.
 
 ## Set up your own Gateway
 

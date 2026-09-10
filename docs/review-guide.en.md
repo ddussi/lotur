@@ -32,9 +32,11 @@ The operator's global kill switch is different from stopping one share: while th
 
 ## Preserve work within the tab
 
-Live updates, panel collapse, filters, and in-app page navigation preserve drafts in the current tab's memory. If someone edits the same comment first, the editor keeps your input and shows the newer version. Compare the contents, then choose **Use latest version and keep draft** before saving again.
+Live updates, panel collapse, filters, and in-app page navigation preserve drafts in the current tab. If someone edits the same comment first, the editor keeps your input and shows the newer version. Compare the contents, then choose **Use latest version and keep draft** before saving again. Restored edit drafts retain this conflict check.
 
-Reloading or closing the tab loses unsaved drafts. Saved comments remain in PostgreSQL. Drafts are not transferred to another browser or device.
+When `sessionStorage` is available, new comments, replies, edits, and selected pins survive reloads. Recent drafts expire after 12 hours and are scoped to the same origin, tab, login, project, and revision. Saving or cancelling removes that draft; access denial clears saved drafts, and a new login does not restore previous drafts. Drafts do not sync across tabs or devices, and recovery after tab closure is not guaranteed. Blocked or full storage falls back to the current page's memory. Saved comments remain in PostgreSQL.
+
+The panel header shows the project and reference revision. The developer can declare additional changes using `--review-changes clean|modified|unknown`. This describes the reported state at share start, without Git detection or a fixed snapshot; the running app can change afterward.
 
 ## Find notifications
 

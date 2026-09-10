@@ -137,6 +137,9 @@ test("review binding은 기존 CLI 세션으로 정확한 Tunnel에 PUT한다", 
     projectSlug: "storefront",
     revisionKey: "commit-a",
   });
+  await authentication.bindReview({
+    tunnelId: "issued-tunnel", projectSlug: "storefront", revisionKey: "commit-a", workingTree: "modified",
+  });
   await authentication.close();
 
   assert.deepEqual(requests[2], {
@@ -145,4 +148,5 @@ test("review binding은 기존 CLI 세션으로 정확한 Tunnel에 PUT한다", 
     authorization: "Bearer session-token-value-1234567890",
     body: "projectSlug=storefront&revisionKey=commit-a",
   });
+  assert.equal(requests[3]?.body, "projectSlug=storefront&revisionKey=commit-a&workingTree=modified");
 });

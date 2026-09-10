@@ -201,9 +201,15 @@ test("authenticated review APIs bind stable revisions and never reach the local 
       headers: { cookie: contentCookie },
     });
     assert.equal(context.status, 200);
-    assert.deepEqual(JSON.parse(context.body), {
-      project: { id: JSON.parse(context.body).project.id, slug: "storefront", displayName: "storefront" },
-      revision: { id: JSON.parse(context.body).revision.id, key: "commit-a" },
+    const contextBody = JSON.parse(context.body);
+    assert.match(contextBody.draftSession, /^[a-f0-9]{64}$/);
+    assert.notEqual(contextBody.draftSession, reviewer.sessionToken);
+    assert.ok(Number.isFinite(Date.parse(contextBody.workingTree.reportedAt)));
+    assert.deepEqual(contextBody, {
+      project: { id: contextBody.project.id, slug: "storefront", displayName: "storefront" },
+      revision: { id: contextBody.revision.id, key: "commit-a" },
+      draftSession: contextBody.draftSession,
+      workingTree: { state: "unknown", reportedAt: contextBody.workingTree.reportedAt },
       controlOrigin: "http://control.localhost:9443",
       features: { workflowVersion: 1, canRequestReview: true },
       principal: {
@@ -227,6 +233,11 @@ test("authenticated review APIs bind stable revisions and never reach the local 
     );
     assert.equal(developerContext.status, 200);
     assert.equal(JSON.parse(developerContext.body).principal.canManageProject, true);
+    assert.notEqual(JSON.parse(developerContext.body).draftSession, contextBody.draftSession);
+    const refreshedContext = await send(gatewayPort, firstHost, "/_review-tunnel/review/context", {
+      method: "GET", headers: { cookie: contentCookie },
+    });
+    assert.equal(JSON.parse(refreshedContext.body).draftSession, contextBody.draftSession);
 
     const invalidEventCursor = await send(
       gatewayPort,

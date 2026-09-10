@@ -8,6 +8,7 @@ import {
   reviewActorFromPrincipal, writeJson,
 } from "./review-http.ts";
 import { REVIEW_CONTROL_SOURCE, REVIEW_CONTROL_HTML } from "./review-control-view.ts";
+import { reviewDraftSession } from "./review-draft-session.ts";
 
 export function createReviewControlHandler(input: Readonly<{
   service: ReviewService;
@@ -94,7 +95,7 @@ export function createReviewControlHandler(input: Readonly<{
               ...(url.searchParams.has("before") ? { before: url.searchParams.get("before")! } : {}) });
             writeJson(response, 200, { ...page, replies: page.replies.map(reply => publicReply(reply, actor, page.threadStatus)) });
           } else if (!match[2]) {
-            writeJson(response, 200, { project: detail.project, revision: detail.revision,
+            writeJson(response, 200, { project: detail.project, revision: detail.revision, draftSession: reviewDraftSession(principal),
               comment: publicComment(detail.thread, actor), features: service.getFeatures(), readOnly: input.isReadOnly(),
               principal: { accountId: actor.accountId, ...actor.capabilities, canComment: actor.capabilities.canComment && !input.isReadOnly() },
               targets: input.isReadOnly() ? [] : await input.activeTargets(principal, detail.revision.id, detail.thread.id),

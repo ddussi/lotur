@@ -26,6 +26,90 @@ class TestHasher {
   }
 }
 
+test("review drafts restore after reload with pin, reply and edit context, and clear on a different login", async ({ page }, testInfo) => {
+  const runtime = await startReviewRuntime('<button id="draft-anchor">Review this button</button>');
+  try {
+    await runtime.service.createPageComment({ ...runtime.reviewCommand, body: "Existing thread" });
+    await page.context().addCookies([{ name: "rt_session_dev", value: runtime.contentSessionToken, url: runtime.shareUrl }]);
+    await page.goto(runtime.shareUrl);
+    const overlay = page.locator("review-tunnel-overlay");
+    const thread = overlay.locator(".thread").first();
+    await expect(thread).toContainText("Existing thread");
+    await thread.getByRole("textbox", { name: "Reply to comment" }).fill("Unsent reply");
+    await thread.getByRole("button", { name: "Edit comment", exact: true }).click();
+    await thread.getByRole("textbox", { name: "Edit comment", exact: true }).fill("Unsent edit");
+    const box = await page.locator("#draft-anchor").boundingBox();
+    await overlay.getByRole("button", { name: "Select area or pin" }).click();
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    await overlay.getByRole("textbox", { name: "Comment", exact: true }).fill("Unsent pinned comment");
+    await page.reload();
+    await expect(overlay.getByRole("textbox", { name: "Comment", exact: true })).toHaveValue("Unsent pinned comment");
+    await expect(overlay.locator(".selection-state")).toHaveText("Pinned point selected");
+    await expect(thread.getByRole("textbox", { name: "Reply to comment" })).toHaveValue("Unsent reply");
+    await expect(thread.getByRole("textbox", { name: "Edit comment", exact: true })).toHaveValue("Unsent edit");
+    await thread.getByRole("button", { name: "Cancel edit" }).click();
+    await overlay.getByRole("button", { name: "Comment", exact: true }).click();
+    await expect(overlay.locator(".thread").filter({ hasText: "Unsent pinned comment" }).getByRole("button", { name: "Go to pin 1" })).toBeVisible();
+    await page.reload();
+    await expect(overlay.getByRole("textbox", { name: "Comment", exact: true })).toHaveValue("");
+    await expect(overlay.getByRole("textbox", { name: "Edit comment", exact: true })).toHaveCount(0);
+    await overlay.getByRole("textbox", { name: "Comment", exact: true }).fill("Reviewer private draft");
+    await page.context().addCookies([{ name: "rt_session_dev", value: runtime.developerContentSessionToken, url: runtime.shareUrl }]);
+    await page.reload();
+    await expect(overlay.getByRole("textbox", { name: "Comment", exact: true })).toHaveValue("");
+    await expect(overlay.getByRole("textbox", { name: "Reply to comment" }).first()).toHaveValue("");
+    expect(await page.evaluate(() => Object.values(sessionStorage).join(" "))).not.toContain("Reviewer private draft");
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({ path: testInfo.outputPath("review-version-mobile.png"), fullPage: true });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  } finally { await page.close(); await runtime.close(); }
+});
+
+test("review inbox restores drafts and retains the original edit version after a peer change", async ({ page }) => {
+  const runtime = await startReviewRuntime();
+  try {
+    const comment = await runtime.service.createPageComment({ ...runtime.reviewCommand, body: "Original text" });
+    await page.context().addCookies([{ name: "rt_control_dev", value: runtime.controlSessionToken, url: runtime.controlUrl }]);
+    await page.goto(`${runtime.controlUrl}/reviews/threads/${comment.id}`);
+    await page.getByRole("textbox", { name: "Reply to comment" }).fill("Inbox reply draft");
+    await page.getByRole("button", { name: "Edit comment", exact: true }).click();
+    await page.getByRole("textbox", { name: "Edit comment", exact: true }).fill("Inbox edit draft");
+    await runtime.service.updateComment({ ...runtime.reviewCommand, commentId: comment.id, expectedVersion: 1, body: "Peer changed text" });
+    await page.reload();
+    await expect(page.getByRole("textbox", { name: "Reply to comment" })).toHaveValue("Inbox reply draft");
+    await expect(page.getByRole("textbox", { name: "Edit comment", exact: true })).toHaveValue("Inbox edit draft");
+    await expect(page.getByRole("button", { name: "Save changes" })).toBeDisabled();
+    await expect(page.getByText("This comment changed.", { exact: false })).toBeVisible();
+    await page.getByRole("button", { name: "Use latest version and keep draft" }).click();
+    await page.getByRole("button", { name: "Save changes" }).click();
+    await expect(page.locator(".comment-body")).toHaveText("Inbox edit draft");
+    await page.reload();
+    await expect(page.getByRole("textbox", { name: "Edit comment", exact: true })).toHaveCount(0);
+  } finally { await page.close(); await runtime.close(); }
+});
+
+test("review version shows explicit developer-reported changes and rejects invalid reports", async ({ page }) => {
+  const runtime = await startReviewRuntime();
+  try {
+    await page.context().addCookies([{ name: "rt_session_dev", value: runtime.contentSessionToken, url: runtime.shareUrl }]);
+    await page.goto(runtime.shareUrl);
+    const context = page.locator("review-tunnel-overlay .review-version");
+    await expect(context).toContainText("프로젝트: storefront");
+    await expect(context).toContainText("기준 버전: commit-a");
+    await expect(context).toContainText("추가 수정 여부 미확인");
+    expect((await runtime.reportChanges("modified")).status).toBe(200);
+    await page.reload();
+    await expect(context).toContainText("추가 수정 있음 · 공유 시작 시 개발자 입력");
+    expect((await runtime.reportChanges("invalid")).status).toBe(400);
+    await page.reload();
+    await expect(context).toContainText("추가 수정 있음");
+    expect((await runtime.reportChanges("clean")).status).toBe(200);
+    await page.reload();
+    await expect(context).toContainText("추가 수정 없음");
+    await expect(context).toContainText("이후 내용은 바뀔 수 있습니다");
+  } finally { await page.close(); await runtime.close(); }
+});
+
 test("Shadow DOM review overlay works with strict nonce CSP and survives API failure", async ({ page }) => {
   const runtime = await startReviewRuntime();
   try {
@@ -740,6 +824,7 @@ async function startReviewRuntime(fixture = "") {
 
   return {
     service,
+    reportChanges: state => sendControl(gatewayPort, tunnelId, developer.sessionToken, state),
     reviewCommand: {
       actor: reviewActorFromPrincipal(reviewer.principal),
       tunnelId,
@@ -795,11 +880,12 @@ async function startReviewRuntime(fixture = "") {
   };
 }
 
-function sendControl(port, tunnelId, sessionToken) {
+function sendControl(port, tunnelId, sessionToken, workingTree) {
   return new Promise((resolve, reject) => {
     const body = new URLSearchParams({
       projectSlug: "storefront",
       revisionKey: "commit-a",
+      ...(workingTree === undefined ? {} : { workingTree }),
     }).toString();
     const outgoing = request({
       host: "127.0.0.1",

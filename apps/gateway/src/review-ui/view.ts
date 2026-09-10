@@ -1,7 +1,9 @@
 import { createThreadView } from './thread-view.ts';
 import { attachMentions } from './mentions.ts';
 import { createReviewApi } from './api.ts';
-import { createDraftStore } from './drafts.ts';
+import { createDraftStore, reviewDraftScope } from './drafts.ts';
+import { reviewRevisionLabel } from './revision-context.ts';
+import { normalizeRegionAnchor } from '../../../../packages/review/src/model.ts';
 import { createRefreshCoordinator, emptyCommentPage, refreshLoadedPage } from './page-state.ts';
 import { createLiveUpdates, watchNavigation } from './live-updates.ts';
 import type { CommentPage, PublicComment, PublicNotification, ReplyPage, ReviewContext } from './contracts.ts';
@@ -49,6 +51,8 @@ if (document.querySelector(overlayTag) === null) {
     ".heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }",
     "h2 { margin: 0; font-size: 16px; }",
     ".context, .status, .selection-state { color: #52606d; font-size: 12px; }",
+    ".review-version { display: block; white-space: pre-line; overflow-wrap: anywhere; margin-bottom: 8px; line-height: 1.6; }",
+    ".review-inbox-link { display: block; margin-bottom: 12px; }",
     ".comments { display: grid; gap: 10px; margin: 12px 0; padding: 0; list-style: none; }",
     ".notification-panel { margin-top: 10px; padding: 8px; border: 1px solid #d7dce2; border-radius: 8px; background: #fbfcfd; }",
     ".notification-panel summary { cursor: pointer; color: #334e68; font-weight: 650; }",
@@ -70,6 +74,7 @@ if (document.querySelector(overlayTag) === null) {
     ".replies { display: grid; gap: 8px; margin: 10px 0 0 12px; padding-left: 10px; border-left: 2px solid #d7dce2; }",
     ".reply { padding: 8px; border-radius: 6px; background: #fff; }",
     "form { display: grid; gap: 8px; }",
+    "form[hidden] { display: none; }",
     ".selection-controls { display: flex; align-items: center; gap: 8px; }",
     ".selection-state { flex: 1; }",
     ".reply-form { margin-top: 10px; }",
@@ -105,12 +110,13 @@ if (document.querySelector(overlayTag) === null) {
   const title = document.createElement("h2");
   title.textContent = "Page review";
   const contextLabel = document.createElement("span");
-  contextLabel.className = "context";
+  contextLabel.className = "context review-version";
+  contextLabel.setAttribute("aria-label", "검토 버전");
   const collapseButton = document.createElement("button");
   collapseButton.type = "button";
   collapseButton.className = "secondary-button small-button";
   collapseButton.textContent = "Close review panel";
-  heading.append(title, contextLabel, collapseButton);
+  heading.append(title, collapseButton);
   const launcher = document.createElement("button");
   launcher.type = "button";
   launcher.className = "review-launcher";
@@ -163,6 +169,7 @@ if (document.querySelector(overlayTag) === null) {
   loadOlderButton.textContent = "Load older comments";
   loadOlderButton.hidden = true;
   const form = document.createElement("form");
+  form.hidden = true;
   const body = document.createElement("textarea");
   body.name = "body";
   body.maxLength = 4000;
@@ -188,14 +195,14 @@ if (document.querySelector(overlayTag) === null) {
   submit.type = "submit";
   submit.textContent = "Comment";
   form.append(body, selectionControls, submit);
-  panel.append(heading, pinControls, filters, status, notificationPanel, comments, loadOlderButton, form);
+  panel.append(heading, contextLabel, pinControls, filters, status, notificationPanel, comments, loadOlderButton, form);
   root.append(style, markerLayer, selectionLayer, panel, launcher);
   document.documentElement.append(host);
 
-  const drafts = createDraftStore();
+  const drafts = createDraftStore({ channel: "page" });
   const lifetime = new AbortController();
   let draftPath = location.pathname;
-  body.addEventListener("input", () => drafts.write(draftPath, "", body.value));
+  body.addEventListener("input", () => drafts.write(draftPath, "", body.value, pendingAnchor));
   let context: ReviewContext | undefined;
   let loadSequence = 0;
   let commentPage = emptyCommentPage();
@@ -210,6 +217,7 @@ if (document.querySelector(overlayTag) === null) {
   const clearAccess = () => {
     ++loadSequence;
     threadView.clear(); drafts.clear(); body.value = ""; context = undefined;
+    form.hidden = true; contextLabel.textContent = ""; pendingAnchor = undefined;
     commentPage = emptyCommentPage(); comments.replaceChildren(); markerLayer.replaceChildren();
     notifications.replaceChildren(); live.close();
   };
@@ -316,13 +324,24 @@ if (document.querySelector(overlayTag) === null) {
       ...target,
     };
   };
-  const updateSelectionState = () => {
+  const updateSelectionState = (saveDraft = true) => {
     selectionState.textContent = pendingAnchor === undefined
       ? "Page comment"
       : pendingAnchor.selection === "POINT"
       ? "Pinned point selected"
       : "Area selected";
     clearSelectionButton.hidden = pendingAnchor === undefined;
+    if (context && saveDraft) drafts.write(draftPath, "", body.value, pendingAnchor);
+  };
+  const restorePageDraft = () => {
+    body.value = drafts.read(draftPath, "");
+    const saved = drafts.get(draftPath, "")?.data;
+    pendingAnchor = undefined;
+    if (saved !== undefined) {
+      try { pendingAnchor = normalizeRegionAnchor(saved); }
+      catch { setStatus("Draft restored; select the review area again.", true); }
+    }
+    updateSelectionState(false);
   };
   const cancelSelection = (clearPending: boolean) => {
     selectionLayer.setAttribute("hidden", "");
@@ -598,11 +617,14 @@ if (document.querySelector(overlayTag) === null) {
     setPassiveStatus("Loading comments…");
     try {
       if (context === undefined) {
-        context = await apiClient.context();
+        const nextContext = await apiClient.context();
+        if (lifetime.signal.aborted || sequence !== loadSequence) return;
+        context = nextContext;
+        if (drafts.setScope(reviewDraftScope(context))) restorePageDraft();
         if (context.controlOrigin && !panel.querySelector(".review-inbox-link")) {
           const inboxLink = document.createElement("a"); inboxLink.className = "review-inbox-link"; inboxLink.textContent = "Review inbox · All pages"; inboxLink.href = context.controlOrigin + "/reviews"; inboxLink.target = "_blank"; inboxLink.rel = "noopener noreferrer"; contextLabel.after(inboxLink);
         }
-        contextLabel.textContent = context.project.displayName + " · " + context.revision.key;
+        contextLabel.textContent = reviewRevisionLabel(context);
         form.hidden = !context.principal.canComment;
       }
       const [result, notificationResult] = await Promise.all([
@@ -728,26 +750,26 @@ if (document.querySelector(overlayTag) === null) {
   document.fonts.addEventListener("loadingdone", scheduleMarkerUpdate, { signal: lifetime.signal });
   watchNavigation(() => {
     if (draftPath !== location.pathname) {
-      drafts.write(draftPath, "", body.value);
+      drafts.write(draftPath, "", body.value, pendingAnchor);
       draftPath = location.pathname;
-      body.value = drafts.read(draftPath, "") ?? "";
+      restorePageDraft();
     }
     activeThreadId = undefined;
     pinOverrides.clear();
     commentPage = { comments: [], openCount: 0, eventCursor: "0", pageInfo: { hasMore: false } };
     renderComments();
-    cancelSelection(true);
+    cancelSelection(false);
     live.close();
     commentPath = undefined;
     setStatus("Loading comments…");
     void requestLoad();
   }, lifetime.signal);
   window.addEventListener("pagehide", () => live.close(), { signal: lifetime.signal });
-  window.addEventListener("pageshow", event => { if (event.persisted) void requestLoad(); }, { signal: lifetime.signal });
+  window.addEventListener("pageshow", event => { if (event.persisted) { context = undefined; void requestLoad(); } }, { signal: lifetime.signal });
   const removalObserver = new MutationObserver(() => { if (!host.isConnected) lifetime.abort(); });
   removalObserver.observe(document.documentElement, { childList: true });
   lifetime.signal.addEventListener("abort", () => {
-    ++loadSequence; live.close(); drafts.clear(); threadView.clear(); resizeObserver.disconnect();
+    ++loadSequence; live.close(); drafts.dispose(); threadView.dispose(); resizeObserver.disconnect();
     mutationObserver.disconnect(); removalObserver.disconnect(); if (markerFrame !== undefined) cancelAnimationFrame(markerFrame);
   }, { once: true });
   void requestLoad();

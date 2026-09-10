@@ -48,6 +48,10 @@ npx --no-install review-tunnel http://127.0.0.1:3000 \
 
 ## 확인과 업데이트
 
+연결 문제는 `npx --no-install review-tunnel doctor http://127.0.0.1:3000 --gateway wss://control.tunnel.example.com/_review-tunnel/carrier --username developer1`로 확인한다. 로컬 포트·서버 준비 상태·로그인과 개발자 연결 자격을 점검하며 공유는 시작하지 않는다. `--username`을 생략하면 계정 검사를 건너뛴다. 실제 터널과 화면 동작은 공유 후 확인한다.
+
+공유 명령의 `--review-changes modified`는 기준 버전 이후 수정이 있음을, `clean`은 없음을 표시한다. 생략하면 `unknown`이다. Git 자동 감지가 아닌 공유 시작 시 입력값이며 이후 변경을 추적하지 않는다.
+
 새로 검증한 설치 파일을 같은 전용 폴더에 설치하고 `--version`으로 확인한다. 소스 실행·컴파일된 Docker 진입점·독립 파일은 같은 Client 메타데이터의 버전을 사용한다.
 
 [소비자 검증 기록](validation/client-package-2026-09-09.md)에 저장소 밖 설치와 실제 Gateway 검사를 기록했다. 업데이트에는 선택한 릴리스의 체크섬과 [업그레이드 안내](upgrading.md)를 따른다. 로컬에서 생성한 파일을 게시된 릴리스로 간주하지 않는다.
