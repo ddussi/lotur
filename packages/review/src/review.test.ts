@@ -62,6 +62,7 @@ test("review identifiers and page paths are canonical, bounded, and fail closed"
   assert.equal(normalizeProjectSlug("storefront"), "storefront");
   assert.equal(normalizeRevisionKey("4A1b2c3d"), "4A1b2c3d");
   assert.equal(normalizeRoutePath("/products/%7bsku%7d"), "/products/%7Bsku%7D");
+  assert.equal(normalizeRoutePath("/한글/%5c"), "/한글/%5C");
   assert.equal(normalizeCommentBody("line one\r\nline two"), "line one\nline two");
   assert.equal(normalizeReplyBody("reply one\r\nreply two"), "reply one\nreply two");
   assert.equal(normalizeAuthorizationVersion(1), 1);
@@ -83,7 +84,7 @@ test("review identifiers and page paths are canonical, bounded, and fail closed"
   for (const revision of ["", " dirty ", "feature branch", "a".repeat(129)]) {
     assert.throws(() => normalizeRevisionKey(revision), ReviewError);
   }
-  for (const path of ["products", "//other-host/path", "/products?token=secret", "/#fragment", "/a\u0000b", `/${"x".repeat(2_048)}`]) {
+  for (const path of ["products", "//other-host/path", "/\\example.invalid/path", "/nested\\path", "/products?token=secret", "/#fragment", "/a\u0000b", `/${"x".repeat(2_048)}`]) {
     assert.throws(() => normalizeRoutePath(path), ReviewError);
   }
   for (const body of ["", " \n\t ", "bad\u0000body", "x".repeat(4_001)]) {

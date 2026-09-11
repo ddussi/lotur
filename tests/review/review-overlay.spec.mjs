@@ -26,6 +26,45 @@ class TestHasher {
   }
 }
 
+test("review focus rejects external paths from new requests and legacy stored comments", async ({ page }) => {
+  const runtime = await startReviewRuntime();
+  try {
+    await page.context().addCookies([{ name: "rt_session_dev", value: runtime.contentSessionToken, url: runtime.shareUrl }]);
+    await page.goto(runtime.shareUrl);
+    const unsafe = "/\\example.invalid/landing";
+    const create = path => page.evaluate(async routePath => {
+      const response = await fetch("/_review-tunnel/review/comments", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ path: routePath, body: "Keep this review" }),
+      });
+      return { status: response.status, body: await response.json() };
+    }, path);
+    expect((await create(unsafe)).status).toBe(400);
+    const created = await create("/safe/%7Bsku%7D");
+    expect(created.status).toBe(201);
+    const id = created.body.comment.id;
+    const focusUrl = `${runtime.shareUrl}_review-tunnel/review/focus?thread=${id}`;
+    await page.goto(focusUrl);
+    await expect(page).toHaveURL(new URL("/safe/%7Bsku%7D", runtime.shareUrl).href);
+
+    const stored = runtime.repository.threads.get(id);
+    runtime.repository.threads.set(id, { ...stored, routePath: unsafe });
+    const externalRequests = [];
+    await page.route("**/*", route => {
+      if (new URL(route.request().url()).origin !== new URL(runtime.shareUrl).origin) {
+        externalRequests.push(route.request().url());
+        return route.fulfill({ status: 200, body: "External navigation intercepted by test" });
+      }
+      return route.continue();
+    });
+    const response = await page.goto(focusUrl);
+    expect(response.status()).toBe(400);
+    expect(new URL(page.url()).origin).toBe(new URL(runtime.shareUrl).origin);
+    expect(externalRequests).toEqual([]);
+    expect(runtime.repository.threads.get(id).body).toBe("Keep this review");
+  } finally { await page.close(); await runtime.close(); }
+});
+
 test("review drafts restore after reload with pin, reply and edit context, and clear on a different login", async ({ page }, testInfo) => {
   const runtime = await startReviewRuntime('<button id="draft-anchor">Review this button</button>');
   try {
@@ -824,6 +863,7 @@ async function startReviewRuntime(fixture = "") {
 
   return {
     service,
+    repository,
     reportChanges: state => sendControl(gatewayPort, tunnelId, developer.sessionToken, state),
     reviewCommand: {
       actor: reviewActorFromPrincipal(reviewer.principal),

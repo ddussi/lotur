@@ -5,6 +5,7 @@ import { reviewDraftSession } from "./review-draft-session.ts";
 
 import {
   ReviewError,
+  normalizeRoutePath,
   type ReviewActor,
   type ReviewEvent,
   type ReviewService,
@@ -339,8 +340,12 @@ export function createReviewHttpHandler(input: Readonly<{
         }
         if (request.method === "GET" && url.pathname === `${REVIEW_PREFIX}/focus`) {
           const comment = await input.service.getThread({ actor, tunnelId: tunnel.tunnelId, sessionId: tunnel.sessionId, commentId: url.searchParams.get("thread") ?? "" });
+          const path = normalizeRoutePath(comment.routePath);
+          if (new URL(path, tunnel.publicOrigin).origin !== new URL(tunnel.publicOrigin).origin) {
+            throw new ReviewError("INVALID_INPUT", "review focus must stay on the shared app origin");
+          }
           const nonce = randomBytes(18).toString("base64");
-          const focus = JSON.stringify({ id: comment.id, path: comment.routePath, revisionId: comment.revisionId, expiresAt: Date.now() + 60_000 }).replaceAll("<", "\\u003c");
+          const focus = JSON.stringify({ id: comment.id, path, revisionId: comment.revisionId, expiresAt: Date.now() + 60_000 }).replaceAll("<", "\\u003c");
           response.setHeader("Content-Security-Policy", `default-src 'none'; script-src 'nonce-${nonce}'; base-uri 'none'; frame-ancestors 'none'`);
           response.setHeader("Content-Type", "text/html; charset=utf-8");
           response.end(`<!doctype html><meta charset="utf-8"><title>리뷰로 이동</title><p>리뷰가 있는 페이지로 이동합니다.</p><script nonce="${nonce}">const focus=${focus};try{sessionStorage.setItem('review-tunnel:focus',JSON.stringify(focus));}catch{}location.replace(focus.path);</script>`);

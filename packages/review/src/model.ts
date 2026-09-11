@@ -354,6 +354,7 @@ export function normalizeRoutePath(value: string): string {
     value.length > MAX_ROUTE_PATH_LENGTH ||
     !value.startsWith("/") ||
     value.startsWith("//") ||
+    value.includes("\\") ||
     value.includes("?") ||
     value.includes("#") ||
     hasControlCharacters
