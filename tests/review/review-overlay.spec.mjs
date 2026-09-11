@@ -65,6 +65,30 @@ test("review focus rejects external paths from new requests and legacy stored co
   } finally { await page.close(); await runtime.close(); }
 });
 
+test("an OPEN filter refresh stays bounded when its oldest loaded comment is resolved and retains a draft", async ({ page }) => {
+  const runtime = await startReviewRuntime();
+  try {
+    const comments = [];
+    for (let index = 0; index < 300; index += 1) {
+      comments.push(await runtime.service.createPageComment({ ...runtime.reviewCommand, body: `Bounded review ${index}` }));
+    }
+    await page.context().addCookies([{ name: "rt_session_dev", value: runtime.contentSessionToken, url: runtime.shareUrl }]);
+    await page.goto(runtime.shareUrl);
+    const overlay = page.locator("review-tunnel-overlay");
+    await expect(overlay.locator(".thread")).toHaveCount(100);
+    const draft = overlay.locator(`[data-review-thread-id="${comments[299].id}"]`).getByRole("textbox", { name: "Reply to comment" });
+    await draft.fill("Keep this bounded refresh draft");
+    await runtime.service.changePageCommentStatus({ ...runtime.reviewCommand, actor: runtime.developerActor,
+      commentId: comments[200].id, expectedStatus: "OPEN", status: "RESOLVED" });
+    await runtime.service.createPageComment({ ...runtime.reviewCommand, body: "Newest bounded review" });
+    await expect(overlay.locator(".thread").filter({ hasText: "Newest bounded review" })).toHaveCount(1);
+    await expect(overlay.locator(`[data-review-thread-id="${comments[200].id}"]`)).toHaveCount(0);
+    await expect(overlay.locator(".thread")).toHaveCount(200);
+    await expect(overlay.getByRole("button", { name: "Load older comments" })).toBeVisible();
+    await expect(draft).toHaveValue("Keep this bounded refresh draft");
+  } finally { await page.close(); await runtime.close(); }
+});
+
 test("review drafts restore after reload with pin, reply and edit context, and clear on a different login", async ({ page }, testInfo) => {
   const runtime = await startReviewRuntime('<button id="draft-anchor">Review this button</button>');
   try {

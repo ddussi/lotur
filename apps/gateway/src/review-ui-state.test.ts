@@ -86,7 +86,7 @@ test("a submission cannot clear a newer draft that returns to the same text", ()
 });
 
 test("refresh revalidates every loaded comment and reply range instead of retaining stale records", async () => {
-  const old = comment("old");
+  const old = comment("old", "2026-09-01T00:00:00.000Z");
   const latest = comment("latest");
   const olderReply = { id: "old-reply", threadId: old.id, body: "old reply" } as PublicComment["replies"][number];
   const newReply = { id: "new-reply", threadId: old.id, body: "new reply" } as PublicComment["replies"][number];
@@ -112,6 +112,35 @@ test("refresh revalidates every loaded comment and reply range instead of retain
   assert.equal(refreshed.eventCursor, "3");
 });
 
-function comment(id: string): PublicComment {
-  return { id, body: id, version: 1, replies: [], replyPageInfo: { hasMore: false } } as unknown as PublicComment;
+for (const total of [100, 1_000, 10_000]) {
+  for (const sameTimestamp of [false, true]) {
+    test(`refresh stops at a vanished filter boundary in ${total} records (${sameTimestamp ? "tied" : "distinct"} timestamps)`, async () => {
+      const item = (number: number) => comment(String(number).padStart(6, "0"),
+        new Date(sameTimestamp ? 0 : number * 1_000).toISOString());
+      const loaded = Array.from({ length: 100 }, (_, index) => item(total - 99 + index));
+      const remaining = Array.from({ length: total + 1 }, (_, index) => item(index + 1))
+        .filter(value => value.id !== loaded[0]!.id);
+      let requests = 0;
+      const refreshed = await refreshLoadedPage({
+        async page(_path, before) {
+          requests += 1;
+          const end = before === undefined ? remaining.length : Number(before);
+          const start = Math.max(0, end - 100);
+          return { comments: remaining.slice(start, end), openCount: total, eventCursor: "2",
+            pageInfo: { hasMore: start > 0, nextCursor: String(start) } };
+        },
+        async replies() { throw new Error("No reply pages are open"); },
+      }, "/", { comments: loaded, openCount: total, eventCursor: "1", pageInfo: { hasMore: total > 100 } });
+      assert.ok(requests <= 2, `loaded ${requests} pages for a single filtered-out boundary`);
+      assert.ok(refreshed.comments.length <= 200);
+      assert.equal(refreshed.comments.at(-1)?.id, item(total + 1).id);
+      assert.ok(loaded.slice(1).every(previous => refreshed.comments.some(value => value.id === previous.id)));
+      assert.equal(refreshed.comments.some(value => value.id === loaded[0]!.id), false);
+      if (total > 200) assert.equal(refreshed.pageInfo.hasMore, true);
+    });
+  }
+}
+
+function comment(id: string, createdAt = "2026-09-02T00:00:00.000Z"): PublicComment {
+  return { id, createdAt, body: id, version: 1, replies: [], replyPageInfo: { hasMore: false } } as unknown as PublicComment;
 }

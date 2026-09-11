@@ -5,8 +5,8 @@ export function emptyCommentPage(): CommentPage {
   return { comments: [], openCount: 0, eventCursor: "0", pageInfo: { hasMore: false } };
 }
 
-/** Re-read loaded ranges through their oldest item. New arrivals may shift page boundaries.
- * Server tombstones preserve those anchors; a missing anchor falls back to the end of history.
+/** Re-read through the oldest loaded position, including a boundary page.
+ * Status filters can remove an item, but its immutable creation position still bounds the range.
  */
 export async function refreshLoadedPage(
   api: Pick<ReviewApi, "page" | "replies">,
@@ -14,10 +14,11 @@ export async function refreshLoadedPage(
   current: CommentPage,
 ): Promise<CommentPage> {
   let latest = await api.page(path);
-  const oldestId = current.comments[0]?.id;
+  const oldest = current.comments[0];
   while (
-    oldestId !== undefined &&
-    !latest.comments.some((item) => item.id === oldestId) &&
+    oldest !== undefined &&
+    !latest.comments.some((item) => item.createdAt < oldest.createdAt ||
+      (item.createdAt === oldest.createdAt && item.id <= oldest.id)) &&
     latest.pageInfo.hasMore
   ) {
     const older = await api.page(path, latest.pageInfo.nextCursor);
