@@ -5,8 +5,26 @@ import {
   decodeOpenHttpMetadata,
   decodeResponseHeadersMetadata,
   encodeOpenHttpMetadata,
+  encodeResponseHeadersMetadata,
   encodeMetadata,
 } from "./http-metadata.ts";
+
+test("RESPONSE_HEADERS encoder preserves valid boundaries and rejects the decoder's invalid inputs", () => {
+  const metadata = { statusCode: 200, statusMessage: "OK", headers: [] as (readonly [string, string])[] };
+  for (const count of [255, 256]) {
+    const value = { ...metadata, headers: Array.from({ length: count }, () => ["set-cookie", "a=b"] as const) };
+    assert.deepEqual(decodeResponseHeadersMetadata(encodeResponseHeadersMetadata(value)), value);
+  }
+  for (const value of [
+    { ...metadata, headers: Array.from({ length: 257 }, () => ["x-test", "x"] as const) },
+    { ...metadata, statusCode: 600 },
+    { ...metadata, statusMessage: "bad\r\nstatus" },
+    { ...metadata, headers: [["x-test", "bad\r\nvalue"]] as const },
+  ]) {
+    assert.throws(() => encodeResponseHeadersMetadata(value), TypeError);
+    assert.throws(() => decodeResponseHeadersMetadata(encodeMetadata(value)), TypeError);
+  }
+});
 
 test("OPEN_HTTP encoder and decoder share header count and path validation", () => {
   const metadata = {

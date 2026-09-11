@@ -14,6 +14,7 @@ import {
   decodeSessionActiveMetadata,
   decodeWindowUpdate,
   encodeMetadata,
+  encodeResponseHeadersMetadata,
   encodeWindowUpdate,
   CARRIER_PROFILE,
   FrameType,
@@ -1212,7 +1213,7 @@ async function activateLocalWebSocket(
       type: FrameType.ResponseHeaders,
       generation,
       streamId,
-      payload: encodeMetadata({
+      payload: encodeResponseHeadersMetadata({
         statusCode: response.statusCode ?? 101,
         statusMessage: response.statusMessage ?? "Switching Protocols",
         headers: projectResponseHeaders(rawHeadersToPairs(response.rawHeaders), {
@@ -1261,7 +1262,7 @@ async function forwardLocalResponse(
       type: FrameType.ResponseHeaders,
       generation,
       streamId,
-      payload: encodeMetadata({
+      payload: encodeResponseHeadersMetadata({
         statusCode: response.statusCode ?? 502,
         statusMessage: response.statusMessage ?? "",
         headers: projectResponseHeaders(

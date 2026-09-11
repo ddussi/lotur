@@ -715,10 +715,12 @@ async function handleWebSocketClientFrame(
       enqueueWebSocketResponseEnd(session, streamId, stream);
       break;
     case FrameType.ResetStream: {
+      const reset = decodeResetStreamMetadata(envelope.payload);
       stream.cancelled = true;
       removeGatewayStream(session, streamId, stream);
       stream.transport.outboundFlow.closeStream(streamId);
-      stream.browserSocket.destroy();
+      if (stream.responseStarted) stream.browserSocket.destroy();
+      else writeRawError(stream.browserSocket, 502, reset.code);
       break;
     }
     default:

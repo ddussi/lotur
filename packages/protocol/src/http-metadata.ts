@@ -217,7 +217,14 @@ export function decodeWindowUpdate(payload: Uint8Array): number {
 export function decodeResponseHeadersMetadata(
   payload: Uint8Array,
 ): ResponseHeadersMetadata {
-  const value = parseObject(payload);
+  return parseResponseHeadersMetadata(parseObject(payload));
+}
+
+export function encodeResponseHeadersMetadata(value: ResponseHeadersMetadata): Uint8Array {
+  return encodeMetadata(parseResponseHeadersMetadata(value));
+}
+
+function parseResponseHeadersMetadata(value: Record<string, unknown>): ResponseHeadersMetadata {
   if (
     typeof value.statusCode !== "number" ||
     !Number.isInteger(value.statusCode) ||
