@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { mkdtemp, mkdir, readFile, writeFile, rm, lstat } from "node:fs/promises";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -54,8 +55,22 @@ test("standalone Client archive installs offline outside the repository with onl
     const invalid = await execute(cli, ["--unknown"], { cwd: consumer, env: environment }).then(() => undefined, error => error);
     assert.equal(invalid?.code, 1); assert.match(invalid.stderr, /Usage: review-tunnel/);
     assert.doesNotMatch(invalid.stderr, /\n\s+at /);
-    const needsTty = await execute(cli, ["http://127.0.0.1:3000", "--gateway", "ws://control.localhost:8788/_review-tunnel/carrier", "--username", "developer"], { cwd: consumer, env: environment }).then(() => undefined, error => error);
-    assert.equal(needsTty?.code, 1); assert.match(needsTty.stderr, /TTY is required/);
+    const origin = createServer(socket => socket.end());
+    await new Promise((resolve, reject) => {
+      origin.once("error", reject);
+      origin.listen(0, "127.0.0.1", resolve);
+    });
+    const shareArgs = [`http://127.0.0.1:${origin.address().port}`, "--gateway", "ws://control.localhost:8788/_review-tunnel/carrier", "--username", "developer"];
+    try {
+      const needsTty = await execute(cli, shareArgs, { cwd: consumer, env: environment }).then(() => undefined, error => error);
+      assert.equal(needsTty?.code, 1); assert.match(needsTty.stderr, /TTY is required/);
+    } finally {
+      await new Promise((resolve, reject) => origin.close(error => error ? reject(error) : resolve()));
+    }
+    const needsOrigin = await execute(cli, shareArgs, { cwd: consumer, env: environment }).then(() => undefined, error => error);
+    assert.equal(needsOrigin?.code, 1);
+    assert.match(needsOrigin.stderr, /로컬 웹앱을 먼저 실행/);
+    assert.doesNotMatch(needsOrigin.stderr, /TTY is required/);
     const again = await execute(process.execPath, ["scripts/pack-client.mjs", "--output-dir", output], { cwd: root, env: environment }).then(() => undefined, error => error);
     assert.equal(again?.code, 1); assert.match(again.stderr, /already exists/);
   } finally { await rm(temporary, { recursive: true, force: true }); }
