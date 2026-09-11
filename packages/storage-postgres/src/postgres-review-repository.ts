@@ -336,7 +336,7 @@ export class PostgresReviewRepository implements ReviewRepository {
       )) return { status: "STALE_AUTHORIZATION" } as const;
       const currentStatus = await lockBoundThreadStatus(client, { ...input, threadId: input.reply.threadId });
       if (currentStatus === undefined) return { status: "THREAD_NOT_FOUND" } as const;
-      if (currentStatus === "RESOLVED") return { status: "STATE_CONFLICT" } as const;
+      if (currentStatus === "RESOLVED" || currentStatus === "DELETED") return { status: "STATE_CONFLICT" } as const;
       await client.query(
         `INSERT INTO rt_review_replies
          (id, thread_id, body, author_account_id, created_at, updated_at)

@@ -248,6 +248,54 @@ test("PostgreSQL page data and initial event cursor share one read snapshot", {
   });
 });
 
+for (const concurrent of [false, true]) {
+  test(`PostgreSQL rejects replies ${concurrent ? "waiting for" : "after"} thread deletion without side effects`, {
+    skip: databaseUrl === undefined ? "TEST_DATABASE_URL is not configured" : false,
+    timeout: 20_000,
+  }, async () => {
+    await withReviewRaceDatabase(async (pool, service) => {
+      await insertAccount(pool, reviewer, ["REVIEWER"]);
+      const base = { actor: developer, tunnelId: "race", sessionId: "race-session", routePath: "/" };
+      const thread = await service.createPageComment({ ...base, actor: reviewer, body: "Remove this thread" });
+      const deleted = Promise.withResolvers<void>();
+      const release = Promise.withResolvers<void>();
+      const deleting = concurrent ? createReviewService({
+        repository: new PostgresReviewRepository(observeQueries(pool, async (sql) => {
+          if (sql.trimStart().startsWith("INSERT INTO rt_review_events")) {
+            deleted.resolve();
+            await release.promise;
+          }
+        })), now: () => now,
+      }) : service;
+      const deletion = deleting.deleteComment({ ...base, commentId: thread.id, expectedVersion: 1 });
+      let rejection: Promise<void> | undefined;
+      try {
+        if (concurrent) await deleted.promise;
+        else await deletion;
+        const replyStarted = Promise.withResolvers<void>();
+        const replying = createReviewService({
+          repository: new PostgresReviewRepository(observeQueries(pool, async (sql) => {
+            if (sql === "BEGIN") replyStarted.resolve();
+          })), now: () => now,
+        });
+        rejection = assert.rejects(replying.createReply({
+          ...base, commentId: thread.id, body: "Should not notify @review-reviewer",
+        }), { code: "STATE_CONFLICT" });
+        if (concurrent) await replyStarted.promise;
+        release.resolve();
+        await Promise.all([deletion, rejection]);
+        assert.equal((await pool.query("SELECT count(*)::int AS count FROM rt_review_replies")).rows[0]?.count, 0);
+        assert.equal((await pool.query("SELECT count(*)::int AS count FROM rt_review_notifications")).rows[0]?.count, 0);
+        assert.deepEqual((await service.listEvents({ ...base, afterId: "0" })).map(event => event.type),
+          ["COMMENT_CREATED", "COMMENT_DELETED"]);
+      } finally {
+        release.resolve();
+        await Promise.allSettled([deletion, ...(rejection === undefined ? [] : [rejection])]);
+      }
+    });
+  });
+}
+
 function observeQueries(pool: Pool, after: (sql: string) => Promise<void>): Pool {
   return {
     async query(sql: string, values?: unknown[]) {
