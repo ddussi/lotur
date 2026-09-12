@@ -1,0 +1,3420 @@
+{
+  "analysisDate": "2026-09-21",
+  "commit": "5bfb322a222ca34d31b68bb4e0eb1f3cf788e805",
+  "localHeadAtStart": "ec39bc32a2fc362addbee7151365e03bf3a4707b",
+  "localCommitsBehindOrigin": 30,
+  "trackedFileCount": 340,
+  "allSnapshotFilesMatchCommit": true,
+  "countsByKind": {
+    "configuration": 32,
+    "documentation-license": 61,
+    "test-fixture": 97,
+    "source-script": 142,
+    "generated-bundle": 2,
+    "dependency-lock": 2,
+    "media": 4
+  },
+  "reviewScopeNote": "분야별 정적 검토와 주요 경계 재현의 대상 목록. 구현은 핵심 흐름·외부 경계 중심, 테스트는 전체 목록 탐색 후 계약·회귀 본문 선별 검토이며 모든 행을 정독한 것은 아니다. 각 파일의 모든 경로를 실행 검증했다는 의미가 아니다. 생성 번들은 원본/빌드 일치, lockfile은 의존성/감사, PNG는 시각 확인, WebM은 촬영 코드와 설명만 검토. 세부 범위와 한계는 report.md 및 validation.md 참조.",
+  "files": [
+    {
+      "path": ".dockerignore",
+      "kind": "configuration",
+      "reviewLane": "root-product-docs",
+      "bytes": 143,
+      "lines": 13,
+      "gitBlob": "8d50c509a4656b894ed9c39f1dfc974f8ff36c0c",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/.dockerignore"
+    },
+    {
+      "path": ".env.example",
+      "kind": "configuration",
+      "reviewLane": "root-product-docs",
+      "bytes": 2927,
+      "lines": 73,
+      "gitBlob": "a8bd7dd403434c9ae506b19014ff8d8f319049df",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/.env.example"
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/bug_report.md",
+      "kind": "documentation-license",
+      "reviewLane": "delivery",
+      "bytes": 872,
+      "lines": 28,
+      "gitBlob": "684031146eed90cce731694ee829049c327b7a61",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/.github/ISSUE_TEMPLATE/bug_report.md"
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/feature_request.md",
+      "kind": "documentation-license",
+      "reviewLane": "delivery",
+      "bytes": 617,
+      "lines": 21,
+      "gitBlob": "92e86ed77c1339359eb9691936462f7f2acd41f4",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/.github/ISSUE_TEMPLATE/feature_request.md"
+    },
+    {
+      "path": ".github/pull_request_template.md",
+      "kind": "documentation-license",
+      "reviewLane": "delivery",
+      "bytes": 542,
+      "lines": 11,
+      "gitBlob": "4530a634863f2d47e18c2a1df152d448472d315e",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/.github/pull_request_template.md"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "kind": "configuration",
+      "reviewLane": "delivery",
+      "bytes": 13041,
+      "lines": 296,
+      "gitBlob": "529054c24dd219491c126492d6aa8a957b7b271b",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/.github/workflows/ci.yml"
+    },
+    {
+      "path": ".github/workflows/release-image-tags.yml",
+      "kind": "configuration",
+      "reviewLane": "delivery",
+      "bytes": 3706,
+      "lines": 85,
+      "gitBlob": "64295ff4fdd5c4807db31259f3f648d1b3516665",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/.github/workflows/release-image-tags.yml"
+    },
+    {
+      "path": ".gitignore",
+      "kind": "configuration",
+      "reviewLane": "root-product-docs",
+      "bytes": 193,
+      "lines": 14,
+      "gitBlob": "69e0eee0e5ae8e467f90aca23d1eab930ceb311b",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/.gitignore"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 8228,
+      "lines": 74,
+      "gitBlob": "19b1574e4fb3dc93034cf612849c4e21a9afe809",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/CHANGELOG.md"
+    },
+    {
+      "path": "CONTRIBUTING.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 8595,
+      "lines": 100,
+      "gitBlob": "96ab126bb02f7171f9d36ca423d83afdaa542bac",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/CONTRIBUTING.md"
+    },
+    {
+      "path": "Dockerfile",
+      "kind": "configuration",
+      "reviewLane": "root-product-docs",
+      "bytes": 3210,
+      "lines": 65,
+      "gitBlob": "394b573450124f621552128068b5b1d9e79196f9",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/Dockerfile"
+    },
+    {
+      "path": "LICENSE",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 1083,
+      "lines": 21,
+      "gitBlob": "61bbfbc677122245234e041437713fd1cbf7a4e0",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/LICENSE"
+    },
+    {
+      "path": "README.ko.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 13331,
+      "lines": 145,
+      "gitBlob": "a18a6e62deca830950a6745e38cfd7a300a34781",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/README.ko.md"
+    },
+    {
+      "path": "README.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 11929,
+      "lines": 144,
+      "gitBlob": "f391787138a2c7829ba9ca6a100a00bc5e05a217",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/README.md"
+    },
+    {
+      "path": "SECURITY.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 5634,
+      "lines": 38,
+      "gitBlob": "33d40a57705abc3b862e58c60986179529ceaeaf",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/SECURITY.md"
+    },
+    {
+      "path": "apps/admin-cli/package.json",
+      "kind": "configuration",
+      "reviewLane": "delivery",
+      "bytes": 374,
+      "lines": 14,
+      "gitBlob": "47194ca86b6cab8642275b096c7418045ce15309",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/admin-cli/package.json"
+    },
+    {
+      "path": "apps/admin-cli/src/arguments.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "delivery",
+      "bytes": 3214,
+      "lines": 107,
+      "gitBlob": "f0044f0b596320045ba0868253d6fa12af527769",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/admin-cli/src/arguments.test.ts"
+    },
+    {
+      "path": "apps/admin-cli/src/arguments.ts",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 9718,
+      "lines": 276,
+      "gitBlob": "b948cb9adbd8b78d8d497ce3623d726834816473",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/admin-cli/src/arguments.ts"
+    },
+    {
+      "path": "apps/admin-cli/src/main.ts",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 11146,
+      "lines": 304,
+      "gitBlob": "dde7737f298004eefad5d6570133c8a823b3c7a7",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/admin-cli/src/main.ts"
+    },
+    {
+      "path": "apps/admin-cli/src/migration.integration.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "delivery",
+      "bytes": 2945,
+      "lines": 65,
+      "gitBlob": "a03c13124154c03717eb61c7494a9a68b34df2f7",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/admin-cli/src/migration.integration.test.ts"
+    },
+    {
+      "path": "apps/client/README.distribution.md",
+      "kind": "documentation-license",
+      "reviewLane": "transport",
+      "bytes": 2056,
+      "lines": 27,
+      "gitBlob": "936119c4c40d3345841b768805c7d3010710b344",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/client/README.distribution.md"
+    },
+    {
+      "path": "apps/client/package.json",
+      "kind": "configuration",
+      "reviewLane": "transport",
+      "bytes": 405,
+      "lines": 15,
+      "gitBlob": "b7a961e47f994ca22a8cff006e53edce2a8c6ab3",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/client/package.json"
+    },
+    {
+      "path": "apps/client/src/application-operation-budget.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "transport",
+      "bytes": 587,
+      "lines": 18,
+      "gitBlob": "b7a0870711a8628640da89ea4dfc652671d98688",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/client/src/application-operation-budget.test.ts"
+    },
+    {
+      "path": "apps/client/src/application-operation-budget.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 603,
+      "lines": 24,
+      "gitBlob": "ef7197a8ad321d84618628437a4f3b6e3ad5b6de",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/client/src/application-operation-budget.ts"
+    },
+    {
+      "path": "apps/client/src/cli-options.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "transport",
+      "bytes": 7160,
+      "lines": 185,
+      "gitBlob": "a784c1058567b98878cba3204d9238de523304e1",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/client/src/cli-options.test.ts"
+    },
+    {
+      "path": "apps/client/src/cli-options.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 7672,
+      "lines": 204,
+      "gitBlob": "9bb5ae3a0f7fdfd2b202887067269e25bc790e3f",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/client/src/cli-options.ts"
+    },
+    {
+      "path": "apps/client/src/client-transport.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "transport",
+      "bytes": 27395,
+      "lines": 785,
+      "gitBlob": "cad1725490201366b978dabb4b613be95d529449",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/client/src/client-transport.test.ts"
+    },
+    {
+      "path": "apps/client/src/client.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "transport",
+      "bytes": 12602,
+      "lines": 392,
+      "gitBlob": "4aa5daede497a595faad9bb71dd444c7c22a2d91",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/client/src/client.test.ts"
+    },
+    {
+      "path": "apps/client/src/client.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 51542,
+      "lines": 1568,
+      "gitBlob": "9aa96f55461f1f8b70a8e59881064fc34b366a27",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/client/src/client.ts"
+    },
+    {
+      "path": "apps/client/src/control-client.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "transport",
+      "bytes": 4954,
+      "lines": 152,
+      "gitBlob": "d6ac9413222dc9846888ed27536bfcfc261ace3a",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/client/src/control-client.test.ts"
+    },
+    {
+      "path": "apps/client/src/control-client.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 5378,
+      "lines": 185,
+      "gitBlob": "7a4c6f646356bd2ebbe3bcb951a6d27aee48065a",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/client/src/control-client.ts"
+    },
+    {
+      "path": "apps/client/src/diagnostics.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "transport",
+      "bytes": 5489,
+      "lines": 103,
+      "gitBlob": "b4fd0962abf77c06b50092e66bf0e75f0b09f89e",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/client/src/diagnostics.test.ts"
+    },
+    {
+      "path": "apps/client/src/diagnostics.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 5485,
+      "lines": 83,
+      "gitBlob": "9f4fda98b21c5223998bb7540ddf3c13abb54dc4",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/client/src/diagnostics.ts"
+    },
+    {
+      "path": "apps/client/src/inbound-flow.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "transport",
+      "bytes": 1310,
+      "lines": 41,
+      "gitBlob": "0f6841ea6b7961727634749f1e01299e07a05f72",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/client/src/inbound-flow.test.ts"
+    },
+    {
+      "path": "apps/client/src/inbound-flow.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 3919,
+      "lines": 116,
+      "gitBlob": "4ace0535477a429a73d655bf9e850233351ac3fa",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/client/src/inbound-flow.ts"
+    },
+    {
+      "path": "apps/client/src/index.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 29,
+      "lines": 1,
+      "gitBlob": "32fbf6b95efcbe978841998c1e39abc9a542d6a6",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/client/src/index.ts"
+    },
+    {
+      "path": "apps/client/src/local-origin.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 3144,
+      "lines": 97,
+      "gitBlob": "27c9aba8f7b640abbc22b61015221b3dc8b5debe",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/client/src/local-origin.ts"
+    },
+    {
+      "path": "apps/client/src/main.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 5540,
+      "lines": 134,
+      "gitBlob": "97cadad9f2e98c0ebbf21a07dc5c0e2fd54965a1",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/client/src/main.ts"
+    },
+    {
+      "path": "apps/client/src/remote-stream-lifecycle.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "transport",
+      "bytes": 1949,
+      "lines": 49,
+      "gitBlob": "da4b743341d19d7e58ad01b75e6fae10acdd9bb7",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/client/src/remote-stream-lifecycle.test.ts"
+    },
+    {
+      "path": "apps/client/src/remote-stream-lifecycle.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 1730,
+      "lines": 53,
+      "gitBlob": "b0f1b5fb0892ba9f6e92f5ab58dbe572d181767f",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/client/src/remote-stream-lifecycle.ts"
+    },
+    {
+      "path": "apps/client/src/review-binding.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "transport",
+      "bytes": 1491,
+      "lines": 53,
+      "gitBlob": "80209bcda76aeb63df5ac947fd2d8823ef8c1daa",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/client/src/review-binding.test.ts"
+    },
+    {
+      "path": "apps/client/src/review-binding.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 1023,
+      "lines": 35,
+      "gitBlob": "bc543691dc36014f9292d08e89d763c9627f38f1",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/client/src/review-binding.ts"
+    },
+    {
+      "path": "apps/client/src/websocket-upgrade.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 2787,
+      "lines": 82,
+      "gitBlob": "9979959b9dd255888e80f5d1cc0b383891373b84",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/client/src/websocket-upgrade.ts"
+    },
+    {
+      "path": "apps/client/src/writable-drain.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "transport",
+      "bytes": 1606,
+      "lines": 43,
+      "gitBlob": "38a562f58846a383519918aa45ef1991b5110522",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/client/src/writable-drain.test.ts"
+    },
+    {
+      "path": "apps/client/src/writable-drain.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 761,
+      "lines": 26,
+      "gitBlob": "422d1b9a9fc39d0d7c867a32e38711be9787506c",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/client/src/writable-drain.ts"
+    },
+    {
+      "path": "apps/gateway/package.json",
+      "kind": "configuration",
+      "reviewLane": "transport",
+      "bytes": 528,
+      "lines": 18,
+      "gitBlob": "0d602dbdfc758300668bbf4d235525fa8eb31e43",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/package.json"
+    },
+    {
+      "path": "apps/gateway/src/auth-gateway.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "domain-ui",
+      "bytes": 25731,
+      "lines": 725,
+      "gitBlob": "0736d801ea1812ad6a2a85c9a3050ce17e96b3b0",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/auth-gateway.test.ts"
+    },
+    {
+      "path": "apps/gateway/src/authorization-revalidation.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 8785,
+      "lines": 225,
+      "gitBlob": "3ce4c1ab5ee1be51a5044590eeead4f48254f1e7",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/authorization-revalidation.ts"
+    },
+    {
+      "path": "apps/gateway/src/canary-echo.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "transport",
+      "bytes": 3724,
+      "lines": 116,
+      "gitBlob": "2af5d66624c53e6691cd33a0a803c7c9d06c14d7",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/canary-echo.test.ts"
+    },
+    {
+      "path": "apps/gateway/src/canary-echo.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 4263,
+      "lines": 148,
+      "gitBlob": "859b13939239fb4e18e47b0b6f157cc3aecd6f87",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/canary-echo.ts"
+    },
+    {
+      "path": "apps/gateway/src/client-address.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "transport",
+      "bytes": 2526,
+      "lines": 70,
+      "gitBlob": "abb7500b99437b867c87792575b61952783b0b03",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/client-address.test.ts"
+    },
+    {
+      "path": "apps/gateway/src/client-address.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 7154,
+      "lines": 199,
+      "gitBlob": "b1bfa81d06301d0c034d42a27d2266fc117729bd",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/client-address.ts"
+    },
+    {
+      "path": "apps/gateway/src/config.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "transport",
+      "bytes": 18052,
+      "lines": 508,
+      "gitBlob": "9889009d30ee4bc5b70d124e227f9d8e2e2689d6",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/config.test.ts"
+    },
+    {
+      "path": "apps/gateway/src/config.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 29294,
+      "lines": 762,
+      "gitBlob": "01ea0e7f6a0c498f9658d75dd6be87e5571f4b9b",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/config.ts"
+    },
+    {
+      "path": "apps/gateway/src/content-revalidation.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "domain-ui",
+      "bytes": 6611,
+      "lines": 119,
+      "gitBlob": "1b69d58f9ccde8c91f68cd9926f27dc94da92228",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/content-revalidation.test.ts"
+    },
+    {
+      "path": "apps/gateway/src/database-runtime.integration.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "transport",
+      "bytes": 7017,
+      "lines": 158,
+      "gitBlob": "7f6fb82ef3aa14fa0e430e64b4eccbcc939b1f62",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/database-runtime.integration.test.ts"
+    },
+    {
+      "path": "apps/gateway/src/gateway-admission.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 7567,
+      "lines": 221,
+      "gitBlob": "e84fd8ab8400469030acc6d2fb069a3c6cdc9a30",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/gateway-admission.ts"
+    },
+    {
+      "path": "apps/gateway/src/gateway-async.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 1549,
+      "lines": 49,
+      "gitBlob": "36021c5c89587b536b2fc74fa5bf2baab39a88f2",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/gateway-async.ts"
+    },
+    {
+      "path": "apps/gateway/src/gateway-carrier.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 29662,
+      "lines": 777,
+      "gitBlob": "8bed5abf0920d07938aa74011d3029eea36e7290",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/gateway-carrier.ts"
+    },
+    {
+      "path": "apps/gateway/src/gateway-operations.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 6579,
+      "lines": 199,
+      "gitBlob": "403cb0d35e1e235850a0e7d7d695ceb40d5c8b93",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/gateway-operations.ts"
+    },
+    {
+      "path": "apps/gateway/src/gateway-responses.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 1448,
+      "lines": 41,
+      "gitBlob": "c710c8dd2f1c379b34b0119b9153c0710eb1e654",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/gateway-responses.ts"
+    },
+    {
+      "path": "apps/gateway/src/gateway-session-lifecycle.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 3924,
+      "lines": 113,
+      "gitBlob": "6a157abf1b5f7af52d37534864b0b541c2634e58",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/gateway-session-lifecycle.ts"
+    },
+    {
+      "path": "apps/gateway/src/gateway-session.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 7129,
+      "lines": 233,
+      "gitBlob": "e03107578d7acfce815863821b5f3ca6cbe7cb3e",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/gateway-session.ts"
+    },
+    {
+      "path": "apps/gateway/src/gateway-stream-ids.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "transport",
+      "bytes": 958,
+      "lines": 25,
+      "gitBlob": "47cd50660078cb2e929412d483c990ebdacf8734",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/gateway-stream-ids.test.ts"
+    },
+    {
+      "path": "apps/gateway/src/gateway-stream-ids.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 781,
+      "lines": 31,
+      "gitBlob": "2c471fea13f43fe3f60dd58919202494013872c7",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/gateway-stream-ids.ts"
+    },
+    {
+      "path": "apps/gateway/src/gateway-streams.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 30363,
+      "lines": 876,
+      "gitBlob": "00d926445267b4bf54116e2ec7f6ee873d5d4c8f",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/gateway-streams.ts"
+    },
+    {
+      "path": "apps/gateway/src/http-tunnel.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "transport",
+      "bytes": 109072,
+      "lines": 3135,
+      "gitBlob": "51a28f36a11d672cf997536fe98580ff4deb4d8d",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/http-tunnel.test.ts"
+    },
+    {
+      "path": "apps/gateway/src/inbound-flow.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "transport",
+      "bytes": 1156,
+      "lines": 35,
+      "gitBlob": "dd987d1b9525f0e80e4eaca28bba013ae25b91a8",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/inbound-flow.test.ts"
+    },
+    {
+      "path": "apps/gateway/src/inbound-flow.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 3689,
+      "lines": 109,
+      "gitBlob": "f8d81792642137ac5312df7b0e4e7b53a7142824",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/inbound-flow.ts"
+    },
+    {
+      "path": "apps/gateway/src/index.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 29,
+      "lines": 1,
+      "gitBlob": "868f42d4c77853141a0ceb9bcb3e3a41536abd55",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/index.ts"
+    },
+    {
+      "path": "apps/gateway/src/keyed-concurrent-admission.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "transport",
+      "bytes": 760,
+      "lines": 24,
+      "gitBlob": "4a23040791590395e8b7c5254fd377b6a95c8bb6",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/keyed-concurrent-admission.test.ts"
+    },
+    {
+      "path": "apps/gateway/src/keyed-concurrent-admission.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 825,
+      "lines": 24,
+      "gitBlob": "44b2cb7cfcb8a53aaa666f155f7c595ab000b2f0",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/keyed-concurrent-admission.ts"
+    },
+    {
+      "path": "apps/gateway/src/main.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 12377,
+      "lines": 324,
+      "gitBlob": "08d588795fb4f25ae38f30e4e451e363dbf95a34",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/main.ts"
+    },
+    {
+      "path": "apps/gateway/src/metrics.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "transport",
+      "bytes": 687,
+      "lines": 21,
+      "gitBlob": "446596be86d4afacbf844cdaca5294adcdb0cbaf",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/metrics.test.ts"
+    },
+    {
+      "path": "apps/gateway/src/metrics.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 1993,
+      "lines": 66,
+      "gitBlob": "d5391c51cb3f3e57be5b5559a27454cf8a41b271",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/metrics.ts"
+    },
+    {
+      "path": "apps/gateway/src/public-content-origin.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 1441,
+      "lines": 49,
+      "gitBlob": "b407ddcd7b2c0024d5ce91f76a4aff29cd704c2b",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/public-content-origin.ts"
+    },
+    {
+      "path": "apps/gateway/src/request-isolation.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "transport",
+      "bytes": 4376,
+      "lines": 98,
+      "gitBlob": "59cb0d87d85c413829382b50ebd1fd18055c6520",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/request-isolation.test.ts"
+    },
+    {
+      "path": "apps/gateway/src/resume-authorization.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "transport",
+      "bytes": 790,
+      "lines": 20,
+      "gitBlob": "d85b8c50869b523b2f1851ac30278bf686f711b5",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/resume-authorization.test.ts"
+    },
+    {
+      "path": "apps/gateway/src/resume-authorization.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 396,
+      "lines": 12,
+      "gitBlob": "2d2f9b3c0fd08b9c125751351d5ed1376efbacee",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/resume-authorization.ts"
+    },
+    {
+      "path": "apps/gateway/src/retained-operation.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "transport",
+      "bytes": 1111,
+      "lines": 38,
+      "gitBlob": "bf00cac738eb28a477ad60877c6b3717e51a8da5",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/retained-operation.test.ts"
+    },
+    {
+      "path": "apps/gateway/src/retained-operation.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 304,
+      "lines": 13,
+      "gitBlob": "013bd45a1ff99abb6e62da5894c1da229708aab9",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/retained-operation.ts"
+    },
+    {
+      "path": "apps/gateway/src/review-bootstrap.generated.ts",
+      "kind": "generated-bundle",
+      "reviewLane": "domain-ui",
+      "bytes": 84973,
+      "lines": 3,
+      "gitBlob": "26efd70671392c034907b6bded31fb07542269ef",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/review-bootstrap.generated.ts"
+    },
+    {
+      "path": "apps/gateway/src/review-bootstrap.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-ui",
+      "bytes": 75,
+      "lines": 1,
+      "gitBlob": "76f10522e8851c33143a8e7098555f8d3bbf0c31",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/review-bootstrap.ts"
+    },
+    {
+      "path": "apps/gateway/src/review-contract.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-ui",
+      "bytes": 3772,
+      "lines": 115,
+      "gitBlob": "e54d942e9d76b37340acea88ae61036ee3583592",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/review-contract.ts"
+    },
+    {
+      "path": "apps/gateway/src/review-control-view.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-ui",
+      "bytes": 12880,
+      "lines": 146,
+      "gitBlob": "9e0041e8eea882a0d6d4d47102855151b0829030",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/review-control-view.ts"
+    },
+    {
+      "path": "apps/gateway/src/review-control.generated.ts",
+      "kind": "generated-bundle",
+      "reviewLane": "domain-ui",
+      "bytes": 28299,
+      "lines": 3,
+      "gitBlob": "6fd67dceed7d4e42d15fe50da228f7eb88189107",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/review-control.generated.ts"
+    },
+    {
+      "path": "apps/gateway/src/review-control.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-ui",
+      "bytes": 10246,
+      "lines": 141,
+      "gitBlob": "7bc915385b4c542e290bd68925a8ca668f9402ba",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/review-control.ts"
+    },
+    {
+      "path": "apps/gateway/src/review-draft-session.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-ui",
+      "bytes": 427,
+      "lines": 9,
+      "gitBlob": "b4af2cab2f230b24c5beba0bee989c13966b6a05",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/review-draft-session.ts"
+    },
+    {
+      "path": "apps/gateway/src/review-gateway.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "domain-ui",
+      "bytes": 34093,
+      "lines": 998,
+      "gitBlob": "878173645af884268ce2d3de05b3a6268a739407",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/review-gateway.test.ts"
+    },
+    {
+      "path": "apps/gateway/src/review-http.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "domain-ui",
+      "bytes": 3120,
+      "lines": 94,
+      "gitBlob": "49ca5b9922a3d50ad0e80aef55a10d90de93bce9",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/review-http.test.ts"
+    },
+    {
+      "path": "apps/gateway/src/review-http.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-ui",
+      "bytes": 35698,
+      "lines": 863,
+      "gitBlob": "7fc786e63d2a43841a8c7b58f62481927f7b3a0e",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/review-http.ts"
+    },
+    {
+      "path": "apps/gateway/src/review-ui-state.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "domain-ui",
+      "bytes": 6107,
+      "lines": 117,
+      "gitBlob": "ebb6af2f3c0ce96e5b1644e412bfb71208cb6590",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/review-ui-state.test.ts"
+    },
+    {
+      "path": "apps/gateway/src/review-ui/api.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-ui",
+      "bytes": 2106,
+      "lines": 54,
+      "gitBlob": "19495680d6999725d4f1c0fe69ea404f12f1bf55",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/review-ui/api.ts"
+    },
+    {
+      "path": "apps/gateway/src/review-ui/contracts.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-ui",
+      "bytes": 678,
+      "lines": 15,
+      "gitBlob": "8f6fcda3d5b4c4c4c1045fe7a44c9bcb0a3996cd",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/review-ui/contracts.ts"
+    },
+    {
+      "path": "apps/gateway/src/review-ui/control-entry.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-ui",
+      "bytes": 179,
+      "lines": 3,
+      "gitBlob": "6004a5fdaeafdca0ca799d78163ee6c5308c5161",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/review-ui/control-entry.ts"
+    },
+    {
+      "path": "apps/gateway/src/review-ui/drafts.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-ui",
+      "bytes": 5531,
+      "lines": 105,
+      "gitBlob": "a2e8a09fbaf51d1b973118270796efa889201566",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/review-ui/drafts.ts"
+    },
+    {
+      "path": "apps/gateway/src/review-ui/entry.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-ui",
+      "bytes": 70,
+      "lines": 2,
+      "gitBlob": "632b16b615f97c4b9df2cfbee450d76a391673eb",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/review-ui/entry.ts"
+    },
+    {
+      "path": "apps/gateway/src/review-ui/live-updates.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-ui",
+      "bytes": 2270,
+      "lines": 74,
+      "gitBlob": "961cef37113078618c1425d89a4a76405971ccf5",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/review-ui/live-updates.ts"
+    },
+    {
+      "path": "apps/gateway/src/review-ui/mentions.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-ui",
+      "bytes": 3458,
+      "lines": 57,
+      "gitBlob": "ab6eea9516833f192d764e39895b2046bdc273c1",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/review-ui/mentions.ts"
+    },
+    {
+      "path": "apps/gateway/src/review-ui/page-state.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-ui",
+      "bytes": 2440,
+      "lines": 78,
+      "gitBlob": "dfe72da4282149728e46b91ae3b142f910b2a40e",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/review-ui/page-state.ts"
+    },
+    {
+      "path": "apps/gateway/src/review-ui/revision-context.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-ui",
+      "bytes": 583,
+      "lines": 7,
+      "gitBlob": "d886b9d3d8e7e4560eaee55367c0fe563b328383",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/review-ui/revision-context.ts"
+    },
+    {
+      "path": "apps/gateway/src/review-ui/thread-view.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-ui",
+      "bytes": 17048,
+      "lines": 278,
+      "gitBlob": "f941da72b093be8fd3f96bda051a043f70c42cfa",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/review-ui/thread-view.ts"
+    },
+    {
+      "path": "apps/gateway/src/review-ui/view.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-ui",
+      "bytes": 43127,
+      "lines": 778,
+      "gitBlob": "9eb3a08b24701caac1b79bf8f79faf9c564a3797",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/review-ui/view.ts"
+    },
+    {
+      "path": "apps/gateway/src/server.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 36317,
+      "lines": 953,
+      "gitBlob": "b89991eaf239080558012aae4077fca009293c30",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/server.ts"
+    },
+    {
+      "path": "apps/gateway/src/transport-epoch.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "transport",
+      "bytes": 32976,
+      "lines": 990,
+      "gitBlob": "ac82eec6e579a3c35e3999e27aac39a1a4912e42",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/transport-epoch.test.ts"
+    },
+    {
+      "path": "apps/gateway/src/upgrade-deadline.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "transport",
+      "bytes": 13327,
+      "lines": 417,
+      "gitBlob": "22fc86fb9e0a09c3650b99ade7fdb6b2cfcafcae",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/upgrade-deadline.test.ts"
+    },
+    {
+      "path": "apps/gateway/src/web-auth-boundary.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "domain-ui",
+      "bytes": 33401,
+      "lines": 1111,
+      "gitBlob": "8f9d06a69c1121c46853d397993d8f61165ae669",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/web-auth-boundary.test.ts"
+    },
+    {
+      "path": "apps/gateway/src/web-auth-pages.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-ui",
+      "bytes": 7277,
+      "lines": 83,
+      "gitBlob": "333d755800d4d2134145a23ab67f1839b27d494b",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/web-auth-pages.ts"
+    },
+    {
+      "path": "apps/gateway/src/web-auth.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "domain-ui",
+      "bytes": 586,
+      "lines": 16,
+      "gitBlob": "3dd6d9c02435aaf0aba7d2499090961dba55a20f",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/web-auth.test.ts"
+    },
+    {
+      "path": "apps/gateway/src/web-auth.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-ui",
+      "bytes": 43512,
+      "lines": 1124,
+      "gitBlob": "9070b0c4099207ae7ec4875c48a277085d163295",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/gateway/src/web-auth.ts"
+    },
+    {
+      "path": "apps/next-integration/LICENSE",
+      "kind": "documentation-license",
+      "reviewLane": "delivery",
+      "bytes": 1083,
+      "lines": 21,
+      "gitBlob": "61bbfbc677122245234e041437713fd1cbf7a4e0",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/next-integration/LICENSE"
+    },
+    {
+      "path": "apps/next-integration/package.json",
+      "kind": "configuration",
+      "reviewLane": "delivery",
+      "bytes": 516,
+      "lines": 28,
+      "gitBlob": "c5c8297afe6a60af0d5f536023c41722f1468771",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/next-integration/package.json"
+    },
+    {
+      "path": "apps/next-integration/src/index.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "delivery",
+      "bytes": 1597,
+      "lines": 38,
+      "gitBlob": "460f9915037bb52db1a44b37f1b043c626eb42a6",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/next-integration/src/index.test.ts"
+    },
+    {
+      "path": "apps/next-integration/src/index.ts",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 1214,
+      "lines": 42,
+      "gitBlob": "3890fec6d2b5b1ea5ac6cd3264aa580e6c800180",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/next-integration/src/index.ts"
+    },
+    {
+      "path": "apps/next-integration/tsconfig.build.json",
+      "kind": "configuration",
+      "reviewLane": "delivery",
+      "bytes": 283,
+      "lines": 13,
+      "gitBlob": "364f6b3c1774324724b44457ee60595947cc7008",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/next-integration/tsconfig.build.json"
+    },
+    {
+      "path": "apps/vite-integration/LICENSE",
+      "kind": "documentation-license",
+      "reviewLane": "delivery",
+      "bytes": 1083,
+      "lines": 21,
+      "gitBlob": "61bbfbc677122245234e041437713fd1cbf7a4e0",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/vite-integration/LICENSE"
+    },
+    {
+      "path": "apps/vite-integration/package.json",
+      "kind": "configuration",
+      "reviewLane": "delivery",
+      "bytes": 510,
+      "lines": 28,
+      "gitBlob": "02f61ab4ed9112b722bc02071448868e7019cfde",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/vite-integration/package.json"
+    },
+    {
+      "path": "apps/vite-integration/src/index.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "delivery",
+      "bytes": 1074,
+      "lines": 27,
+      "gitBlob": "9ff3617bac968c68e9cb96d4f4af2e125c34d8ad",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/vite-integration/src/index.test.ts"
+    },
+    {
+      "path": "apps/vite-integration/src/index.ts",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 545,
+      "lines": 23,
+      "gitBlob": "512bbba94e0805dad7032e1adf8844b2f6e88082",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/vite-integration/src/index.ts"
+    },
+    {
+      "path": "apps/vite-integration/tsconfig.build.json",
+      "kind": "configuration",
+      "reviewLane": "delivery",
+      "bytes": 283,
+      "lines": 13,
+      "gitBlob": "364f6b3c1774324724b44457ee60595947cc7008",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/apps/vite-integration/tsconfig.build.json"
+    },
+    {
+      "path": "biome.json",
+      "kind": "configuration",
+      "reviewLane": "root-product-docs",
+      "bytes": 823,
+      "lines": 46,
+      "gitBlob": "9d84d4c17c4f05c346245525a8243c47bbf6c793",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/biome.json"
+    },
+    {
+      "path": "compose.demo.yml",
+      "kind": "configuration",
+      "reviewLane": "root-product-docs",
+      "bytes": 798,
+      "lines": 23,
+      "gitBlob": "9e8f32cabc6c24d07234223551be0a14db97ac93",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/compose.demo.yml"
+    },
+    {
+      "path": "compose.test.yml",
+      "kind": "test-fixture",
+      "reviewLane": "root-product-docs",
+      "bytes": 507,
+      "lines": 16,
+      "gitBlob": "93be0eaaf991bf4a05c88f0f93b3b8d27ced755d",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/compose.test.yml"
+    },
+    {
+      "path": "deploy/production/deployment.example.json",
+      "kind": "configuration",
+      "reviewLane": "delivery",
+      "bytes": 405,
+      "lines": 13,
+      "gitBlob": "d24e98f0bac078f6033e95aee8f2f84585f54ac7",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/deploy/production/deployment.example.json"
+    },
+    {
+      "path": "deploy/runtime/package-lock.json",
+      "kind": "dependency-lock",
+      "reviewLane": "delivery",
+      "bytes": 11262,
+      "lines": 321,
+      "gitBlob": "78558a602465415d458b583fa74c451b24bf5a49",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/deploy/runtime/package-lock.json"
+    },
+    {
+      "path": "deploy/runtime/package.json",
+      "kind": "configuration",
+      "reviewLane": "delivery",
+      "bytes": 257,
+      "lines": 15,
+      "gitBlob": "f565ce9740191d5f908ef994e57978c00fb98c16",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/deploy/runtime/package.json"
+    },
+    {
+      "path": "docs/adr/0001-typescript-runtime.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 1369,
+      "lines": 24,
+      "gitBlob": "319d28f4d42ce66c4d7ef81300277b86d9136bf2",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/adr/0001-typescript-runtime.md"
+    },
+    {
+      "path": "docs/adr/0002-poc-carrier-protocol.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 2384,
+      "lines": 40,
+      "gitBlob": "d19f696e770447d77a894c93bcb87e64c7f27db1",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/adr/0002-poc-carrier-protocol.md"
+    },
+    {
+      "path": "docs/adr/0003-internal-account-auth.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 2588,
+      "lines": 26,
+      "gitBlob": "86dec966bde0d2f52f07d8f88200330ac406fdfb",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/adr/0003-internal-account-auth.md"
+    },
+    {
+      "path": "docs/adr/0004-review-tunnel-v1-activation.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 2639,
+      "lines": 38,
+      "gitBlob": "6da5144d159c4fe2f89954406d98e96478388c24",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/adr/0004-review-tunnel-v1-activation.md"
+    },
+    {
+      "path": "docs/adr/0005-hosted-and-local-network-modes.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 2474,
+      "lines": 39,
+      "gitBlob": "89f196045cdeda75b85a77dff4e2f0c40eb06958",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/adr/0005-hosted-and-local-network-modes.md"
+    },
+    {
+      "path": "docs/adr/0006-contextual-review-overlay.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 3770,
+      "lines": 40,
+      "gitBlob": "2829bf71387ee109322c546b04b3ebff70b2ac55",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/adr/0006-contextual-review-overlay.md"
+    },
+    {
+      "path": "docs/architecture-review-2026-09-07.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 22929,
+      "lines": 177,
+      "gitBlob": "8bc9ae8669e023fe1287e872e634788ecc797ebe",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/architecture-review-2026-09-07.md"
+    },
+    {
+      "path": "docs/automatic-deployment.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 12085,
+      "lines": 96,
+      "gitBlob": "499bc52f66de27c6e009ce778e02dc341517b451",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/automatic-deployment.md"
+    },
+    {
+      "path": "docs/client-installation.en.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 4446,
+      "lines": 57,
+      "gitBlob": "c0da01282b6e75e6e2121722a43fc5e4a102373a",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/client-installation.en.md"
+    },
+    {
+      "path": "docs/client-installation.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 4817,
+      "lines": 57,
+      "gitBlob": "75d29d5c7499c738e3e6f8c9f874504a15f4c8d3",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/client-installation.md"
+    },
+    {
+      "path": "docs/code-review-2026-09-06.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 8418,
+      "lines": 69,
+      "gitBlob": "423b9f238b4e263ee9fe6745446d7a8fde5ee8ff",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/code-review-2026-09-06.md"
+    },
+    {
+      "path": "docs/contextual-review.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 30562,
+      "lines": 415,
+      "gitBlob": "adbacf5e5b85bb5b6600f481d4e5bf110ad84d73",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/contextual-review.md"
+    },
+    {
+      "path": "docs/documentation.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 3690,
+      "lines": 46,
+      "gitBlob": "d91fb7c519103069e137edb7b9d650b44067b7fa",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/documentation.md"
+    },
+    {
+      "path": "docs/getting-started.en.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 15861,
+      "lines": 233,
+      "gitBlob": "2f7c18687a79ac6738ab43170c7bf89b851b937b",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/getting-started.en.md"
+    },
+    {
+      "path": "docs/getting-started.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 19481,
+      "lines": 281,
+      "gitBlob": "c8722fbf8e0bef82e27f010c4bf6d7c2c47a5cfe",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/getting-started.md"
+    },
+    {
+      "path": "docs/improvement-goal-2026-09-07.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 5421,
+      "lines": 35,
+      "gitBlob": "8e00faef56ec9f4cf6ac9a4d4502a07ca4750db0",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/improvement-goal-2026-09-07.md"
+    },
+    {
+      "path": "docs/integration-2026-09-08.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 4378,
+      "lines": 50,
+      "gitBlob": "b7e2e1dd9e67959258415a00bae844489e283fb3",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/integration-2026-09-08.md"
+    },
+    {
+      "path": "docs/internal-account-operations.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 10406,
+      "lines": 99,
+      "gitBlob": "a20f712519154c1227618aa2f8a212f806ae5985",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/internal-account-operations.md"
+    },
+    {
+      "path": "docs/internal-review-guide.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 5826,
+      "lines": 46,
+      "gitBlob": "fb135e9303127b67d1edd5f7978e2d03969d583e",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/internal-review-guide.md"
+    },
+    {
+      "path": "docs/linux-deployment.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 28338,
+      "lines": 331,
+      "gitBlob": "1b4f62bc630d627904415238b0eff777dc7d8133",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/linux-deployment.md"
+    },
+    {
+      "path": "docs/local-demo.en.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 5647,
+      "lines": 73,
+      "gitBlob": "5f2895afda2d60e11a8ecf5878893156c44aaa7f",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/local-demo.en.md"
+    },
+    {
+      "path": "docs/local-demo.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 6153,
+      "lines": 73,
+      "gitBlob": "c3ac3f9fce57eb568aa55f340bb688daf74c8505",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/local-demo.md"
+    },
+    {
+      "path": "docs/login-ui-improvement-plan-2026-09-08.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 13083,
+      "lines": 132,
+      "gitBlob": "75b474672e3fe871e68d67738a2297f5fb65b312",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/login-ui-improvement-plan-2026-09-08.md"
+    },
+    {
+      "path": "docs/media/README.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 1256,
+      "lines": 18,
+      "gitBlob": "9b516f125f63da285830b21b219f16d2b5123180",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/media/README.md"
+    },
+    {
+      "path": "docs/media/needs-review.png",
+      "kind": "media",
+      "reviewLane": "root-product-docs",
+      "bytes": 169550,
+      "lines": null,
+      "gitBlob": "0cb07efeb7d85bf0d2bdb4d88bbc57bc1eee3aff",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/media/needs-review.png"
+    },
+    {
+      "path": "docs/media/pinned-review.png",
+      "kind": "media",
+      "reviewLane": "root-product-docs",
+      "bytes": 152185,
+      "lines": null,
+      "gitBlob": "b6f0dfd57b13b88c77b3cf73935cc4a6ccc5677c",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/media/pinned-review.png"
+    },
+    {
+      "path": "docs/media/review-flow.webm",
+      "kind": "media",
+      "reviewLane": "root-product-docs",
+      "bytes": 1756769,
+      "lines": null,
+      "gitBlob": "6ce050eb7722dfdfd1591bdd6239df30c6325f51",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/media/review-flow.webm"
+    },
+    {
+      "path": "docs/media/review-inbox.png",
+      "kind": "media",
+      "reviewLane": "root-product-docs",
+      "bytes": 88869,
+      "lines": null,
+      "gitBlob": "a94f98b16382cb72939277c19117b4051ee1b211",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/media/review-inbox.png"
+    },
+    {
+      "path": "docs/open-source-alpha-plan.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 31084,
+      "lines": 267,
+      "gitBlob": "86bf3ba00e261cb19a8c7bd0fde555fcdbc38d8a",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/open-source-alpha-plan.md"
+    },
+    {
+      "path": "docs/poc-status.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 5157,
+      "lines": 46,
+      "gitBlob": "184c9fc378b8f070e4852100050d8fbecd972963",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/poc-status.md"
+    },
+    {
+      "path": "docs/public-path-testing.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 5960,
+      "lines": 83,
+      "gitBlob": "8833cb95ff2eb8f0b06806370567c1700fb0dac8",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/public-path-testing.md"
+    },
+    {
+      "path": "docs/releases/0.1.0-alpha.1.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 4712,
+      "lines": 28,
+      "gitBlob": "2709e756305855789168eafe4b445ea6545e41a9",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/releases/0.1.0-alpha.1.md"
+    },
+    {
+      "path": "docs/releasing.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 12905,
+      "lines": 86,
+      "gitBlob": "0d5fde8c39d0101ab2602deab62f72e8b5c594fa",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/releasing.md"
+    },
+    {
+      "path": "docs/review-guide.en.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 6173,
+      "lines": 56,
+      "gitBlob": "64770de8d82efdfa21883887b965e67c94ac1e81",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/review-guide.en.md"
+    },
+    {
+      "path": "docs/review-improvement-plan-2026-09-07.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 36444,
+      "lines": 211,
+      "gitBlob": "d1c5c1f53c026d9ee60adc625abebcd26c7b3fa1",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/review-improvement-plan-2026-09-07.md"
+    },
+    {
+      "path": "docs/review-improvement-progress.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 6866,
+      "lines": 60,
+      "gitBlob": "cf77db48391228f25c42339eb2afbc821be2a060",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/review-improvement-progress.md"
+    },
+    {
+      "path": "docs/review-tunnel-plan.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 131545,
+      "lines": 1177,
+      "gitBlob": "0b352f072380ac0ce86f3cf54f19ee19830ae60c",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/review-tunnel-plan.md"
+    },
+    {
+      "path": "docs/roadmap.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 3820,
+      "lines": 32,
+      "gitBlob": "f89839d6316847ca2864299abe02154ac82c967b",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/roadmap.md"
+    },
+    {
+      "path": "docs/upgrading.en.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 8953,
+      "lines": 91,
+      "gitBlob": "766f988182147bd51b36106b161422fdb6f5c8e2",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/upgrading.en.md"
+    },
+    {
+      "path": "docs/upgrading.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 9109,
+      "lines": 91,
+      "gitBlob": "93155b44e0aa9e152331bbc0287ec7ef7c98a685",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/upgrading.md"
+    },
+    {
+      "path": "docs/validation/2026-09-06-public-https.json",
+      "kind": "configuration",
+      "reviewLane": "root-product-docs",
+      "bytes": 2197,
+      "lines": 67,
+      "gitBlob": "ac09d98130c5ac3c2f90812d4ba04a35ae9d71c6",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/validation/2026-09-06-public-https.json"
+    },
+    {
+      "path": "docs/validation/2026-09-07-local.json",
+      "kind": "configuration",
+      "reviewLane": "root-product-docs",
+      "bytes": 1560,
+      "lines": 45,
+      "gitBlob": "51d5a74a6058ca9f505a8d8942f67437a5a50dcb",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/validation/2026-09-07-local.json"
+    },
+    {
+      "path": "docs/validation/candidate-images-2026-09-09.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 4116,
+      "lines": 35,
+      "gitBlob": "aba7e61988aafffdfb7bf7f68f2b9f0111411612",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/validation/candidate-images-2026-09-09.md"
+    },
+    {
+      "path": "docs/validation/candidate-refresh-2026-09-09.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 4432,
+      "lines": 38,
+      "gitBlob": "271ef5e21f6ab07359e183bf5ec0c4cf0b440a67",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/validation/candidate-refresh-2026-09-09.md"
+    },
+    {
+      "path": "docs/validation/client-package-2026-09-09.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 4330,
+      "lines": 27,
+      "gitBlob": "5d0b32870e170ab6c6071d837712fc452efd11a2",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/validation/client-package-2026-09-09.md"
+    },
+    {
+      "path": "docs/validation/database-restore-2026-09-09.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 5256,
+      "lines": 36,
+      "gitBlob": "52ee970e1a480c0418910b58f3902527b7882396",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/validation/database-restore-2026-09-09.md"
+    },
+    {
+      "path": "docs/validation/implementation-2026-09-07.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 14055,
+      "lines": 139,
+      "gitBlob": "1c4067d7ec6e0e281a05ba74a4463063b2415551",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/validation/implementation-2026-09-07.md"
+    },
+    {
+      "path": "docs/validation/local-demo-2026-09-09.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 6384,
+      "lines": 50,
+      "gitBlob": "df6500b7ac3d54612873455041e0b0103f36fd25",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/validation/local-demo-2026-09-09.md"
+    },
+    {
+      "path": "docs/validation/local-demo-probe-2026-09-09.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 4068,
+      "lines": 36,
+      "gitBlob": "2fcd83d5650bcc7ee98eacb90169032feeb34a53",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/validation/local-demo-probe-2026-09-09.md"
+    },
+    {
+      "path": "docs/validation/open-source-preflight-2026-09-09.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 6085,
+      "lines": 38,
+      "gitBlob": "35f37a8009d6e55a0adcc42948be031baa9349e4",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/validation/open-source-preflight-2026-09-09.md"
+    },
+    {
+      "path": "docs/validation/public-https-2026-09-06.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 4014,
+      "lines": 49,
+      "gitBlob": "620d1b8ccb0eb7aae09645d6802ef21808ca9c5a",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/validation/public-https-2026-09-06.md"
+    },
+    {
+      "path": "docs/validation/release-files-2026-09-09.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 1771,
+      "lines": 12,
+      "gitBlob": "346588c77f53745b4a0690fea2d6870f56b8a703",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/validation/release-files-2026-09-09.md"
+    },
+    {
+      "path": "docs/validation/runtime-notices-2026-09-09.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 4399,
+      "lines": 27,
+      "gitBlob": "a0d4dd34088c4235849c7a5799fc78e028c3ba02",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/docs/validation/runtime-notices-2026-09-09.md"
+    },
+    {
+      "path": "examples/vite-review/README.md",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 1104,
+      "lines": 16,
+      "gitBlob": "169faceb298d41808cbd2ffd135bd99082b4c8c2",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/examples/vite-review/README.md"
+    },
+    {
+      "path": "examples/vite-review/index.html",
+      "kind": "configuration",
+      "reviewLane": "root-product-docs",
+      "bytes": 1561,
+      "lines": 33,
+      "gitBlob": "cfaae2eb40a34c6f00f33acc928fc190d632cee9",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/examples/vite-review/index.html"
+    },
+    {
+      "path": "examples/vite-review/src/main.js",
+      "kind": "source-script",
+      "reviewLane": "root-product-docs",
+      "bytes": 4992,
+      "lines": 71,
+      "gitBlob": "82016e6210beb0535dda38ac982aa5d65df113a6",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/examples/vite-review/src/main.js"
+    },
+    {
+      "path": "examples/vite-review/src/style.css",
+      "kind": "configuration",
+      "reviewLane": "root-product-docs",
+      "bytes": 6517,
+      "lines": 1,
+      "gitBlob": "dddce555ce1c6a70f66b43f576b912bd0f590fb8",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/examples/vite-review/src/style.css"
+    },
+    {
+      "path": "examples/vite-review/vite.config.mjs",
+      "kind": "source-script",
+      "reviewLane": "root-product-docs",
+      "bytes": 150,
+      "lines": 4,
+      "gitBlob": "9333e0746936d4282ed208c06df25d6f9633c53a",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/examples/vite-review/vite.config.mjs"
+    },
+    {
+      "path": "package-lock.json",
+      "kind": "dependency-lock",
+      "reviewLane": "root-product-docs",
+      "bytes": 78671,
+      "lines": 2427,
+      "gitBlob": "b3fa17960a5bc67f36fbb342e387a2297d21252f",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/package-lock.json"
+    },
+    {
+      "path": "package.json",
+      "kind": "configuration",
+      "reviewLane": "root-product-docs",
+      "bytes": 3107,
+      "lines": 62,
+      "gitBlob": "58f61d5ef33a35cc747b95d4eabe380cd42dfb35",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/package.json"
+    },
+    {
+      "path": "packages/auth/package.json",
+      "kind": "configuration",
+      "reviewLane": "domain-storage",
+      "bytes": 174,
+      "lines": 10,
+      "gitBlob": "7a794a6f7223871f626d562161331d4f492e5b96",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/auth/package.json"
+    },
+    {
+      "path": "packages/auth/src/argon2-password-hasher.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-storage",
+      "bytes": 512,
+      "lines": 22,
+      "gitBlob": "8fec3422d4b6e6427e219438e31ee2d0b8cecab4",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/auth/src/argon2-password-hasher.ts"
+    },
+    {
+      "path": "packages/auth/src/audit-policy.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-storage",
+      "bytes": 965,
+      "lines": 34,
+      "gitBlob": "d00defadf5c9e1739a840a1048d17387baa679c1",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/auth/src/audit-policy.ts"
+    },
+    {
+      "path": "packages/auth/src/auth-error.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-storage",
+      "bytes": 553,
+      "lines": 27,
+      "gitBlob": "8b09d7420a84e380a2a06315007dfe6f8c1e0a02",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/auth/src/auth-error.ts"
+    },
+    {
+      "path": "packages/auth/src/auth-service.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "domain-storage",
+      "bytes": 61587,
+      "lines": 1716,
+      "gitBlob": "a0793db0cf6a054b328163306dcdd106e25d887a",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/auth/src/auth-service.test.ts"
+    },
+    {
+      "path": "packages/auth/src/auth-service.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-storage",
+      "bytes": 32038,
+      "lines": 866,
+      "gitBlob": "d8e86dd91b227103af9e9a389c5d662d7e90be20",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/auth/src/auth-service.ts"
+    },
+    {
+      "path": "packages/auth/src/content-access-policy.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "domain-storage",
+      "bytes": 445,
+      "lines": 11,
+      "gitBlob": "629d45fe86d1119a74b9dcb173c08ad6bf3afc0f",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/auth/src/content-access-policy.test.ts"
+    },
+    {
+      "path": "packages/auth/src/in-memory-auth-repository.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-storage",
+      "bytes": 17630,
+      "lines": 499,
+      "gitBlob": "bfd48e6dfb6c44b2d1143c680c5eaf538c25ab5a",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/auth/src/in-memory-auth-repository.ts"
+    },
+    {
+      "path": "packages/auth/src/index.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-storage",
+      "bytes": 290,
+      "lines": 8,
+      "gitBlob": "a762af94d83c0fbbda649793597431800f963035",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/auth/src/index.ts"
+    },
+    {
+      "path": "packages/auth/src/model.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-storage",
+      "bytes": 3295,
+      "lines": 131,
+      "gitBlob": "30e6e6d73bbd22e1ac4d6d06dc9e57a18e8d3075",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/auth/src/model.ts"
+    },
+    {
+      "path": "packages/auth/src/password-policy.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-storage",
+      "bytes": 1491,
+      "lines": 41,
+      "gitBlob": "9e4c1a915818ca0f7c8f6adbb61417ba3f23ba5a",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/auth/src/password-policy.ts"
+    },
+    {
+      "path": "packages/auth/src/ports.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-storage",
+      "bytes": 4535,
+      "lines": 153,
+      "gitBlob": "bd75f75ab4b26dccff8a3ba750acfc0279b692d9",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/auth/src/ports.ts"
+    },
+    {
+      "path": "packages/cli-utils/package.json",
+      "kind": "configuration",
+      "reviewLane": "transport",
+      "bytes": 130,
+      "lines": 7,
+      "gitBlob": "8f84afdb06a870f6aa713d79e1debe37415d368d",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/cli-utils/package.json"
+    },
+    {
+      "path": "packages/cli-utils/src/secret-input.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 1923,
+      "lines": 61,
+      "gitBlob": "bb6728b6c800df059cc5db25168019dc81d9307c",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/cli-utils/src/secret-input.ts"
+    },
+    {
+      "path": "packages/operations/package.json",
+      "kind": "configuration",
+      "reviewLane": "transport",
+      "bytes": 131,
+      "lines": 7,
+      "gitBlob": "de9aee1ca6765894b795acfa47dcd31b73bd1092",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/operations/package.json"
+    },
+    {
+      "path": "packages/operations/src/index.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 40,
+      "lines": 1,
+      "gitBlob": "44adba38c1d47849b28d934280c524b606254480",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/operations/src/index.ts"
+    },
+    {
+      "path": "packages/operations/src/operational-state.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "transport",
+      "bytes": 2016,
+      "lines": 59,
+      "gitBlob": "099383e37ad573b26e76fb0e45c0efd5b7e34e15",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/operations/src/operational-state.test.ts"
+    },
+    {
+      "path": "packages/operations/src/operational-state.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 3489,
+      "lines": 133,
+      "gitBlob": "588f8fb05c8ff3234872284128fa1a0b61c1e42b",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/operations/src/operational-state.ts"
+    },
+    {
+      "path": "packages/protocol/package.json",
+      "kind": "configuration",
+      "reviewLane": "transport",
+      "bytes": 160,
+      "lines": 8,
+      "gitBlob": "79101da895a473547c41969c771a581ce8f9d523",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/protocol/package.json"
+    },
+    {
+      "path": "packages/protocol/src/envelope.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "transport",
+      "bytes": 4867,
+      "lines": 204,
+      "gitBlob": "66183e4dd3bdd770bd1435c9759025a3a2d4c5d5",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/protocol/src/envelope.test.ts"
+    },
+    {
+      "path": "packages/protocol/src/envelope.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 5751,
+      "lines": 207,
+      "gitBlob": "56a1c54537aa504add5f04b33693ae27077b183a",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/protocol/src/envelope.ts"
+    },
+    {
+      "path": "packages/protocol/src/http-metadata.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "transport",
+      "bytes": 2642,
+      "lines": 91,
+      "gitBlob": "d024f03b70c9566bf1fab338013e5eb3d8ab8188",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/protocol/src/http-metadata.test.ts"
+    },
+    {
+      "path": "packages/protocol/src/http-metadata.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 8733,
+      "lines": 289,
+      "gitBlob": "92127cbcf77a250e046bb70ea9dfe048c0b4d2bc",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/protocol/src/http-metadata.ts"
+    },
+    {
+      "path": "packages/protocol/src/index.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 177,
+      "lines": 5,
+      "gitBlob": "8ed35247e5219a7670310a9b4040db28a5c6bc09",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/protocol/src/index.ts"
+    },
+    {
+      "path": "packages/protocol/src/session-config.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "transport",
+      "bytes": 2404,
+      "lines": 62,
+      "gitBlob": "bde38e739a9ae837d0940148d9473e12350f8ed1",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/protocol/src/session-config.test.ts"
+    },
+    {
+      "path": "packages/protocol/src/session-config.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 15171,
+      "lines": 456,
+      "gitBlob": "fa6c6858018bf8ff9234f90e1bf4235e8c9f213b",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/protocol/src/session-config.ts"
+    },
+    {
+      "path": "packages/protocol/src/session-policy.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "transport",
+      "bytes": 1476,
+      "lines": 62,
+      "gitBlob": "94e40a1edf5a1aaca1ae3e03ccdef8d94cf5df98",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/protocol/src/session-policy.test.ts"
+    },
+    {
+      "path": "packages/protocol/src/session-policy.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 1122,
+      "lines": 44,
+      "gitBlob": "4cbdef42eb4860ddc762cb4af642da188843b4b6",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/protocol/src/session-policy.ts"
+    },
+    {
+      "path": "packages/protocol/src/session-state.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "transport",
+      "bytes": 7596,
+      "lines": 259,
+      "gitBlob": "1b75aacab486bf25514f87b74bc9f87771139e0d",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/protocol/src/session-state.test.ts"
+    },
+    {
+      "path": "packages/protocol/src/session-state.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 6701,
+      "lines": 231,
+      "gitBlob": "d9ccecbc95e5fc42b99978857f14ed3fde242983",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/protocol/src/session-state.ts"
+    },
+    {
+      "path": "packages/proxy/package.json",
+      "kind": "configuration",
+      "reviewLane": "transport",
+      "bytes": 229,
+      "lines": 11,
+      "gitBlob": "b8ba74162a53d0665c3f812f2a163460753061dc",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/proxy/package.json"
+    },
+    {
+      "path": "packages/proxy/src/header-policy.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "transport",
+      "bytes": 1659,
+      "lines": 55,
+      "gitBlob": "90c76561983c1c8eae2e601f9fe9116bc6b4beaf",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/proxy/src/header-policy.test.ts"
+    },
+    {
+      "path": "packages/proxy/src/header-policy.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 2689,
+      "lines": 82,
+      "gitBlob": "d0d7a63eacbd47ae6a2cfabb0033803bb3e272fb",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/proxy/src/header-policy.ts"
+    },
+    {
+      "path": "packages/proxy/src/index.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 76,
+      "lines": 2,
+      "gitBlob": "5cc2f1d7dadea822b973ae61c5fb4745a2aeaf01",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/proxy/src/index.ts"
+    },
+    {
+      "path": "packages/proxy/src/projection-policy.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "transport",
+      "bytes": 4151,
+      "lines": 112,
+      "gitBlob": "1f1972b2274650fa48cfbefd7ed635987306e435",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/proxy/src/projection-policy.test.ts"
+    },
+    {
+      "path": "packages/proxy/src/projection-policy.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 6570,
+      "lines": 215,
+      "gitBlob": "16b4caa4c094f66b74698f94dd891d74de85d48f",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/proxy/src/projection-policy.ts"
+    },
+    {
+      "path": "packages/relay/package.json",
+      "kind": "configuration",
+      "reviewLane": "transport",
+      "bytes": 229,
+      "lines": 11,
+      "gitBlob": "44d71bcaf5e7c1d8df2916ca53aa1eac883da084",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/relay/package.json"
+    },
+    {
+      "path": "packages/relay/src/carrier.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "transport",
+      "bytes": 865,
+      "lines": 40,
+      "gitBlob": "6aba66623ab0874a4aaa4a9bb941dfeb43bc7634",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/relay/src/carrier.test.ts"
+    },
+    {
+      "path": "packages/relay/src/carrier.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 1997,
+      "lines": 75,
+      "gitBlob": "34c86b83e52fb5aaddf5a947ed34ba2a91031d5c",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/relay/src/carrier.ts"
+    },
+    {
+      "path": "packages/relay/src/flow-window.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "transport",
+      "bytes": 2370,
+      "lines": 78,
+      "gitBlob": "066b45cf19e04f6a4f8f4190a4234b5fc19978a2",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/relay/src/flow-window.test.ts"
+    },
+    {
+      "path": "packages/relay/src/flow-window.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 4135,
+      "lines": 122,
+      "gitBlob": "55a1ef5eb7b56991455a2d07ea17e3f0ebeeb179",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/relay/src/flow-window.ts"
+    },
+    {
+      "path": "packages/relay/src/index.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 106,
+      "lines": 3,
+      "gitBlob": "c7263f916fd6e81807b2febd17ec785bfb224dd1",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/relay/src/index.ts"
+    },
+    {
+      "path": "packages/relay/src/retired-data-budget.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "transport",
+      "bytes": 1238,
+      "lines": 35,
+      "gitBlob": "310527eaf2f9873cf2da8acb2bdd73038870ed7f",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/relay/src/retired-data-budget.test.ts"
+    },
+    {
+      "path": "packages/relay/src/retired-data-budget.ts",
+      "kind": "source-script",
+      "reviewLane": "transport",
+      "bytes": 2648,
+      "lines": 70,
+      "gitBlob": "86a2151f531f5c76fb557bf67c996151a2c640bf",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/relay/src/retired-data-budget.ts"
+    },
+    {
+      "path": "packages/review/package.json",
+      "kind": "configuration",
+      "reviewLane": "domain-storage",
+      "bytes": 127,
+      "lines": 7,
+      "gitBlob": "d083ee26410d816aac90f363bd1d33609a09e3ea",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/review/package.json"
+    },
+    {
+      "path": "packages/review/src/content-mutation-policy.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "domain-storage",
+      "bytes": 1718,
+      "lines": 23,
+      "gitBlob": "f8c9823aec305a8a2e25f62e5afc78d5e24c37ff",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/review/src/content-mutation-policy.test.ts"
+    },
+    {
+      "path": "packages/review/src/content-mutation-policy.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-storage",
+      "bytes": 1009,
+      "lines": 28,
+      "gitBlob": "ea53ec1cd84ded8aa35246bc6fbc749ae13223eb",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/review/src/content-mutation-policy.ts"
+    },
+    {
+      "path": "packages/review/src/in-memory-review-repository.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-storage",
+      "bytes": 28110,
+      "lines": 626,
+      "gitBlob": "bf07b5310c98591505b041e9090adff0b7f8edec",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/review/src/in-memory-review-repository.ts"
+    },
+    {
+      "path": "packages/review/src/index.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-storage",
+      "bytes": 189,
+      "lines": 5,
+      "gitBlob": "334f7d53ee712df048778838a90aae8718343990",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/review/src/index.ts"
+    },
+    {
+      "path": "packages/review/src/model.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-storage",
+      "bytes": 17108,
+      "lines": 530,
+      "gitBlob": "987c2deddd3bf8603e954365478916f0dcae8ae8",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/review/src/model.ts"
+    },
+    {
+      "path": "packages/review/src/ports.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-storage",
+      "bytes": 8261,
+      "lines": 245,
+      "gitBlob": "36a10fff7d7a0ca0b7cbedabe5d780454de74d29",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/review/src/ports.ts"
+    },
+    {
+      "path": "packages/review/src/review-service.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-storage",
+      "bytes": 31470,
+      "lines": 757,
+      "gitBlob": "05aac65a9cd17ea86da2400347655cacc4c33267",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/review/src/review-service.ts"
+    },
+    {
+      "path": "packages/review/src/review.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "domain-storage",
+      "bytes": 40162,
+      "lines": 1097,
+      "gitBlob": "0a6b248868953f163e453a206eaf61c8e91b6a08",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/review/src/review.test.ts"
+    },
+    {
+      "path": "packages/storage-postgres/package.json",
+      "kind": "configuration",
+      "reviewLane": "domain-storage",
+      "bytes": 322,
+      "lines": 13,
+      "gitBlob": "8f7e57af56185aad9ed404ac96c1935e44892040",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/storage-postgres/package.json"
+    },
+    {
+      "path": "packages/storage-postgres/src/bounded-audit-writer.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-storage",
+      "bytes": 1658,
+      "lines": 55,
+      "gitBlob": "15cba387dda546dfd870aef599a1fa8483ec45f8",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/storage-postgres/src/bounded-audit-writer.ts"
+    },
+    {
+      "path": "packages/storage-postgres/src/capacity-locks.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-storage",
+      "bytes": 121,
+      "lines": 2,
+      "gitBlob": "dd2b9080870cb3e304dfa649644c772cd07f6e2f",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/storage-postgres/src/capacity-locks.ts"
+    },
+    {
+      "path": "packages/storage-postgres/src/fixtures/review-schema-github-18.sql",
+      "kind": "test-fixture",
+      "reviewLane": "domain-storage",
+      "bytes": 17153,
+      "lines": 445,
+      "gitBlob": "7b8c18fd983600ee6b3b419cd980ad6d1c1302a5",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/storage-postgres/src/fixtures/review-schema-github-18.sql"
+    },
+    {
+      "path": "packages/storage-postgres/src/fixtures/review-schema-local-20.sql",
+      "kind": "test-fixture",
+      "reviewLane": "domain-storage",
+      "bytes": 19001,
+      "lines": 458,
+      "gitBlob": "390d135ea036cb933d874a3ebd352cb97e560247",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/storage-postgres/src/fixtures/review-schema-local-20.sql"
+    },
+    {
+      "path": "packages/storage-postgres/src/index.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-storage",
+      "bytes": 221,
+      "lines": 5,
+      "gitBlob": "af6134103329e5d74a08672ed5717a0478959a83",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/storage-postgres/src/index.ts"
+    },
+    {
+      "path": "packages/storage-postgres/src/postgres-auth-repository.integration.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "domain-storage",
+      "bytes": 36033,
+      "lines": 931,
+      "gitBlob": "ebb6e68de0c4d3e4cb7089296c43555756edbd47",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/storage-postgres/src/postgres-auth-repository.integration.test.ts"
+    },
+    {
+      "path": "packages/storage-postgres/src/postgres-auth-repository.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-storage",
+      "bytes": 33281,
+      "lines": 979,
+      "gitBlob": "e9f53ec0d8ffa6a02e73f1357fd729786be2fc3d",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/storage-postgres/src/postgres-auth-repository.ts"
+    },
+    {
+      "path": "packages/storage-postgres/src/postgres-operational-state-repository.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-storage",
+      "bytes": 8775,
+      "lines": 260,
+      "gitBlob": "0eb8248bc2fb1f0780b1a784b2c1dc32f45146dd",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/storage-postgres/src/postgres-operational-state-repository.ts"
+    },
+    {
+      "path": "packages/storage-postgres/src/postgres-review-repository.integration.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "domain-storage",
+      "bytes": 49309,
+      "lines": 1157,
+      "gitBlob": "8a3c1b24c937219436a50a53ad129a5a39149288",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/storage-postgres/src/postgres-review-repository.integration.test.ts"
+    },
+    {
+      "path": "packages/storage-postgres/src/postgres-review-repository.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-storage",
+      "bytes": 70445,
+      "lines": 1760,
+      "gitBlob": "33b9c2dcf52d58821eeacab6cbcac6d8e5e72125",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/storage-postgres/src/postgres-review-repository.ts"
+    },
+    {
+      "path": "packages/storage-postgres/src/postgres-transaction.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "domain-storage",
+      "bytes": 1470,
+      "lines": 48,
+      "gitBlob": "44e5e8cda5d3864b0d943436313ae74209e4252f",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/storage-postgres/src/postgres-transaction.test.ts"
+    },
+    {
+      "path": "packages/storage-postgres/src/postgres-transaction.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-storage",
+      "bytes": 644,
+      "lines": 22,
+      "gitBlob": "bb51f9cdd6df63c766d7e7a83b0f6ad5d5b56035",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/storage-postgres/src/postgres-transaction.ts"
+    },
+    {
+      "path": "packages/storage-postgres/src/review-event-transaction.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-storage",
+      "bytes": 781,
+      "lines": 19,
+      "gitBlob": "5f7a002b0a2757dcfb51b81b89c5f48eca25efba",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/storage-postgres/src/review-event-transaction.ts"
+    },
+    {
+      "path": "packages/storage-postgres/src/review-schema.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "domain-storage",
+      "bytes": 3365,
+      "lines": 49,
+      "gitBlob": "81db0edf6cf12a3f0c74da0839c0ab77f1274f1c",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/storage-postgres/src/review-schema.test.ts"
+    },
+    {
+      "path": "packages/storage-postgres/src/review-schema.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-storage",
+      "bytes": 20217,
+      "lines": 484,
+      "gitBlob": "694cf816ad22291b8407b0ba5a060ea9dddd0290",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/storage-postgres/src/review-schema.ts"
+    },
+    {
+      "path": "packages/storage-postgres/src/schema.test.ts",
+      "kind": "test-fixture",
+      "reviewLane": "domain-storage",
+      "bytes": 1694,
+      "lines": 31,
+      "gitBlob": "134a2f9b5506143cc7b1b0b50a3263ac9076b5fa",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/storage-postgres/src/schema.test.ts"
+    },
+    {
+      "path": "packages/storage-postgres/src/schema.ts",
+      "kind": "source-script",
+      "reviewLane": "domain-storage",
+      "bytes": 6621,
+      "lines": 157,
+      "gitBlob": "c9cce67e525b645fef8575addcc6e8dc124c455d",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/packages/storage-postgres/src/schema.ts"
+    },
+    {
+      "path": "scripts/build-review-ui.mjs",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 1451,
+      "lines": 34,
+      "gitBlob": "3116c0838c5a64749aab81056bf33440516d887e",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/build-review-ui.mjs"
+    },
+    {
+      "path": "scripts/canary-origin.mjs",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 2780,
+      "lines": 77,
+      "gitBlob": "2e1a5b91a40c591132502604d724c897e1248add",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/canary-origin.mjs"
+    },
+    {
+      "path": "scripts/canary-policy.mjs",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 3522,
+      "lines": 108,
+      "gitBlob": "9926243c8c9e9613a8a4101ef6ffbf833c5a1a6c",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/canary-policy.mjs"
+    },
+    {
+      "path": "scripts/canary-policy.test.mjs",
+      "kind": "test-fixture",
+      "reviewLane": "delivery",
+      "bytes": 3172,
+      "lines": 109,
+      "gitBlob": "2ad818d8af863d46eb1baab4bf810ac166a924f2",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/canary-policy.test.mjs"
+    },
+    {
+      "path": "scripts/candidate-images.mjs",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 8214,
+      "lines": 131,
+      "gitBlob": "2bc3b7918a9be51c13d4e924bcd1ab14ad40d10d",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/candidate-images.mjs"
+    },
+    {
+      "path": "scripts/candidate-images.test.mjs",
+      "kind": "test-fixture",
+      "reviewLane": "delivery",
+      "bytes": 5949,
+      "lines": 90,
+      "gitBlob": "ae388f581a812ec62b2999db09a151d224118489",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/candidate-images.test.mjs"
+    },
+    {
+      "path": "scripts/check-boundaries-lib.mjs",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 7080,
+      "lines": 188,
+      "gitBlob": "8994f6db475011698195afcc3129545c78bc8368",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/check-boundaries-lib.mjs"
+    },
+    {
+      "path": "scripts/check-boundaries.mjs",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 5166,
+      "lines": 144,
+      "gitBlob": "19600ec872b4f595c6b28c2eeb413619ca5fecb5",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/check-boundaries.mjs"
+    },
+    {
+      "path": "scripts/check-boundaries.test.mjs",
+      "kind": "test-fixture",
+      "reviewLane": "delivery",
+      "bytes": 6330,
+      "lines": 180,
+      "gitBlob": "c7fccef33aa8c2141d49c55787060f73df103b69",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/check-boundaries.test.mjs"
+    },
+    {
+      "path": "scripts/check-release-version.mjs",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 389,
+      "lines": 7,
+      "gitBlob": "dc156b22efe57faa81877a588d0b35f8f6002f53",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/check-release-version.mjs"
+    },
+    {
+      "path": "scripts/ci-contract.test.mjs",
+      "kind": "test-fixture",
+      "reviewLane": "delivery",
+      "bytes": 1827,
+      "lines": 47,
+      "gitBlob": "046e3fa042f4a4d08f4c1975845222bca31303c3",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/ci-contract.test.mjs"
+    },
+    {
+      "path": "scripts/cli-help.test.mjs",
+      "kind": "test-fixture",
+      "reviewLane": "delivery",
+      "bytes": 930,
+      "lines": 28,
+      "gitBlob": "a8b588ad1fbbe7584ceaf4cb07ff53a48eaa6c1a",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/cli-help.test.mjs"
+    },
+    {
+      "path": "scripts/client-package.mjs",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 5293,
+      "lines": 81,
+      "gitBlob": "d5a51c2f93e615a51cf00fc2ed3082f814ad6692",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/client-package.mjs"
+    },
+    {
+      "path": "scripts/client-package.test.mjs",
+      "kind": "test-fixture",
+      "reviewLane": "delivery",
+      "bytes": 4648,
+      "lines": 62,
+      "gitBlob": "c3eca076f51bb42321bb1facf506f9597911ec35",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/client-package.test.mjs"
+    },
+    {
+      "path": "scripts/config-documentation.test.mjs",
+      "kind": "test-fixture",
+      "reviewLane": "delivery",
+      "bytes": 3652,
+      "lines": 101,
+      "gitBlob": "4eacb5dbb5ccf32c779521833d9c331f9b5498d8",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/config-documentation.test.mjs"
+    },
+    {
+      "path": "scripts/demo-dns.test.mjs",
+      "kind": "test-fixture",
+      "reviewLane": "delivery",
+      "bytes": 1649,
+      "lines": 29,
+      "gitBlob": "326309f6f7e98947c01c52a0f63250581eb0c712",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/demo-dns.test.mjs"
+    },
+    {
+      "path": "scripts/demo-lifecycle.test.mjs",
+      "kind": "test-fixture",
+      "reviewLane": "delivery",
+      "bytes": 4396,
+      "lines": 85,
+      "gitBlob": "8011a0bf8f07942a53cac5a30d6e4175ef303064",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/demo-lifecycle.test.mjs"
+    },
+    {
+      "path": "scripts/demo-state.test.mjs",
+      "kind": "test-fixture",
+      "reviewLane": "delivery",
+      "bytes": 3543,
+      "lines": 59,
+      "gitBlob": "aafb6f1090be4af6d2d7fe46fa5d97b87b9c91c2",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/demo-state.test.mjs"
+    },
+    {
+      "path": "scripts/demo.mjs",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 12367,
+      "lines": 193,
+      "gitBlob": "be1038523f44e32a17beb6807ddbf05acafd28e3",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/demo.mjs"
+    },
+    {
+      "path": "scripts/demo/bootstrap.mjs",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 5153,
+      "lines": 99,
+      "gitBlob": "ec821c6c4b22939d98ddf5cb95a0cd96c0d8d135",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/demo/bootstrap.mjs"
+    },
+    {
+      "path": "scripts/demo/loopback-dns.mjs",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 1267,
+      "lines": 27,
+      "gitBlob": "32a221a5090d19930024aa6da6e9d246dab4c42c",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/demo/loopback-dns.mjs"
+    },
+    {
+      "path": "scripts/demo/processes.mjs",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 4250,
+      "lines": 98,
+      "gitBlob": "c727ea721a644b95c5e785c532225f2258ad53ae",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/demo/processes.mjs"
+    },
+    {
+      "path": "scripts/demo/state.mjs",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 7097,
+      "lines": 151,
+      "gitBlob": "0d261e40ce304ae1d287246e1e562dcdb6496664",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/demo/state.mjs"
+    },
+    {
+      "path": "scripts/deploy-over-ssh.py",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 3368,
+      "lines": 74,
+      "gitBlob": "0a4fa9fe982aff27e563b6e59244da3f0b8cbd20",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/deploy-over-ssh.py"
+    },
+    {
+      "path": "scripts/deploy_gateway.py",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 21305,
+      "lines": 372,
+      "gitBlob": "89a6d0927d8742ef5d85f0cbb607b5fb79bb1df2",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/deploy_gateway.py"
+    },
+    {
+      "path": "scripts/deployment.test.mjs",
+      "kind": "test-fixture",
+      "reviewLane": "delivery",
+      "bytes": 2907,
+      "lines": 49,
+      "gitBlob": "cc5e165216a12a9f0c1c9c6b7f039cdba7a197ac",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/deployment.test.mjs"
+    },
+    {
+      "path": "scripts/docker-contract.test.mjs",
+      "kind": "test-fixture",
+      "reviewLane": "delivery",
+      "bytes": 5797,
+      "lines": 137,
+      "gitBlob": "c392b178486cc9ddabe58e01af15049b567d8545",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/docker-contract.test.mjs"
+    },
+    {
+      "path": "scripts/image-notices-probe.mjs",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 3844,
+      "lines": 58,
+      "gitBlob": "8da9ed241347d766ce67d662367adbb6177b794c",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/image-notices-probe.mjs"
+    },
+    {
+      "path": "scripts/inspect-image-notices.mjs",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 3552,
+      "lines": 43,
+      "gitBlob": "631e99706c488e9f3fa1f5f7554d64759202e9c1",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/inspect-image-notices.mjs"
+    },
+    {
+      "path": "scripts/integration-packages.test.mjs",
+      "kind": "test-fixture",
+      "reviewLane": "delivery",
+      "bytes": 3378,
+      "lines": 89,
+      "gitBlob": "31cc3586cc65596febe993b4a1ab56cae66fbf04",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/integration-packages.test.mjs"
+    },
+    {
+      "path": "scripts/pack-client.mjs",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 1431,
+      "lines": 28,
+      "gitBlob": "ccf640ddce43f58aaa88f560feb4051cf2f9457a",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/pack-client.mjs"
+    },
+    {
+      "path": "scripts/pack-release.mjs",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 4118,
+      "lines": 61,
+      "gitBlob": "4693f01b9e70d0e88d4ae4a32cabbc295d189407",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/pack-release.mjs"
+    },
+    {
+      "path": "scripts/postgres-backup.mjs",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 1237,
+      "lines": 36,
+      "gitBlob": "fe53cd77c30d13058bc5b931ec8c632ea57b5a2b",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/postgres-backup.mjs"
+    },
+    {
+      "path": "scripts/postgres-operations.mjs",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 8565,
+      "lines": 283,
+      "gitBlob": "200d1386d8d2f659b5a63331e0aed9ea8380f05f",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/postgres-operations.mjs"
+    },
+    {
+      "path": "scripts/postgres-operations.test.mjs",
+      "kind": "test-fixture",
+      "reviewLane": "delivery",
+      "bytes": 16877,
+      "lines": 462,
+      "gitBlob": "bb94baf9ddd7c260b5ad8cef9529af345963eaf8",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/postgres-operations.test.mjs"
+    },
+    {
+      "path": "scripts/postgres-process.mjs",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 2473,
+      "lines": 81,
+      "gitBlob": "168e6ceb603593a39e4f44d09f0420071064662c",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/postgres-process.mjs"
+    },
+    {
+      "path": "scripts/postgres-restore.mjs",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 1717,
+      "lines": 53,
+      "gitBlob": "694454267833394472db00f3876cbdad96704a12",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/postgres-restore.mjs"
+    },
+    {
+      "path": "scripts/postgres-url.mjs",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 3183,
+      "lines": 77,
+      "gitBlob": "7df10b4fd07943c750798006e8d9391f60b61670",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/postgres-url.mjs"
+    },
+    {
+      "path": "scripts/postgres-url.test.mjs",
+      "kind": "test-fixture",
+      "reviewLane": "delivery",
+      "bytes": 3451,
+      "lines": 103,
+      "gitBlob": "ce3c13820b5e01b027f8b2656b7ad8826c12830f",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/postgres-url.test.mjs"
+    },
+    {
+      "path": "scripts/product-language.test.mjs",
+      "kind": "test-fixture",
+      "reviewLane": "delivery",
+      "bytes": 1037,
+      "lines": 30,
+      "gitBlob": "aac90156c834139c3ec61a1916dcedde770bf5b9",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/product-language.test.mjs"
+    },
+    {
+      "path": "scripts/promote-release-images.mjs",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 3806,
+      "lines": 58,
+      "gitBlob": "9d966f8cd9389b075c674e3ce0235dbc9ccccde0",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/promote-release-images.mjs"
+    },
+    {
+      "path": "scripts/publish-candidate-images.mjs",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 4395,
+      "lines": 65,
+      "gitBlob": "8545a66151f068139377f8ced42221991092e1c9",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/publish-candidate-images.mjs"
+    },
+    {
+      "path": "scripts/receive-deployment.py",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 1539,
+      "lines": 38,
+      "gitBlob": "f1da1b6b8563f91b0f828522e96a7423d168d46c",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/receive-deployment.py"
+    },
+    {
+      "path": "scripts/release-artifacts.mjs",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 3248,
+      "lines": 52,
+      "gitBlob": "51b9e211f39570d2c773f39f4b57c0cc860cd97d",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/release-artifacts.mjs"
+    },
+    {
+      "path": "scripts/release-artifacts.test.mjs",
+      "kind": "test-fixture",
+      "reviewLane": "delivery",
+      "bytes": 4643,
+      "lines": 73,
+      "gitBlob": "a64aba27576dfa3819cc13bb5329552bd29d9657",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/release-artifacts.test.mjs"
+    },
+    {
+      "path": "scripts/release-image-tags.mjs",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 3236,
+      "lines": 54,
+      "gitBlob": "c93a52a866946009f13c63c7ccb67b376d9aaa92",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/release-image-tags.mjs"
+    },
+    {
+      "path": "scripts/release-image-tags.test.mjs",
+      "kind": "test-fixture",
+      "reviewLane": "delivery",
+      "bytes": 4944,
+      "lines": 81,
+      "gitBlob": "f0a2f1eb9499aeaa8bb426bff2f51c2a338a9ae6",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/release-image-tags.test.mjs"
+    },
+    {
+      "path": "scripts/release-version.mjs",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 2570,
+      "lines": 39,
+      "gitBlob": "c91f41763257de9c0ec7faf54949ef964ce009ba",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/release-version.mjs"
+    },
+    {
+      "path": "scripts/review-ui-build.test.mjs",
+      "kind": "test-fixture",
+      "reviewLane": "delivery",
+      "bytes": 436,
+      "lines": 11,
+      "gitBlob": "7d60edf3a631e805fd10c7cd43757c6cde93a7fa",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/review-ui-build.test.mjs"
+    },
+    {
+      "path": "scripts/style-contract.test.mjs",
+      "kind": "test-fixture",
+      "reviewLane": "delivery",
+      "bytes": 1301,
+      "lines": 27,
+      "gitBlob": "5bccdd89fa26d96809a4f87afd85750660e306b8",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/style-contract.test.mjs"
+    },
+    {
+      "path": "scripts/test_deployment.py",
+      "kind": "test-fixture",
+      "reviewLane": "delivery",
+      "bytes": 19802,
+      "lines": 382,
+      "gitBlob": "5e3a320074bd2f09562523efe7433ea390fd26b3",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/test_deployment.py"
+    },
+    {
+      "path": "scripts/verify-public-path.mjs",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 4552,
+      "lines": 139,
+      "gitBlob": "9bae86578b670f275b9fcee40369419cb2a234e0",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/verify-public-path.mjs"
+    },
+    {
+      "path": "scripts/verify-release.mjs",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 642,
+      "lines": 11,
+      "gitBlob": "f736a4d45bda5354cfa3d7b14db0a875dbe7b8ec",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/verify-release.mjs"
+    },
+    {
+      "path": "scripts/workspace-dependencies.test.mjs",
+      "kind": "test-fixture",
+      "reviewLane": "delivery",
+      "bytes": 4231,
+      "lines": 121,
+      "gitBlob": "730ddeffae5f4f51266b7be1b8cdad1c5a47eb00",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/scripts/workspace-dependencies.test.mjs"
+    },
+    {
+      "path": "tests/demo/capture-media.mjs",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 6718,
+      "lines": 96,
+      "gitBlob": "a6de0768b845bbd1eea52171ce1382457aa437bc",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/tests/demo/capture-media.mjs"
+    },
+    {
+      "path": "tests/demo/client-package.spec.mjs",
+      "kind": "test-fixture",
+      "reviewLane": "delivery",
+      "bytes": 9178,
+      "lines": 141,
+      "gitBlob": "340b1bb86929715d036b8164620f2e5f92fbf4e1",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/tests/demo/client-package.spec.mjs"
+    },
+    {
+      "path": "tests/demo/demo.spec.mjs",
+      "kind": "test-fixture",
+      "reviewLane": "delivery",
+      "bytes": 9646,
+      "lines": 152,
+      "gitBlob": "fa87c76bae5de78b440be7bce4dd088854f98772",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/tests/demo/demo.spec.mjs"
+    },
+    {
+      "path": "tests/demo/playwright.config.mjs",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 397,
+      "lines": 6,
+      "gitBlob": "39dd6227848de1c461861ac80cd2fa0d1d06cbff",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/tests/demo/playwright.config.mjs"
+    },
+    {
+      "path": "tests/demo/runtime.mjs",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 4220,
+      "lines": 84,
+      "gitBlob": "9f918e941943297119ad22aff5d468daa56d15b2",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/tests/demo/runtime.mjs"
+    },
+    {
+      "path": "tests/demo/terminal-client.py",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 1456,
+      "lines": 52,
+      "gitBlob": "d21a9582a7d9ee4a3c2bc0b17021c638892fab28",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/tests/demo/terminal-client.py"
+    },
+    {
+      "path": "tests/frameworks/compatibility.spec.mjs",
+      "kind": "test-fixture",
+      "reviewLane": "delivery",
+      "bytes": 16362,
+      "lines": 379,
+      "gitBlob": "6f9871fbb3dbdffec0190539063a07e1be6b4ab4",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/tests/frameworks/compatibility.spec.mjs"
+    },
+    {
+      "path": "tests/frameworks/fixtures/next/app/api/health/route.js",
+      "kind": "test-fixture",
+      "reviewLane": "delivery",
+      "bytes": 87,
+      "lines": 3,
+      "gitBlob": "d2ea9199935d75b8fe4648c2a2ad2cafb977a9b8",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/tests/frameworks/fixtures/next/app/api/health/route.js"
+    },
+    {
+      "path": "tests/frameworks/fixtures/next/app/details/page.jsx",
+      "kind": "test-fixture",
+      "reviewLane": "delivery",
+      "bytes": 175,
+      "lines": 5,
+      "gitBlob": "e022b3355ac4adfb694ef1a6239dac8a831ca336",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/tests/frameworks/fixtures/next/app/details/page.jsx"
+    },
+    {
+      "path": "tests/frameworks/fixtures/next/app/interactive-fixture.jsx",
+      "kind": "test-fixture",
+      "reviewLane": "delivery",
+      "bytes": 919,
+      "lines": 24,
+      "gitBlob": "6f21e650b398d688938568aeef13540fdf459944",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/tests/frameworks/fixtures/next/app/interactive-fixture.jsx"
+    },
+    {
+      "path": "tests/frameworks/fixtures/next/app/layout.jsx",
+      "kind": "test-fixture",
+      "reviewLane": "delivery",
+      "bytes": 459,
+      "lines": 17,
+      "gitBlob": "5cad2b18735247fbf54cc9e26151d20a74a13755",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/tests/frameworks/fixtures/next/app/layout.jsx"
+    },
+    {
+      "path": "tests/frameworks/fixtures/next/app/page.jsx",
+      "kind": "test-fixture",
+      "reviewLane": "delivery",
+      "bytes": 629,
+      "lines": 21,
+      "gitBlob": "44d118c3a19e8ad48f9a255912e5a8c0fcd853ea",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/tests/frameworks/fixtures/next/app/page.jsx"
+    },
+    {
+      "path": "tests/frameworks/fixtures/next/app/server-actions.js",
+      "kind": "test-fixture",
+      "reviewLane": "delivery",
+      "bytes": 121,
+      "lines": 5,
+      "gitBlob": "b6489d030aa29253a30c0d55cb51a465eaafb07c",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/tests/frameworks/fixtures/next/app/server-actions.js"
+    },
+    {
+      "path": "tests/frameworks/fixtures/next/app/style.css",
+      "kind": "test-fixture",
+      "reviewLane": "delivery",
+      "bytes": 305,
+      "lines": 5,
+      "gitBlob": "c11626157b2a319b077c588435c213d2595f9ac5",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/tests/frameworks/fixtures/next/app/style.css"
+    },
+    {
+      "path": "tests/frameworks/fixtures/next/next.config.mjs",
+      "kind": "test-fixture",
+      "reviewLane": "delivery",
+      "bytes": 257,
+      "lines": 11,
+      "gitBlob": "13332eb2a50bc975af825c564f922d9f5515dc2c",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/tests/frameworks/fixtures/next/next.config.mjs"
+    },
+    {
+      "path": "tests/frameworks/fixtures/vite/index.html",
+      "kind": "test-fixture",
+      "reviewLane": "delivery",
+      "bytes": 313,
+      "lines": 12,
+      "gitBlob": "43e63bc309c4e4f8ecdd9057ab3ade6c8595160d",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/tests/frameworks/fixtures/vite/index.html"
+    },
+    {
+      "path": "tests/frameworks/fixtures/vite/src/main.js",
+      "kind": "test-fixture",
+      "reviewLane": "delivery",
+      "bytes": 458,
+      "lines": 16,
+      "gitBlob": "4d297d0464e3d1e2d3c40f5a3f7feb7043f8e99a",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/tests/frameworks/fixtures/vite/src/main.js"
+    },
+    {
+      "path": "tests/frameworks/fixtures/vite/src/style.css",
+      "kind": "test-fixture",
+      "reviewLane": "delivery",
+      "bytes": 237,
+      "lines": 4,
+      "gitBlob": "fc49a650ab5ac70fbf87f774aabf07c5a21c000b",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/tests/frameworks/fixtures/vite/src/style.css"
+    },
+    {
+      "path": "tests/frameworks/fixtures/vite/vite.config.mjs",
+      "kind": "test-fixture",
+      "reviewLane": "delivery",
+      "bytes": 154,
+      "lines": 7,
+      "gitBlob": "286c0ac1e0e3f1e1da358ae291b8a7eb66b15bb5",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/tests/frameworks/fixtures/vite/vite.config.mjs"
+    },
+    {
+      "path": "tests/frameworks/playwright.config.mjs",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 426,
+      "lines": 20,
+      "gitBlob": "54d8d3720faac588737ed0b7e28f6ab8e2881fd0",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/tests/frameworks/playwright.config.mjs"
+    },
+    {
+      "path": "tests/frameworks/public-compatibility.mjs",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 11656,
+      "lines": 203,
+      "gitBlob": "47e728b00b2050a08fb5d931d65a3d910b6ed694",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/tests/frameworks/public-compatibility.mjs"
+    },
+    {
+      "path": "tests/frameworks/vite-readiness.mjs",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 856,
+      "lines": 18,
+      "gitBlob": "ad0d36c13a486fad7cedfd0cdb1a29eeed8165a0",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/tests/frameworks/vite-readiness.mjs"
+    },
+    {
+      "path": "tests/release/playwright.config.mjs",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 375,
+      "lines": 7,
+      "gitBlob": "87011b7801ad008bf74d34a0d2573493a420aa22",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/tests/release/playwright.config.mjs"
+    },
+    {
+      "path": "tests/release/restore-runtime.mjs",
+      "kind": "source-script",
+      "reviewLane": "delivery",
+      "bytes": 18373,
+      "lines": 222,
+      "gitBlob": "8d98932bd6a3569e9dc83014474c69bfb79f3b98",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/tests/release/restore-runtime.mjs"
+    },
+    {
+      "path": "tests/release/restore.spec.mjs",
+      "kind": "test-fixture",
+      "reviewLane": "delivery",
+      "bytes": 7185,
+      "lines": 101,
+      "gitBlob": "5a22cced46e3b0c3ba34f3e79bc4a9f1756bd2f4",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/tests/release/restore.spec.mjs"
+    },
+    {
+      "path": "tests/review/review-overlay.spec.mjs",
+      "kind": "test-fixture",
+      "reviewLane": "delivery",
+      "bytes": 62864,
+      "lines": 1132,
+      "gitBlob": "65c6e6cf9fdcac44b604527b86e21587bbafbd3d",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/tests/review/review-overlay.spec.mjs"
+    },
+    {
+      "path": "third-party-notices/epic-web-invariant-1.0.0.txt",
+      "kind": "documentation-license",
+      "reviewLane": "root-product-docs",
+      "bytes": 1693,
+      "lines": 32,
+      "gitBlob": "cf462ff56a8c5ad6f53c1a711d914c2b6d830828",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/third-party-notices/epic-web-invariant-1.0.0.txt"
+    },
+    {
+      "path": "tsconfig.build.json",
+      "kind": "configuration",
+      "reviewLane": "root-product-docs",
+      "bytes": 233,
+      "lines": 14,
+      "gitBlob": "e78517e725c42cdf3da3b3d054941975ab4b42b3",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/tsconfig.build.json"
+    },
+    {
+      "path": "tsconfig.json",
+      "kind": "configuration",
+      "reviewLane": "root-product-docs",
+      "bytes": 463,
+      "lines": 20,
+      "gitBlob": "ecfcc3d721f0db8a3cda966f3463a999e21c8c5f",
+      "snapshotMatchesCommit": true,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/5bfb322a222ca34d31b68bb4e0eb1f3cf788e805/tsconfig.json"
+    }
+  ]
+}
