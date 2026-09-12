@@ -989,7 +989,9 @@ test("전역 active Tunnel quota는 다음 Carrier를 activation 전에 거부�
     localOrigin: `http://127.0.0.1:${originPort}`,
   });
   context.after(() => second.disconnect());
-  await assert.rejects(second.ready);
+  await assert.rejects(second.ready, (error: unknown) =>
+    error instanceof TunnelConnectionError && error.code === "RELAY_NOT_READY" &&
+    error.retryAfterMs === undefined);
 });
 
 test("activation gate가 실패하면 공유 URL을 한 번도 열지 않는다", async (context) => {

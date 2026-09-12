@@ -156,7 +156,7 @@ export function attachGatewayCarrier(socket: WebSocket, input: CarrierContext): 
               return;
             }
             if (!admission.canAdmitNewTunnel(developerAuthorization?.accountId, hello.tunnelId)) {
-              await rejectCarrier(socket, 0, "RELAY_NOT_READY", 1_000);
+              await rejectCarrier(socket, 0, "RELAY_NOT_READY");
               return;
             }
             const resumeSecret = randomBytes(32).toString("base64url");
@@ -470,7 +470,7 @@ export function attachGatewayCarrier(socket: WebSocket, input: CarrierContext): 
               return;
             }
             if (!admission.canActivateTunnel(session)) {
-              await rejectCarrier(socket, session.generation, "RELAY_NOT_READY", 1_000);
+              await rejectCarrier(socket, session.generation, "RELAY_NOT_READY");
               return;
             }
             session.outboundFlow.closeStream(probe.streamId);
