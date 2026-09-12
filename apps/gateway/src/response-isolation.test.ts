@@ -83,6 +83,43 @@ for (const kind of ["HTTP", "WEBSOCKET"] as const) {
   }
 }
 
+test("tunneling preserves prototype-like header names and duplicate values in both directions", async (context) => {
+  let received: string[] = [];
+  const origin = createServer((incoming, response) => {
+    received = incoming.rawHeaders;
+    response.writeHead(200, ["Constructor", "response-first", "constructor", "response-second",
+      "__proto__", "response-literal", "Set-Cookie", "a=1", "Set-Cookie", "b=2"]);
+    response.end("preserved");
+  });
+  origin.listen(0, "127.0.0.1"); await once(origin, "listening");
+  const address = origin.address();
+  assert.ok(address !== null && typeof address !== "string");
+  const gateway = createGatewayServer();
+  const port = await gateway.listen();
+  const client = connectTunnelClient({ gatewayUrl: `ws://127.0.0.1:${port}/_review-tunnel/carrier`,
+    tunnelId: "response-isolation", localOrigin: `http://127.0.0.1:${address.port}` });
+  context.after(async () => {
+    await client.disconnect(); await gateway.close(); origin.closeAllConnections();
+    await new Promise<void>(resolve => origin.close(() => resolve()));
+  });
+  await client.ready;
+  const response = await new Promise<IncomingMessage>((resolve, reject) => {
+    const outgoing = request({ host: "127.0.0.1", port, path: "/", headers: [
+      "Host", "response-isolation.localhost", "Constructor", "request-first",
+      "constructor", "request-second", "__proto__", "request-literal",
+    ] }, resolve);
+    outgoing.on("error", reject); outgoing.end();
+  });
+  assert.equal(await collect(response), "preserved");
+  const values = (raw: string[], name: string) => raw.flatMap((value, index) =>
+    index % 2 === 0 && value.toLowerCase() === name ? [raw[index + 1]] : []);
+  assert.deepEqual(values(received, "constructor"), ["request-first", "request-second"]);
+  assert.deepEqual(values(received, "__proto__"), ["request-literal"]);
+  assert.deepEqual(values(response.rawHeaders, "constructor"), ["response-first", "response-second"]);
+  assert.deepEqual(values(response.rawHeaders, "__proto__"), ["response-literal"]);
+  assert.deepEqual(values(response.rawHeaders, "set-cookie"), ["a=1", "b=2"]);
+});
+
 function get(port: number, path: string): Promise<IncomingMessage> {
   return new Promise((resolve, reject) => {
     const outgoing = request({ host: "127.0.0.1", port, path, headers: { host: "response-isolation.localhost" } }, resolve);

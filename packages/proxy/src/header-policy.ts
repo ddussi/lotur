@@ -70,7 +70,7 @@ export function rawHeadersToPairs(rawHeaders: readonly string[]): HeaderPair[] {
 export function headerPairsToOutgoingHeaders(
   headers: readonly HeaderPair[],
 ): Record<string, string | string[]> {
-  const output: Record<string, string | string[]> = {};
+  const output: Record<string, string | string[]> = Object.create(null);
   for (const [rawName, value] of headers) {
     const name = rawName.toLowerCase();
     const current = output[name];

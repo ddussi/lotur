@@ -49,7 +49,18 @@ test("raw header 순서와 반복 값을 보존해 Node outgoing header로 바�
     ["Set-Cookie", "a=1"],
     ["Set-Cookie", "b=2"],
   ]);
-  assert.deepEqual(headerPairsToOutgoingHeaders(pairs), {
+  assert.deepEqual({ ...headerPairsToOutgoingHeaders(pairs) }, {
     "set-cookie": ["a=1", "b=2"],
   });
+});
+
+test("header names cannot inherit or replace object prototype properties", () => {
+  const headers = headerPairsToOutgoingHeaders([
+    ["Constructor", "first"], ["constructor", "second"],
+    ["__proto__", "literal"], ["toString", "ordinary"], ["X-App", "retained"],
+  ]);
+  assert.deepEqual(headers.constructor, ["first", "second"]);
+  assert.equal(Object.getOwnPropertyDescriptor(headers, "__proto__")?.value, "literal");
+  assert.equal(headers.tostring, "ordinary");
+  assert.equal(headers["x-app"], "retained");
 });
