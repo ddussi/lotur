@@ -28,6 +28,8 @@
 
 환경 파일은 Docker가 읽는 `KEY=value` 형식이다. `export`, 값 주변 따옴표, 셸 변수 치환을 사용하지 않는다. 관리자 계정은 임시 비밀번호 변경을 완료한 기존 `ADMIN` 계정이어야 한다. 운영 DB를 갱신하기 전에 정상 백업과 복원 절차를 준비한다.
 
+Control의 HTTPS 진입점이 기본 포트가 아니면 `gateway.env`의 `CONTROL_HOST=control.example.com:8443`과 `deployment.json`의 `controlUrl=https://control.example.com:8443`을 맞춘다. 이 공개 포트는 Gateway 내부 포트나 SSH의 `DEPLOY_PORT`와 다르다. 비교 시 기본 HTTPS 포트 `443`의 생략·명시는 동일하게 취급하며 다른 호스트·포트는 거부한다.
+
 Nginx Proxy Manager처럼 ingress도 Docker에서 실행한다면 `network`에 DB망, `proxyNetwork`에 프록시망을 지정하고 `port`를 `null`로 둔다. Gateway는 두 망에 연결되고 호스트 포트를 열지 않는다. 관리자·migration 작업은 DB망만 사용하고 공개 canary 검사는 외부 통신이 가능한 프록시망만 사용한다. ingress는 `containerName:8787`을 가리켜야 한다.
 
 `ingressConfigPath`에는 **실제로 적용된 ingress 설정 파일**의 절대 경로를 지정한다. include 파일·외부 Load Balancer 설정을 사용하면 운영자가 전체 적용 설정을 내보낸 스냅샷 파일을 지정하고 설정 변경 때 함께 갱신한다. 이미지 digest, Gateway 환경, 배포 설정, ingress 설정을 합쳐 이번 배포의 `DEPLOYMENT_CONFIG_DIGEST`를 계산한다. 파일 내용을 CI 로그로 출력하지 않는다.

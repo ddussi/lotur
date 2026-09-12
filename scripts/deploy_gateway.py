@@ -104,7 +104,18 @@ def load_configuration(root, manifest):
         require(bool(gateway.get(key)), f"{key} is required in gateway.env")
     require(admin.get("AUTH_SESSION_HMAC_KEY") == gateway["AUTH_SESSION_HMAC_KEY"], "Admin and Gateway must use the same session key")
     require(gateway.get("ALLOW_INSECURE_HTTP_AUTH", "false") == "false", "Production cookies must require HTTPS")
-    require(gateway["CONTROL_HOST"] == urlsplit(config["controlUrl"]).hostname, "Control origin does not match gateway.env")
+    try:
+        control_host = urlsplit("//" + gateway["CONTROL_HOST"])
+        control_url = urlsplit(config["controlUrl"])
+        control_matches = (control_host.netloc == gateway["CONTROL_HOST"]
+                           and re.fullmatch(r"[A-Za-z0-9.-]+(?::[1-9][0-9]{0,4})?", gateway["CONTROL_HOST"]) is not None
+                           and not control_host.username and not control_host.password
+                           and control_host.hostname == control_url.hostname
+                           and (control_host.port or 443) == (control_url.port or 443)
+                           and control_host.port != 0 and control_url.port != 0)
+    except ValueError:
+        control_matches = False
+    require(control_matches, "Control origin does not match gateway.env")
     require(gateway["CANARY_HOST"] == urlsplit(config["canaryUrl"]).hostname, "Canary origin does not match gateway.env")
     # Different database roles are expected; every role must address the same database.
     destinations = [(urlsplit(env["DATABASE_URL"]).hostname, urlsplit(env["DATABASE_URL"]).port or 5432,

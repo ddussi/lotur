@@ -134,6 +134,38 @@ class DeploymentTests(unittest.TestCase):
         self.assertLess(operations.index("record-canary"), operations.index("approve-admission"))
         self.assertEqual(self.readiness, [False, False])
 
+    def test_control_origin_compares_effective_https_ports(self):
+        original = (self.root / "gateway.env").read_text()
+        for authority, origin in (
+            ("control.example.com:8443", "https://control.example.com:8443"),
+            ("control.example.com:443", "https://control.example.com"),
+            ("control.example.com", "https://control.example.com:443"),
+        ):
+            with self.subTest(authority=authority, origin=origin):
+                self.config["controlUrl"] = origin
+                self.write_config()
+                self.private("gateway.env", original.replace("CONTROL_HOST=control.example.com\n", f"CONTROL_HOST={authority}\n"))
+                config, _environment, _password, _identity = deployment.load_configuration(self.root, release())
+                self.assertEqual(config["controlUrl"], origin)
+
+    def test_control_origin_rejects_different_or_invalid_authorities(self):
+        original = (self.root / "gateway.env").read_text()
+        for authority, origin in (
+            ("control.example.com:8443", "https://control.example.com:8444"),
+            ("other.example.com:8443", "https://control.example.com:8443"),
+            ("control.example.com", "https://control.example.com:99999"),
+            ("control.example.com/path", "https://control.example.com"),
+            ("user@control.example.com", "https://control.example.com"),
+            ("control.example.com:0443", "https://control.example.com"),
+            ("[::1]:8443", "https://[::1]:8443"),
+        ):
+            with self.subTest(authority=authority, origin=origin):
+                self.config["controlUrl"] = origin
+                self.write_config()
+                self.private("gateway.env", original.replace("CONTROL_HOST=control.example.com\n", f"CONTROL_HOST={authority}\n"))
+                with self.assertRaisesRegex(deployment.DeploymentError, "Control origin"):
+                    deployment.load_configuration(self.root, release())
+
     def test_migration_failure_does_not_stop_the_existing_gateway(self):
         self.docker.fail_migration = True
         with self.assertRaisesRegex(deployment.DeploymentError, "migration"):
