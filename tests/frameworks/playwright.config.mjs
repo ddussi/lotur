@@ -5,6 +5,7 @@ export default defineConfig({
   testMatch: [
     "frameworks/compatibility.spec.mjs",
     "review/review-overlay.spec.mjs",
+    "review/control-pagination.spec.mjs",
   ],
   fullyParallel: false,
   workers: 1,

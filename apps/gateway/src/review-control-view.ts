@@ -116,23 +116,31 @@ export const REVIEW_CONTROL_SOURCE = REVIEW_CONTROL_SHARED_SOURCE + `
       const path = node("input"); path.placeholder = "전체 페이지"; path.setAttribute("aria-label", "페이지 경로 (선택)");
       const list = node("ul"); const more = node("button", "이전 댓글 더 보기"); more.hidden = true;
       filters.append(revision, state, mineLabel, path); main.append(filters, list, more);
-      let cursor; let sequence = 0;
+      let cursor; let sequence = 0; let loading = false;
       const load = async (append = false) => {
+        if (append && (loading || !cursor)) return;
         const current = ++sequence;
-        if (!revision.value) { showStatus("저장된 버전이 없습니다."); return; }
-        const query = new URLSearchParams({ status: state.value }); if (mine.checked) query.set("author", "me"); if (path.value) query.set("path", path.value); if (append && cursor) query.set("before", cursor);
-        const page = await read(endpoint + "/revisions/" + revision.value + "/comments?" + query);
-        if (current !== sequence) return;
-        if (!append) list.replaceChildren();
-        for (const item of [...page.comments].reverse()) {
-          const row = node("li", undefined, "card"); row.append(link(item.body ?? "삭제된 댓글", "/reviews/threads/" + item.id), node("p", item.routePath + " · " + item.author.displayName + " · " + item.status, "context")); list.append(row);
+        if (!append) { cursor = undefined; more.hidden = true; list.replaceChildren(); showStatus("불러오는 중…"); }
+        loading = true; more.disabled = true;
+        try {
+          if (!revision.value) { list.replaceChildren(); showStatus("저장된 버전이 없습니다."); return; }
+          const query = new URLSearchParams({ status: state.value }); if (mine.checked) query.set("author", "me"); if (path.value) query.set("path", path.value); if (append && cursor) query.set("before", cursor);
+          const page = await read(endpoint + "/revisions/" + revision.value + "/comments?" + query);
+          if (current !== sequence) return;
+          if (!append) list.replaceChildren();
+          for (const item of [...page.comments].reverse()) {
+            const row = node("li", undefined, "card"); row.append(link(item.body ?? "삭제된 댓글", "/reviews/threads/" + item.id), node("p", item.routePath + " · " + item.author.displayName + " · " + item.status, "context")); list.append(row);
+          }
+          cursor = page.pageInfo.nextCursor; more.hidden = !page.pageInfo.hasMore;
+          showStatus("미해결 " + page.openCount + "개 · 현재 조건 " + page.filteredCount + "개");
+        } catch (error) {
+          if (current === sequence && error.message !== "REVIEW_FORBIDDEN") showStatus(error.message, true);
+        } finally {
+          if (current === sequence) { loading = false; more.disabled = false; }
         }
-        cursor = page.pageInfo.nextCursor; more.hidden = !page.pageInfo.hasMore;
-        showStatus("미해결 " + page.openCount + "개 · 현재 조건 " + page.filteredCount + "개");
       };
-      const guarded = append => load(append).catch(error => showStatus(error.message, true));
-      for (const control of [revision, state, mine, path]) control.onchange = () => guarded(false);
-      more.onclick = () => guarded(true);
+      for (const control of [revision, state, mine, path]) control.onchange = () => load(false);
+      more.onclick = () => load(true);
       await load(); return;
     }
     const { projects } = await read("/projects");
