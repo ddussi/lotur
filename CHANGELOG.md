@@ -8,6 +8,7 @@ Release contents are grouped by version below. Check [GitHub Releases](https://g
 
 - Update Next.js and the integration's minimum peer version to 16.3.8, and refresh the locked sharp 0.35.5 and source-map-js 1.2.2 dependencies.
 - Prevent stale review filter requests from overwriting the current selection.
+- Preserve both the original transaction error and a failed rollback error, and discard the failed PostgreSQL connection.
 
 ## 0.1.0-alpha.1
 

@@ -8,15 +8,25 @@ export async function withTransaction<T>(
   mode: "write" | "snapshot" = "write",
 ): Promise<T> {
   const client = await database.connect();
+  let discardClient = false;
   try {
     await client.query(mode === "snapshot" ? "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY" : "BEGIN");
     const result = await work(client);
     await client.query("COMMIT");
     return result;
   } catch (error) {
-    await client.query("ROLLBACK");
+    try {
+      await client.query("ROLLBACK");
+    } catch (rollbackError) {
+      discardClient = true;
+      throw new AggregateError(
+        [error, rollbackError],
+        "PostgreSQL transaction failed and rollback also failed",
+        { cause: error },
+      );
+    }
     throw error;
   } finally {
-    client.release();
+    client.release(discardClient);
   }
 }

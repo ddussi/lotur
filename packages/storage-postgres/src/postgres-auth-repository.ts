@@ -65,25 +65,14 @@ export class PostgresAuthRepository implements AuthRepository {
   }
 
   async createFirstAccount(account: Account, auditEvent: AuditEvent): Promise<boolean> {
-    const client = await this.#database.connect();
-    try {
-      await client.query("BEGIN");
+    return withTransaction(this.#database, async (client) => {
       await client.query("SELECT pg_advisory_xact_lock($1)", [1_467_289_113]);
       const count = await client.query<{ count: string }>("SELECT count(*)::text AS count FROM rt_accounts");
-      if (Number(count.rows[0]?.count ?? 0) !== 0) {
-        await client.query("ROLLBACK");
-        return false;
-      }
+      if (Number(count.rows[0]?.count ?? 0) !== 0) return false;
       await insertAccount(client, account);
       await this.#appendAuditEvent(client, auditEvent);
-      await client.query("COMMIT");
       return true;
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
+    });
   }
 
   async countEnabledAdministrators(): Promise<number> {
