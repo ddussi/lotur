@@ -33,7 +33,7 @@ Credentials and state live in the ignored `.review-tunnel-demo/` directory, with
 4. As `reviewer`, open the same permanent link. Read the reply and notification. Choose **Request more changes**, or **Confirm resolved** when satisfied. Both users see live status updates and the processing history.
 5. Open the printed **Review inbox** URL to browse saved feedback. You can also edit the [example source](../examples/vite-review/src/main.js); Vite updates the running app.
 
-Saved reviews belong to the fixed `launch-checklist` project and `demo-v1` revision. The example's checklist is disposable page state; changes to it reset on reload. Submitted review text is stored in PostgreSQL. Unsent review drafts survive live updates and filter changes in their current tab, but not a page reload or closing that tab.
+Saved reviews belong to the fixed `launch-checklist` project and `demo-v1` revision. The example's checklist is disposable page state; changes to it reset on reload. Submitted review text is stored in PostgreSQL. Unsent review drafts survive live updates and filter changes in their current tab. When browser tab storage is available, new comments, replies, edits, and selected pins survive reloads. Recent drafts are kept for 12 hours within the same origin, tab, login, project, and revision; a new login does not restore previous drafts. Saving or cancelling removes the corresponding draft. Drafts do not sync between tabs or devices, and recovery after closing a tab is not guaranteed. If storage is blocked, drafts remain only in the current page's memory.
 
 ## Stop, resume, or delete
 

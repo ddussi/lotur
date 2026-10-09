@@ -4,7 +4,7 @@ English | [한국어](README.ko.md)
 
 Share a web application running on your computer with authenticated reviewers through a server and domain you operate. Reviewers use their browsers; developers keep working locally and can show changes through Vite HMR or Next.js Fast Refresh.
 
-**Status: alpha.** HTTP, streaming, WebSocket, accounts, and temporary sharing are implemented, together with page comments, responsive pins, filters, a persistent review inbox, internal notifications, and re-review. Per-project access lists remain unimplemented. The source package version is `0.1.0-alpha.1`. Published versions and downloads are listed on [GitHub Releases](https://github.com/ddussi/lotur/releases); a source version alone does not mean that a release has been published. See the [current implementation status](docs/poc-status.md) and [documentation index](docs/documentation.md).
+**Status: alpha.** HTTP, streaming, WebSocket, accounts, and temporary sharing are implemented, together with page comments, responsive pins, filters, a persistent review inbox, internal notifications, and re-review. Per-project access lists remain unimplemented. The source package version is `0.1.0-alpha.1`. Published versions and downloads are listed on [GitHub Releases](https://github.com/ddussi/lotur/releases); a source version alone does not mean that a release has been published. See the [historical implementation status (2026-09-09)](docs/poc-status.md) and [documentation index](docs/documentation.md).
 
 ![A numbered region pin and reviewer comment on the local Fieldnotes example](docs/media/pinned-review.png)
 
@@ -134,7 +134,7 @@ Per-project access lists, screenshot attachments to reviews, external email/Slac
 - [Current guides and historical records](docs/documentation.md)
 - [Review workflow](docs/review-guide.en.md)
 - [Account operations (Korean)](docs/internal-account-operations.md)
-- [Implementation status (Korean)](docs/poc-status.md)
+- [Historical implementation status (2026-09-09, Korean)](docs/poc-status.md)
 - [Code review findings (Korean)](docs/code-review-2026-09-06.md)
 - [Architecture plan (Korean)](docs/review-tunnel-plan.md)
 - [Release procedure](docs/releasing.md)

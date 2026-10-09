@@ -108,7 +108,7 @@ Mentions notify only the project owner or existing participants in that revision
 
 Open `/reviews` on the control host to browse saved reviews across projects and revisions, filter by page/status/author, and see your notifications. Permanent links return to the same comment after sign-in; conversations remain available after a share ends. The [review guide](review-guide.en.md) covers inbox editing, pin controls, notifications, and optional re-review requests. Re-review requires migrations 19–21 and `REVIEW_WORKFLOW_ENABLED=true` for new requests.
 
-Live updates, filter changes, and in-app navigation preserve current-tab drafts. Reloading or closing the tab loses unsaved text. A concurrent edit shows a conflict while retaining your draft so you can compare it with the latest version.
+Live updates, filter changes, and in-app navigation preserve current-tab drafts. When browser tab storage is available, new comments, replies, edits, and selected pins survive reloads. Recent drafts are kept for 12 hours within the same origin, tab, login, project, and revision; a new login does not restore previous drafts. Saving or cancelling removes the corresponding draft. Drafts do not sync between tabs or devices, and recovery after closing a tab is not guaranteed. If storage is blocked, drafts remain only in the current page's memory. A concurrent edit shows a conflict while retaining your draft so you can compare it with the latest version.
 
 ### Pin placement and visibility
 
@@ -132,7 +132,7 @@ Selections without a suitable identity, including existing pins, keep page coord
 
 The remaining steps are for the operator, once per deployment.
 
-- Linux server or container environment and PostgreSQL 15+. The pinned CI database is PostgreSQL 17.6.
+- Linux server or container environment and PostgreSQL 15+. The pinned CI database is PostgreSQL 17.11.
 - A domain you control, with control and wildcard DNS records pointing to your reverse proxy.
 - TLS certificates for `control.tunnel.example.com` and `*.preview.tunnel.example.com`.
 - A reverse proxy that forwards the original Host, supports HTTP streaming, SSE, and WebSocket upgrades, and sanitizes forwarding headers.

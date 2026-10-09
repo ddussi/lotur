@@ -10,6 +10,7 @@ Release contents are grouped by version below. Check [GitHub Releases](https://g
 - Prevent stale review filter requests from overwriting the current selection.
 - Preserve both the original transaction error and a failed rollback error, and discard the failed PostgreSQL connection.
 - Publish the same runtime images that passed validation, transferring verified image archives to publication jobs instead of rebuilding them.
+- Correct draft recovery guidance to describe same-tab storage, its 12-hour scope and memory fallback; align the documented CI PostgreSQL version and label the September implementation report as historical.
 
 ## 0.1.0-alpha.1
 
@@ -78,6 +79,6 @@ Release contents are grouped by version below. Check [GitHub Releases](https://g
 - Run the administrator migration command before starting a Gateway requiring review schema 21. Existing migration 18 must retain its deployed meaning; never renumber an applied production migration manually.
 - Upgrade every Gateway reading that database before enabling `REVIEW_WORKFLOW_ENABLED=true`. The runtime defaults to disabling new re-review requests; existing pending requests and their history remain readable and actionable.
 - Gateway restart ends active tunnel URLs. Restart sharing with the same owner/project/revision to retrieve saved feedback under a new URL.
-- Drafts are held in the current browser tab's memory. Reloading or closing the tab discards unsaved text.
+- Drafts can recover after reload for 12 hours within the same origin, tab, login, project and revision when browser tab storage is available. Blocked storage falls back to page memory; cross-tab/device synchronization and recovery after closing a tab are not guaranteed.
 
 Project-level access lists, review-capture screenshots, external notifications, automatic revision carry-over, and complete edit history remain outside the current scope.

@@ -15,7 +15,7 @@ Start with the current guides below. Dated plans and validation reports describe
 | Share and configure reviews / 공유·연동 설정 | [Getting started](getting-started.en.md) | [시작 안내](getting-started.md) |
 | Pins, inbox, notifications, re-review / 리뷰 사용 | [Review guide](review-guide.en.md) | [리뷰 안내](internal-review-guide.md) |
 | Boundaries and security reports / 권한·보안 제보 | [Security policy](../SECURITY.md) | [보안 안내](../SECURITY.md#한국어-안내) |
-| Changes / 변경 사항 | [Changelog](../CHANGELOG.md) | [현재 구현 현황](poc-status.md) |
+| Changes / 변경 사항 | [Changelog](../CHANGELOG.md) | [과거 구현 현황 (2026-09-09)](poc-status.md) |
 | Update and restore / 업데이트·복원 | [Upgrade guide](upgrading.en.md) | [업그레이드 안내](upgrading.md) |
 
 The local demo and archive builder run from a source checkout. A developer can install the resulting standalone Client archive without the repository. Tagged release downloads are still being prepared.
