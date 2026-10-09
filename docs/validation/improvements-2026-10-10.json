@@ -1,0 +1,670 @@
+{
+  "format": "lotur-improvement-validation-v1",
+  "date": "2026-10-10",
+  "source": {
+    "baseRevision": "ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b",
+    "workingTreeModified": true,
+    "inputFiles": 245,
+    "inputSha256": "427f009b6fd15720bf692d95bbeceacfb73c86f86697047f648dbe1527c1ffdd",
+    "note": "Local working-tree verification; source labels identify the base revision, not a committed release."
+  },
+  "environment": {
+    "host": "macOS arm64",
+    "node": "v24.13.0",
+    "docker": "29.2.0",
+    "postgres": "17.11 (Debian 17.11-1.pgdg12+2)"
+  },
+  "results": {
+    "cleanInstall": true,
+    "audit": {
+      "rootBefore": {
+        "high": 2,
+        "critical": 1
+      },
+      "rootAfter": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 0,
+        "critical": 0,
+        "total": 0
+      },
+      "runtime": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 0,
+        "critical": 0,
+        "total": 0
+      }
+    },
+    "checkMvp": {
+      "scriptsPassed": 84,
+      "applicationPassed": 370,
+      "postgresSkippedInDefaultRun": 23,
+      "browserPassed": 34,
+      "lintWarnings": 1,
+      "lintInfos": 49
+    },
+    "postgres17_11Passed": 23,
+    "demoPassed": 3,
+    "restorePassed": 1,
+    "finalImageScriptTestsPassed": 16,
+    "publishCliFixturePassed": true,
+    "relativeLinksChecked": 160,
+    "reviewUiGeneratedFiles": true,
+    "diffWhitespace": true,
+    "fixtureContainersAndRegistryReferencesCleaned": true,
+    "verificationImagesAndArchiveCleaned": true
+  },
+  "imageTransfer": {
+    "format": "lotur-local-image-transfer-v1",
+    "context": {
+      "repository": "ddussi/lotur",
+      "revision": "ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b",
+      "version": "0.1.0-alpha.1",
+      "runId": "20261010",
+      "attempt": "1"
+    },
+    "checks": {
+      "missingChangedCrossTargetAndWrongAttemptRejected": true,
+      "expectedTagsAbsentBeforeLoad": true,
+      "allSixIdentitiesRestored": true,
+      "allSixRegistryDigestsMatchVerifiedIds": true
+    },
+    "images": [
+      {
+        "target": "gateway",
+        "verifiedImageId": "sha256:bfb2bbd1df3df8edb4b5451f77af1d29e4b130804ba34faad642e1bba46b605c",
+        "registryDigest": "sha256:bfb2bbd1df3df8edb4b5451f77af1d29e4b130804ba34faad642e1bba46b605c"
+      },
+      {
+        "target": "admin-cli",
+        "verifiedImageId": "sha256:e516e8faf86654a15461c27741518321e030e91dda0a255aa2884a9fb3fd1ee3",
+        "registryDigest": "sha256:e516e8faf86654a15461c27741518321e030e91dda0a255aa2884a9fb3fd1ee3"
+      },
+      {
+        "target": "client",
+        "verifiedImageId": "sha256:b7ad5b48705d3904419c99d6ba426579d15c4aa7e1109fa3a15e2c21616f47c4",
+        "registryDigest": "sha256:b7ad5b48705d3904419c99d6ba426579d15c4aa7e1109fa3a15e2c21616f47c4"
+      },
+      {
+        "target": "canary-check",
+        "verifiedImageId": "sha256:1584dc00caf04f0d889dab3c9c617d3c6da4023e736104daf999c45555417b5e",
+        "registryDigest": "sha256:1584dc00caf04f0d889dab3c9c617d3c6da4023e736104daf999c45555417b5e"
+      },
+      {
+        "target": "db-backup",
+        "verifiedImageId": "sha256:bc160c38f5f44c022030a95d5d7976700ecd23eb4e255ddad6eae9906b17f53e",
+        "registryDigest": "sha256:bc160c38f5f44c022030a95d5d7976700ecd23eb4e255ddad6eae9906b17f53e"
+      },
+      {
+        "target": "db-restore",
+        "verifiedImageId": "sha256:990761b1d5ad584be18547e337a9e9ec15d343fb60fe8691a9a3bc56f8b441ba",
+        "registryDigest": "sha256:990761b1d5ad584be18547e337a9e9ec15d343fb60fe8691a9a3bc56f8b441ba"
+      }
+    ],
+    "archive": {
+      "bytes": 255681024,
+      "sha256": "4457f2170bd9beec7632e027967460ba117a1f6631032913c0f3c573ba65912a"
+    },
+    "registryImage": "sha256:ddf754342cfc8acc51a56d5d0ab6af06826461864460636d8bd5c546dab2a7b8"
+  },
+  "restore": {
+    "format": "review-tunnel-restore-validation-v1",
+    "images": {
+      "gateway": {
+        "reference": "review-tunnel-gateway:ci",
+        "id": "sha256:bfb2bbd1df3df8edb4b5451f77af1d29e4b130804ba34faad642e1bba46b605c",
+        "platform": "linux/amd64"
+      },
+      "admin-cli": {
+        "reference": "review-tunnel-admin-cli:ci",
+        "id": "sha256:e516e8faf86654a15461c27741518321e030e91dda0a255aa2884a9fb3fd1ee3",
+        "platform": "linux/amd64"
+      },
+      "db-backup": {
+        "reference": "review-tunnel-db-backup:ci",
+        "id": "sha256:bc160c38f5f44c022030a95d5d7976700ecd23eb4e255ddad6eae9906b17f53e",
+        "platform": "linux/amd64"
+      },
+      "db-restore": {
+        "reference": "review-tunnel-db-restore:ci",
+        "id": "sha256:990761b1d5ad584be18547e337a9e9ec15d343fb60fe8691a9a3bc56f8b441ba",
+        "platform": "linux/amd64"
+      }
+    },
+    "checks": {
+      "wrongConfirmationPreservedEmptyDatabase": true,
+      "allTablesAndSequencesPreserved": true,
+      "runtimeRoleRecreatedWithoutDdl": true,
+      "repeatedMigrationsPreservedData": true,
+      "oldAdmissionDidNotApproveNewDeployment": true,
+      "freshCanaryAndAdmissionPassed": true,
+      "freshLoginsAndRoleRecipientSeparation": true,
+      "newReplyWorkflowAndShareAfterRestore": true
+    },
+    "sourceRevision": "ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b",
+    "postgresImage": "postgres:17.11-bookworm@sha256:051f7b7b3abdd564d5d1bd1e8c4b9c1b6e77087d1dd22020ede611c096a272e0",
+    "backup": {
+      "bytes": 133279,
+      "sha256": "64cd5cddb38e6e09a0ff8a37eed2382028660b85d66256007a1b0a5c2ce1a104",
+      "privateMode": true
+    },
+    "restoreCommandMs": 991,
+    "preservedTables": {
+      "rt_accounts": 3,
+      "rt_audit_event_capacity": 1,
+      "rt_audit_events": 9,
+      "rt_auth_sessions": 3,
+      "rt_carrier_credentials": 0,
+      "rt_demo_identity": 1,
+      "rt_deployment_admissions": 1,
+      "rt_login_intents": 0,
+      "rt_login_throttle_capacity": 1,
+      "rt_login_throttles": 0,
+      "rt_operational_controls": 1,
+      "rt_review_event_retention": 0,
+      "rt_review_events": 11,
+      "rt_review_mentions": 1,
+      "rt_review_notifications": 5,
+      "rt_review_pin_counters": 1,
+      "rt_review_projects": 1,
+      "rt_review_replies": 1,
+      "rt_review_revisions": 1,
+      "rt_review_threads": 1,
+      "rt_review_tunnel_bindings": 0,
+      "rt_review_workflow_history": 3,
+      "rt_schema_migrations": 21,
+      "rt_session_exchanges": 0
+    },
+    "preservedSequenceCount": 2,
+    "serverVersion": "17.11 (Debian 17.11-1.pgdg12+2)",
+    "tools": {
+      "pg_dump": "pg_dump (PostgreSQL) 17.11 (Debian 17.11-1.pgdg12+2)",
+      "pg_restore": "pg_restore (PostgreSQL) 17.11 (Debian 17.11-1.pgdg12+2)"
+    },
+    "gatewayMode": "host-source"
+  },
+  "notices": [
+    {
+      "target": "gateway",
+      "imageId": "sha256:bfb2bbd1df3df8edb4b5451f77af1d29e4b130804ba34faad642e1bba46b605c",
+      "platform": "linux/amd64",
+      "npmPackages": [
+        {
+          "name": "@epic-web/invariant",
+          "version": "1.0.0"
+        },
+        {
+          "name": "@phc/format",
+          "version": "1.0.0"
+        },
+        {
+          "name": "argon2",
+          "version": "0.45.1"
+        },
+        {
+          "name": "cross-env",
+          "version": "10.1.0"
+        },
+        {
+          "name": "cross-spawn",
+          "version": "7.0.6"
+        },
+        {
+          "name": "isexe",
+          "version": "2.0.0"
+        },
+        {
+          "name": "node-addon-api",
+          "version": "8.9.2"
+        },
+        {
+          "name": "node-gyp-build",
+          "version": "4.8.4"
+        },
+        {
+          "name": "path-key",
+          "version": "3.1.1"
+        },
+        {
+          "name": "pg",
+          "version": "8.23.0"
+        },
+        {
+          "name": "pg-cloudflare",
+          "version": "1.4.0"
+        },
+        {
+          "name": "pg-connection-string",
+          "version": "2.14.0"
+        },
+        {
+          "name": "pg-int8",
+          "version": "1.0.1"
+        },
+        {
+          "name": "pg-pool",
+          "version": "3.14.0"
+        },
+        {
+          "name": "pg-protocol",
+          "version": "1.16.0"
+        },
+        {
+          "name": "pg-types",
+          "version": "2.2.0"
+        },
+        {
+          "name": "pgpass",
+          "version": "1.0.5"
+        },
+        {
+          "name": "postgres-array",
+          "version": "2.0.0"
+        },
+        {
+          "name": "postgres-bytea",
+          "version": "1.0.1"
+        },
+        {
+          "name": "postgres-date",
+          "version": "1.0.7"
+        },
+        {
+          "name": "postgres-interval",
+          "version": "1.2.0"
+        },
+        {
+          "name": "shebang-command",
+          "version": "2.0.0"
+        },
+        {
+          "name": "shebang-regex",
+          "version": "3.0.0"
+        },
+        {
+          "name": "split2",
+          "version": "4.2.0"
+        },
+        {
+          "name": "which",
+          "version": "2.0.2"
+        },
+        {
+          "name": "ws",
+          "version": "8.21.3"
+        },
+        {
+          "name": "xtend",
+          "version": "4.0.2"
+        }
+      ]
+    },
+    {
+      "target": "admin-cli",
+      "imageId": "sha256:e516e8faf86654a15461c27741518321e030e91dda0a255aa2884a9fb3fd1ee3",
+      "platform": "linux/amd64",
+      "npmPackages": [
+        {
+          "name": "@epic-web/invariant",
+          "version": "1.0.0"
+        },
+        {
+          "name": "@phc/format",
+          "version": "1.0.0"
+        },
+        {
+          "name": "argon2",
+          "version": "0.45.1"
+        },
+        {
+          "name": "cross-env",
+          "version": "10.1.0"
+        },
+        {
+          "name": "cross-spawn",
+          "version": "7.0.6"
+        },
+        {
+          "name": "isexe",
+          "version": "2.0.0"
+        },
+        {
+          "name": "node-addon-api",
+          "version": "8.9.2"
+        },
+        {
+          "name": "node-gyp-build",
+          "version": "4.8.4"
+        },
+        {
+          "name": "path-key",
+          "version": "3.1.1"
+        },
+        {
+          "name": "pg",
+          "version": "8.23.0"
+        },
+        {
+          "name": "pg-cloudflare",
+          "version": "1.4.0"
+        },
+        {
+          "name": "pg-connection-string",
+          "version": "2.14.0"
+        },
+        {
+          "name": "pg-int8",
+          "version": "1.0.1"
+        },
+        {
+          "name": "pg-pool",
+          "version": "3.14.0"
+        },
+        {
+          "name": "pg-protocol",
+          "version": "1.16.0"
+        },
+        {
+          "name": "pg-types",
+          "version": "2.2.0"
+        },
+        {
+          "name": "pgpass",
+          "version": "1.0.5"
+        },
+        {
+          "name": "postgres-array",
+          "version": "2.0.0"
+        },
+        {
+          "name": "postgres-bytea",
+          "version": "1.0.1"
+        },
+        {
+          "name": "postgres-date",
+          "version": "1.0.7"
+        },
+        {
+          "name": "postgres-interval",
+          "version": "1.2.0"
+        },
+        {
+          "name": "shebang-command",
+          "version": "2.0.0"
+        },
+        {
+          "name": "shebang-regex",
+          "version": "3.0.0"
+        },
+        {
+          "name": "split2",
+          "version": "4.2.0"
+        },
+        {
+          "name": "which",
+          "version": "2.0.2"
+        },
+        {
+          "name": "ws",
+          "version": "8.21.3"
+        },
+        {
+          "name": "xtend",
+          "version": "4.0.2"
+        }
+      ]
+    },
+    {
+      "target": "client",
+      "imageId": "sha256:b7ad5b48705d3904419c99d6ba426579d15c4aa7e1109fa3a15e2c21616f47c4",
+      "platform": "linux/amd64",
+      "npmPackages": [
+        {
+          "name": "@epic-web/invariant",
+          "version": "1.0.0"
+        },
+        {
+          "name": "@phc/format",
+          "version": "1.0.0"
+        },
+        {
+          "name": "argon2",
+          "version": "0.45.1"
+        },
+        {
+          "name": "cross-env",
+          "version": "10.1.0"
+        },
+        {
+          "name": "cross-spawn",
+          "version": "7.0.6"
+        },
+        {
+          "name": "isexe",
+          "version": "2.0.0"
+        },
+        {
+          "name": "node-addon-api",
+          "version": "8.9.2"
+        },
+        {
+          "name": "node-gyp-build",
+          "version": "4.8.4"
+        },
+        {
+          "name": "path-key",
+          "version": "3.1.1"
+        },
+        {
+          "name": "pg",
+          "version": "8.23.0"
+        },
+        {
+          "name": "pg-cloudflare",
+          "version": "1.4.0"
+        },
+        {
+          "name": "pg-connection-string",
+          "version": "2.14.0"
+        },
+        {
+          "name": "pg-int8",
+          "version": "1.0.1"
+        },
+        {
+          "name": "pg-pool",
+          "version": "3.14.0"
+        },
+        {
+          "name": "pg-protocol",
+          "version": "1.16.0"
+        },
+        {
+          "name": "pg-types",
+          "version": "2.2.0"
+        },
+        {
+          "name": "pgpass",
+          "version": "1.0.5"
+        },
+        {
+          "name": "postgres-array",
+          "version": "2.0.0"
+        },
+        {
+          "name": "postgres-bytea",
+          "version": "1.0.1"
+        },
+        {
+          "name": "postgres-date",
+          "version": "1.0.7"
+        },
+        {
+          "name": "postgres-interval",
+          "version": "1.2.0"
+        },
+        {
+          "name": "shebang-command",
+          "version": "2.0.0"
+        },
+        {
+          "name": "shebang-regex",
+          "version": "3.0.0"
+        },
+        {
+          "name": "split2",
+          "version": "4.2.0"
+        },
+        {
+          "name": "which",
+          "version": "2.0.2"
+        },
+        {
+          "name": "ws",
+          "version": "8.21.3"
+        },
+        {
+          "name": "xtend",
+          "version": "4.0.2"
+        }
+      ]
+    },
+    {
+      "target": "canary-check",
+      "imageId": "sha256:1584dc00caf04f0d889dab3c9c617d3c6da4023e736104daf999c45555417b5e",
+      "platform": "linux/amd64",
+      "npmPackages": [
+        {
+          "name": "@epic-web/invariant",
+          "version": "1.0.0"
+        },
+        {
+          "name": "@phc/format",
+          "version": "1.0.0"
+        },
+        {
+          "name": "argon2",
+          "version": "0.45.1"
+        },
+        {
+          "name": "cross-env",
+          "version": "10.1.0"
+        },
+        {
+          "name": "cross-spawn",
+          "version": "7.0.6"
+        },
+        {
+          "name": "isexe",
+          "version": "2.0.0"
+        },
+        {
+          "name": "node-addon-api",
+          "version": "8.9.2"
+        },
+        {
+          "name": "node-gyp-build",
+          "version": "4.8.4"
+        },
+        {
+          "name": "path-key",
+          "version": "3.1.1"
+        },
+        {
+          "name": "pg",
+          "version": "8.23.0"
+        },
+        {
+          "name": "pg-cloudflare",
+          "version": "1.4.0"
+        },
+        {
+          "name": "pg-connection-string",
+          "version": "2.14.0"
+        },
+        {
+          "name": "pg-int8",
+          "version": "1.0.1"
+        },
+        {
+          "name": "pg-pool",
+          "version": "3.14.0"
+        },
+        {
+          "name": "pg-protocol",
+          "version": "1.16.0"
+        },
+        {
+          "name": "pg-types",
+          "version": "2.2.0"
+        },
+        {
+          "name": "pgpass",
+          "version": "1.0.5"
+        },
+        {
+          "name": "postgres-array",
+          "version": "2.0.0"
+        },
+        {
+          "name": "postgres-bytea",
+          "version": "1.0.1"
+        },
+        {
+          "name": "postgres-date",
+          "version": "1.0.7"
+        },
+        {
+          "name": "postgres-interval",
+          "version": "1.2.0"
+        },
+        {
+          "name": "shebang-command",
+          "version": "2.0.0"
+        },
+        {
+          "name": "shebang-regex",
+          "version": "3.0.0"
+        },
+        {
+          "name": "split2",
+          "version": "4.2.0"
+        },
+        {
+          "name": "which",
+          "version": "2.0.2"
+        },
+        {
+          "name": "ws",
+          "version": "8.21.3"
+        },
+        {
+          "name": "xtend",
+          "version": "4.0.2"
+        }
+      ]
+    },
+    {
+      "target": "db-backup",
+      "imageId": "sha256:bc160c38f5f44c022030a95d5d7976700ecd23eb4e255ddad6eae9906b17f53e",
+      "platform": "linux/amd64",
+      "npmPackages": []
+    },
+    {
+      "target": "db-restore",
+      "imageId": "sha256:990761b1d5ad584be18547e337a9e9ec15d343fb60fe8691a9a3bc56f8b441ba",
+      "platform": "linux/amd64",
+      "npmPackages": []
+    }
+  ],
+  "limits": [
+    "로컬 작업 트리 검증이며 이미지의 revision 라벨은 기준 HEAD다. 커밋된 릴리스 또는 원격 CI 결과가 아니다.",
+    "복원 테스트의 Gateway는 macOS 호스트 소스로 실행했다. Admin·백업·복원 도구는 기록된 Linux 이미지로 실행했다.",
+    "실제 push·digest pull은 Docker VM 내부 루프백 레지스트리에만 수행했다. GHCR·운영 배포는 실행하지 않았다.",
+    "최종 게시 증거 파일의 format/verifiedImageId 정정과 v1 필드 설명 주석은 이미지 빌드 후 반영했다. runtime에 포함되지 않는 게시 도구 변경이며 관련 16개 검사와 별도 CLI fixture를 통과했다.",
+    "다른 Docker image store 간 전달 호환과 원격 Actions 권한·서비스 동작은 이번 로컬 검증으로 입증하지 않는다."
+  ]
+}

@@ -1,0 +1,3577 @@
+{
+  "analysisDate": "2026-10-09",
+  "repository": "https://github.com/ddussi/lotur",
+  "branch": "main",
+  "commit": "ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b",
+  "snapshotMatchesCommit": true,
+  "trackedFileCount": 345,
+  "depthCounts": {
+    "full": 329,
+    "metadata-check": 9,
+    "generated-check": 4,
+    "visual-check": 3
+  },
+  "methodologyReference": "validation.md",
+  "files": [
+    {
+      "path": ".dockerignore",
+      "depth": "full",
+      "summary": "환경 파일·node_modules·빌드·로컬 데모 상태를 Docker context에서 제외함. COPY 대상과 대조.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "8d50c509a4656b894ed9c39f1dfc974f8ff36c0c",
+      "bytes": 143,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/.dockerignore"
+    },
+    {
+      "path": ".env.example",
+      "depth": "full",
+      "summary": "전체 원문 확인: 현재 사용 계약·지원 범위·구현 일치 및 과거 결정 상태 검토",
+      "concerns": [],
+      "reviewer": "root-review",
+      "gitBlob": "a8bd7dd403434c9ae506b19014ff8d8f319049df",
+      "bytes": 2927,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/.env.example"
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/bug_report.md",
+      "depth": "full",
+      "summary": "재현 절차와 환경·마스킹 증거 요청, 보안 제보 경로 분리 검토.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "684031146eed90cce731694ee829049c327b7a61",
+      "bytes": 872,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/.github/ISSUE_TEMPLATE/bug_report.md"
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/feature_request.md",
+      "depth": "full",
+      "summary": "사용 상황·최소 동작·대안·권한/프로토콜 영향 요청 검토.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "92e86ed77c1339359eb9691936462f7f2acd41f4",
+      "bytes": 617,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/.github/ISSUE_TEMPLATE/feature_request.md"
+    },
+    {
+      "path": ".github/pull_request_template.md",
+      "depth": "full",
+      "summary": "문제·검증·호환성과 문서 변경 기록, 비밀정보 배제 지침 검토.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "4530a634863f2d47e18c2a1df152d448472d315e",
+      "bytes": 542,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/.github/pull_request_template.md"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "depth": "full",
+      "summary": "전체 gate·권한·manual candidate·registry publish·main freshness·production serialization·artifact retention 흐름 전부 검토.",
+      "concerns": [
+        "OPS-1"
+      ],
+      "reviewer": "operations-review",
+      "gitBlob": "529054c24dd219491c126492d6aa8a957b7b271b",
+      "bytes": 13041,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/.github/workflows/ci.yml",
+      "finalReviewRequiredReference": "report.md / validation.md",
+      "finalDisposition": "see_report_and_validation_for_scope_and_counterevidence"
+    },
+    {
+      "path": ".github/workflows/release-image-tags.yml",
+      "depth": "full",
+      "summary": "동일 저장소/commit/manual successful run과 job 성공 검증, artifact 다운로드·checksum·dry-run/publish 전환 검토.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "64295ff4fdd5c4807db31259f3f648d1b3516665",
+      "bytes": 3706,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/.github/workflows/release-image-tags.yml"
+    },
+    {
+      "path": ".gitignore",
+      "depth": "full",
+      "summary": "전체 원문 확인: 현재 사용 계약·지원 범위·구현 일치 및 과거 결정 상태 검토",
+      "concerns": [],
+      "reviewer": "root-review",
+      "gitBlob": "69e0eee0e5ae8e467f90aca23d1eab930ceb311b",
+      "bytes": 193,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/.gitignore"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "depth": "full",
+      "summary": "전문 검토; 운영 절차와 한계, 현재 구현 대비 문서 불일치 확인",
+      "concerns": [
+        "초안/배포/준비 상태의 현재성"
+      ],
+      "reviewer": "root-review",
+      "gitBlob": "19b1574e4fb3dc93034cf612849c4e21a9afe809",
+      "bytes": 8228,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/CHANGELOG.md",
+      "finalReviewRequiredReference": "report.md / validation.md",
+      "finalDisposition": "see_report_and_validation_for_scope_and_counterevidence"
+    },
+    {
+      "path": "CONTRIBUTING.md",
+      "depth": "full",
+      "summary": "전체 원문 확인: 현재 사용 계약·지원 범위·구현 일치 및 과거 결정 상태 검토",
+      "concerns": [],
+      "reviewer": "root-review",
+      "gitBlob": "96ab126bb02f7171f9d36ca423d83afdaa542bac",
+      "bytes": 8595,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/CONTRIBUTING.md"
+    },
+    {
+      "path": "Dockerfile",
+      "depth": "full",
+      "summary": "6개 runtime target, digest pin·독립 production lock·non-root·healthcheck·모듈/notice 복사 검토.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "394b573450124f621552128068b5b1d9e79196f9",
+      "bytes": 3210,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/Dockerfile"
+    },
+    {
+      "path": "LICENSE",
+      "depth": "full",
+      "summary": "전체 원문 확인: 현재 사용 계약·지원 범위·구현 일치 및 과거 결정 상태 검토",
+      "concerns": [],
+      "reviewer": "root-review",
+      "gitBlob": "61bbfbc677122245234e041437713fd1cbf7a4e0",
+      "bytes": 1083,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/LICENSE"
+    },
+    {
+      "path": "README.ko.md",
+      "depth": "full",
+      "summary": "전체 원문 확인: 현재 사용 계약·지원 범위·구현 일치 및 과거 결정 상태 검토",
+      "concerns": [],
+      "reviewer": "root-review",
+      "gitBlob": "a18a6e62deca830950a6745e38cfd7a300a34781",
+      "bytes": 13331,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/README.ko.md"
+    },
+    {
+      "path": "README.md",
+      "depth": "full",
+      "summary": "전체 원문 확인: 현재 사용 계약·지원 범위·구현 일치 및 과거 결정 상태 검토",
+      "concerns": [],
+      "reviewer": "root-review",
+      "gitBlob": "f391787138a2c7829ba9ca6a100a00bc5e05a217",
+      "bytes": 11929,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/README.md"
+    },
+    {
+      "path": "SECURITY.md",
+      "depth": "full",
+      "summary": "전체 원문 확인: 현재 사용 계약·지원 범위·구현 일치 및 과거 결정 상태 검토",
+      "concerns": [],
+      "reviewer": "root-review",
+      "gitBlob": "33d40a57705abc3b862e58c60986179529ceaeaf",
+      "bytes": 5634,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/SECURITY.md"
+    },
+    {
+      "path": "apps/admin-cli/package.json",
+      "depth": "metadata-check",
+      "summary": "패키지 이름/버전/private/ESM 및 직접 의존성 전문 확인",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "47194ca86b6cab8642275b096c7418045ce15309",
+      "bytes": 374,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/admin-cli/package.json"
+    },
+    {
+      "path": "apps/admin-cli/src/arguments.test.ts",
+      "depth": "full",
+      "summary": "CLI 명령·중복/알 수 없는 옵션·actor 및 운영 identity 입력 검증; 기존 테스트의 관찰 가능한 계약 및 실패 경로 확인(재실행은 루트 검증 기록 참조)",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "f0044f0b596320045ba0868253d6fa12af527769",
+      "bytes": 3214,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/admin-cli/src/arguments.test.ts"
+    },
+    {
+      "path": "apps/admin-cli/src/arguments.ts",
+      "depth": "full",
+      "summary": "CLI 명령·중복/알 수 없는 옵션·actor 및 운영 identity 입력 검증",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "b948cb9adbd8b78d8d497ce3623d726834816473",
+      "bytes": 9718,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/admin-cli/src/arguments.ts"
+    },
+    {
+      "path": "apps/admin-cli/src/main.ts",
+      "depth": "full",
+      "summary": "프로세스 구성, DB/서비스 생성, 운영 admission 및 종료 경로",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "dde7737f298004eefad5d6570133c8a823b3c7a7",
+      "bytes": 11146,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/admin-cli/src/main.ts"
+    },
+    {
+      "path": "apps/admin-cli/src/migration.integration.test.ts",
+      "depth": "full",
+      "summary": "도메인 자료형·저장소 포트 및 불변식 전문 검토; 기존 테스트의 관찰 가능한 계약 및 실패 경로 확인(재실행은 루트 검증 기록 참조)",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "a03c13124154c03717eb61c7494a9a68b34df2f7",
+      "bytes": 2945,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/admin-cli/src/migration.integration.test.ts"
+    },
+    {
+      "path": "apps/client/README.distribution.md",
+      "depth": "full",
+      "summary": "전체 내용 정독: 공개 export/타입/manifest/빌드 설정/라이선스 또는 사용 문서의 해당 계약 확인.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "936119c4c40d3345841b768805c7d3010710b344",
+      "bytes": 2056,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/client/README.distribution.md"
+    },
+    {
+      "path": "apps/client/package.json",
+      "depth": "full",
+      "summary": "전체 내용 정독: 공개 export/타입/manifest/빌드 설정/라이선스 또는 사용 문서의 해당 계약 확인.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "b7a961e47f994ca22a8cff006e53edce2a8c6ab3",
+      "bytes": 405,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/client/package.json"
+    },
+    {
+      "path": "apps/client/src/application-operation-budget.test.ts",
+      "depth": "full",
+      "summary": "전체 테스트 코드 정독: application-operation-budget.test.ts의 입력·assertion·cleanup 확인. 테스트 실행은 하지 않음.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "b7a0870711a8628640da89ea4dfc652671d98688",
+      "bytes": 587,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/client/src/application-operation-budget.test.ts"
+    },
+    {
+      "path": "apps/client/src/application-operation-budget.ts",
+      "depth": "full",
+      "summary": "양의 safe integer 상한, idempotent release.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "ef7197a8ad321d84618628437a4f3b6e3ad5b6de",
+      "bytes": 603,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/client/src/application-operation-budget.ts"
+    },
+    {
+      "path": "apps/client/src/cli-options.test.ts",
+      "depth": "full",
+      "summary": "전체 테스트 코드 정독: cli-options.test.ts의 입력·assertion·cleanup 확인. 테스트 실행은 하지 않음.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "a784c1058567b98878cba3204d9238de523304e1",
+      "bytes": 7160,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/client/src/cli-options.test.ts"
+    },
+    {
+      "path": "apps/client/src/cli-options.ts",
+      "depth": "full",
+      "summary": "strict 옵션, raw URL path, authenticated origin mapping, TLS/loopback 예외, review 쌍 검증.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "9bb5ae3a0f7fdfd2b202887067269e25bc790e3f",
+      "bytes": 7672,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/client/src/cli-options.ts"
+    },
+    {
+      "path": "apps/client/src/client-transport.test.ts",
+      "depth": "full",
+      "summary": "785줄 전문 정적 검토. 활성화 harness/정리, upload 이후 header deadline, stream ID 재사용 거부, upload stall 중 control/다른 stream 진행, reset 후 continuation·credit 한도, RESET/END 전달 실패 정리, Carrier control frame·malformed frame 거부, bounded close, WebSocket credit pause/half-close/upgrade 직후 socket 오류 격리, inbound flow overrun의 기존 검증 범위를 확인. 추가 실행·변경·전송 후보 조사 없음.",
+      "concerns": [],
+      "reviewer": "extra-client-review",
+      "gitBlob": "cad1725490201366b978dabb4b613be95d529449",
+      "bytes": 27395,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/client/src/client-transport.test.ts"
+    },
+    {
+      "path": "apps/client/src/client.test.ts",
+      "depth": "full",
+      "summary": "392줄 전문 정적 검토. provisioned context를 이용한 동일 URL resume, RESET 실패 후 새 generation 복구, local URL userinfo 거부, credential/close/activation/handshake deadline, Carrier profile·최대 envelope·WebSocket 선택 subprotocol/extension 경계 테스트. 기존 assertions/fixture/cleanup 읽음. 추가 실행·변경·전송 후보 조사 없음.",
+      "concerns": [],
+      "reviewer": "extra-client-review",
+      "gitBlob": "4aa5daede497a595faad9bb71dd444c7c22a2d91",
+      "bytes": 12602,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/client/src/client.test.ts"
+    },
+    {
+      "path": "apps/client/src/client.ts",
+      "depth": "full",
+      "summary": "전체 정독: activation/probe, generation, operation budget, HTTP/WS forwarding, drain/reset, reconnect deadline 및 pinned 주소 추적.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "f3b7af476ec9b2c350ac1cc5c2eb118ec8815ba9",
+      "bytes": 51605,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/client/src/client.ts"
+    },
+    {
+      "path": "apps/client/src/control-client.test.ts",
+      "depth": "full",
+      "summary": "전체 테스트 코드 정독: control-client.test.ts의 입력·assertion·cleanup 확인. 테스트 실행은 하지 않음.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "d6ac9413222dc9846888ed27536bfcfc261ace3a",
+      "bytes": 4954,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/client/src/control-client.test.ts"
+    },
+    {
+      "path": "apps/client/src/control-client.ts",
+      "depth": "full",
+      "summary": "redirect:error, 10초 timeout, resume abort signal, credential 실패 logout와 AggregateError.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "7a4c6f646356bd2ebbe3bcb951a6d27aee48065a",
+      "bytes": 5378,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/client/src/control-client.ts"
+    },
+    {
+      "path": "apps/client/src/diagnostics.test.ts",
+      "depth": "full",
+      "summary": "전체 테스트 코드 정독: diagnostics.test.ts의 입력·assertion·cleanup 확인. 테스트 실행은 하지 않음.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "b4fd0962abf77c06b50092e66bf0e75f0b09f89e",
+      "bytes": 5489,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/client/src/diagnostics.test.ts"
+    },
+    {
+      "path": "apps/client/src/diagnostics.ts",
+      "depth": "full",
+      "summary": "TCP/health/auth 진단, stage별 설명, cleanup 실패 보고.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "9f4fda98b21c5223998bb7540ddf3c13abb54dc4",
+      "bytes": 5485,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/client/src/diagnostics.ts"
+    },
+    {
+      "path": "apps/client/src/inbound-flow.test.ts",
+      "depth": "full",
+      "summary": "전체 테스트 코드 정독: inbound-flow.test.ts의 입력·assertion·cleanup 확인. 테스트 실행은 하지 않음.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "0f6841ea6b7961727634749f1e01299e07a05f72",
+      "bytes": 1310,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/client/src/inbound-flow.test.ts"
+    },
+    {
+      "path": "apps/client/src/inbound-flow.ts",
+      "depth": "full",
+      "summary": "stream/connection 수신 credit, local reset retired allowance.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "4ace0535477a429a73d655bf9e850233351ac3fa",
+      "bytes": 3919,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/client/src/inbound-flow.ts"
+    },
+    {
+      "path": "apps/client/src/index.ts",
+      "depth": "full",
+      "summary": "전체 내용 정독: 공개 export/타입/manifest/빌드 설정/라이선스 또는 사용 문서의 해당 계약 확인.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "32fbf6b95efcbe978841998c1e39abc9a542d6a6",
+      "bytes": 29,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/client/src/index.ts"
+    },
+    {
+      "path": "apps/client/src/local-origin.ts",
+      "depth": "full",
+      "summary": "HTTP loopback 전용, DNS 전 주소 loopback 확인 후 pinning, TCP probe timeout.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "27c9aba8f7b640abbc22b61015221b3dc8b5debe",
+      "bytes": 3144,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/client/src/local-origin.ts"
+    },
+    {
+      "path": "apps/client/src/main.ts",
+      "depth": "full",
+      "summary": "origin probe→auth→carrier activation→review binding→URL 출력→shutdown/logout 순서.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "97cadad9f2e98c0ebbf21a07dc5c0e2fd54965a1",
+      "bytes": 5540,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/client/src/main.ts"
+    },
+    {
+      "path": "apps/client/src/remote-stream-lifecycle.test.ts",
+      "depth": "full",
+      "summary": "전체 테스트 코드 정독: remote-stream-lifecycle.test.ts의 입력·assertion·cleanup 확인. 테스트 실행은 하지 않음.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "da4b743341d19d7e58ad01b75e6fae10acdd9bb7",
+      "bytes": 1949,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/client/src/remote-stream-lifecycle.test.ts"
+    },
+    {
+      "path": "apps/client/src/remote-stream-lifecycle.ts",
+      "depth": "full",
+      "summary": "순차 홀수 ID와 tombstone 없는 retired high-water 판단.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "b0f1b5fb0892ba9f6e92f5ab58dbe572d181767f",
+      "bytes": 1730,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/client/src/remote-stream-lifecycle.ts"
+    },
+    {
+      "path": "apps/client/src/review-binding.test.ts",
+      "depth": "full",
+      "summary": "전체 테스트 코드 정독: review-binding.test.ts의 입력·assertion·cleanup 확인. 테스트 실행은 하지 않음.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "80209bcda76aeb63df5ac947fd2d8823ef8c1daa",
+      "bytes": 1491,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/client/src/review-binding.test.ts"
+    },
+    {
+      "path": "apps/client/src/review-binding.ts",
+      "depth": "full",
+      "summary": "binding 실패 close와 cleanup AggregateError.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "bc543691dc36014f9292d08e89d763c9627f38f1",
+      "bytes": 1023,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/client/src/review-binding.ts"
+    },
+    {
+      "path": "apps/client/src/websocket-upgrade.ts",
+      "depth": "full",
+      "summary": "101/accept hash, connection/upgrade token, offered protocol, extension 거부.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "9979959b9dd255888e80f5d1cc0b383891373b84",
+      "bytes": 2787,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/client/src/websocket-upgrade.ts"
+    },
+    {
+      "path": "apps/client/src/writable-drain.test.ts",
+      "depth": "full",
+      "summary": "전체 테스트 코드 정독: writable-drain.test.ts의 입력·assertion·cleanup 확인. 테스트 실행은 하지 않음.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "38a562f58846a383519918aa45ef1991b5110522",
+      "bytes": 1606,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/client/src/writable-drain.test.ts"
+    },
+    {
+      "path": "apps/client/src/writable-drain.ts",
+      "depth": "full",
+      "summary": "drain/close/error settle 및 listener 정리.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "422d1b9a9fc39d0d7c867a32e38711be9787506c",
+      "bytes": 761,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/client/src/writable-drain.ts"
+    },
+    {
+      "path": "apps/gateway/package.json",
+      "depth": "metadata-check",
+      "summary": "패키지 이름/버전/private/ESM 및 직접 의존성 전문 확인",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "0d602dbdfc758300668bbf4d235525fa8eb31e43",
+      "bytes": 528,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/package.json"
+    },
+    {
+      "path": "apps/gateway/src/auth-gateway.test.ts",
+      "depth": "full",
+      "summary": "역할·세션·쿠키·콘텐츠 audience HTTP 경계와 폐기 시나리오; 기존 테스트의 관찰 가능한 계약 및 실패 경로 확인(재실행은 루트 검증 기록 참조)",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "0736d801ea1812ad6a2a85c9a3050ce17e96b3b0",
+      "bytes": 25731,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/auth-gateway.test.ts"
+    },
+    {
+      "path": "apps/gateway/src/authorization-revalidation.ts",
+      "depth": "full",
+      "summary": "batch/fallback 제한, retained admission, transport/stream snapshot guard, 취소와 실패 종료.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "3ce4c1ab5ee1be51a5044590eeead4f48254f1e7",
+      "bytes": 8785,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/authorization-revalidation.ts"
+    },
+    {
+      "path": "apps/gateway/src/canary-echo.test.ts",
+      "depth": "full",
+      "summary": "전체 테스트 코드 정독: canary-echo.test.ts의 입력·assertion·cleanup 확인. 테스트 실행은 하지 않음.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "2af5d66624c53e6691cd33a0a803c7c9d06c14d7",
+      "bytes": 3724,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/canary-echo.test.ts"
+    },
+    {
+      "path": "apps/gateway/src/canary-echo.ts",
+      "depth": "full",
+      "summary": "한 send 상태 전이, bounded bytes, idle timeout 및 cleanup.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "859b13939239fb4e18e47b0b6f157cc3aecd6f87",
+      "bytes": 4263,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/canary-echo.ts"
+    },
+    {
+      "path": "apps/gateway/src/client-address.test.ts",
+      "depth": "full",
+      "summary": "전체 테스트 코드 정독: client-address.test.ts의 입력·assertion·cleanup 확인. 테스트 실행은 하지 않음.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "abb7500b99437b867c87792575b61952783b0b03",
+      "bytes": 2526,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/client-address.test.ts"
+    },
+    {
+      "path": "apps/gateway/src/client-address.ts",
+      "depth": "full",
+      "summary": "trusted proxy CIDR, 우측 비신뢰 주소 선택, chain 길이/bytes 상한, IP 정규화.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "b1bfa81d06301d0c034d42a27d2266fc117729bd",
+      "bytes": 7154,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/client-address.ts"
+    },
+    {
+      "path": "apps/gateway/src/config.test.ts",
+      "depth": "full",
+      "summary": "환경 설정의 엄격한 boolean·상한·호스트 격리·운영 필수값; 기존 테스트의 관찰 가능한 계약 및 실패 경로 확인(재실행은 루트 검증 기록 참조)",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "9889009d30ee4bc5b70d124e227f9d8e2e2689d6",
+      "bytes": 18052,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/config.test.ts"
+    },
+    {
+      "path": "apps/gateway/src/config.ts",
+      "depth": "full",
+      "summary": "환경 설정의 엄격한 boolean·상한·호스트 격리·운영 필수값",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "01ea0e7f6a0c498f9658d75dd6be87e5571f4b9b",
+      "bytes": 29294,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/config.ts"
+    },
+    {
+      "path": "apps/gateway/src/content-revalidation.test.ts",
+      "depth": "full",
+      "summary": "전체 테스트 코드 정독: content-revalidation.test.ts의 입력·assertion·cleanup 확인. 테스트 실행은 하지 않음.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "1b69d58f9ccde8c91f68cd9926f27dc94da92228",
+      "bytes": 6611,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/content-revalidation.test.ts"
+    },
+    {
+      "path": "apps/gateway/src/database-runtime.integration.test.ts",
+      "depth": "full",
+      "summary": "실제 DB idle 단절 후 프로세스 생존과 영속 admission 복구; 기존 테스트의 관찰 가능한 계약 및 실패 경로 확인(재실행은 루트 검증 기록 참조)",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "7f6fb82ef3aa14fa0e430e64b4eccbcc939b1f62",
+      "bytes": 7017,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/database-runtime.integration.test.ts"
+    },
+    {
+      "path": "apps/gateway/src/gateway-admission.ts",
+      "depth": "full",
+      "summary": "pending/active/account 한도, credential reservation TTL, rate window 및 idempotent release.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "e84fd8ab8400469030acc6d2fb069a3c6cdc9a30",
+      "bytes": 7567,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/gateway-admission.ts"
+    },
+    {
+      "path": "apps/gateway/src/gateway-async.ts",
+      "depth": "full",
+      "summary": "연결 취소와 Promise deadline 분리; 실제 미완료 operation은 timeout 후에도 지속.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "36021c5c89587b536b2fc74fa5bf2baab39a88f2",
+      "bytes": 1549,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/gateway-async.ts"
+    },
+    {
+      "path": "apps/gateway/src/gateway-carrier.ts",
+      "depth": "full",
+      "summary": "전체 정독: create/resume 인증, generation/config/probe, 전역 receive queue 및 cleanup.",
+      "concerns": [
+        "T-CANDIDATE-1: 정적 추론, 미재현"
+      ],
+      "reviewer": "transport-review",
+      "gitBlob": "d72e4285cc5545c313521173159166acb51b9907",
+      "bytes": 29648,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/gateway-carrier.ts",
+      "finalReviewRequiredReference": "report.md / validation.md",
+      "finalDisposition": "excluded_unvalidated"
+    },
+    {
+      "path": "apps/gateway/src/gateway-operations.ts",
+      "depth": "full",
+      "summary": "시간 주입, heartbeat transport identity, 권한 만료와 kill switch, cleanup single-flight 및 timer 정리까지 전체 원문 확인",
+      "concerns": [],
+      "reviewer": "root-review",
+      "gitBlob": "403cb0d35e1e235850a0e7d7d695ceb40d5c8b93",
+      "bytes": 6579,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/gateway-operations.ts"
+    },
+    {
+      "path": "apps/gateway/src/gateway-responses.ts",
+      "depth": "full",
+      "summary": "전체 내용 정독: 공개 export/타입/manifest/빌드 설정/라이선스 또는 사용 문서의 해당 계약 확인.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "c710c8dd2f1c379b34b0119b9153c0710eb1e654",
+      "bytes": 1448,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/gateway-responses.ts"
+    },
+    {
+      "path": "apps/gateway/src/gateway-session-lifecycle.ts",
+      "depth": "full",
+      "summary": "session 등록/삭제 소유권, terminal cleanup, stream 취소, binding cleanup 대기.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "6a157abf1b5f7af52d37534864b0b541c2634e58",
+      "bytes": 3924,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/gateway-session-lifecycle.ts"
+    },
+    {
+      "path": "apps/gateway/src/gateway-session.ts",
+      "depth": "full",
+      "summary": "transport epoch identity 및 generation/flow 검사, current stream guard, lifecycle/timer 정리.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "e03107578d7acfce815863821b5f3ca6cbe7cb3e",
+      "bytes": 7129,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/gateway-session.ts"
+    },
+    {
+      "path": "apps/gateway/src/gateway-stream-ids.test.ts",
+      "depth": "full",
+      "summary": "전체 테스트 코드 정독: gateway-stream-ids.test.ts의 입력·assertion·cleanup 확인. 테스트 실행은 하지 않음.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "47cd50660078cb2e929412d483c990ebdacf8734",
+      "bytes": 958,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/gateway-stream-ids.test.ts"
+    },
+    {
+      "path": "apps/gateway/src/gateway-stream-ids.ts",
+      "depth": "full",
+      "summary": "홀수 uint32 발급, exhausted guard 및 generation reset.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "2c471fea13f43fe3f60dd58919202494013872c7",
+      "bytes": 781,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/gateway-stream-ids.ts"
+    },
+    {
+      "path": "apps/gateway/src/gateway-streams.ts",
+      "depth": "full",
+      "summary": "전체 정독: HTTP/WS admission, bounded downstream queue, flow credit, body 제한, drain/cancellation/epoch guard.",
+      "concerns": [
+        "T-CANDIDATE-1: 정적 추론, 미재현"
+      ],
+      "reviewer": "transport-review",
+      "gitBlob": "11f2e446c48f0146f93e9ed2a411d7e815393835",
+      "bytes": 30521,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/gateway-streams.ts",
+      "finalReviewRequiredReference": "report.md / validation.md",
+      "finalDisposition": "excluded_unvalidated"
+    },
+    {
+      "path": "apps/gateway/src/http-tunnel.test.ts",
+      "depth": "full",
+      "summary": "3137줄 전체를 400줄 이하 단위로 완독했다. 실제 로컬 HTTP·WebSocket 서버와 Client를 사용해 carrier 활성화·거부·큐 상한·프레임 계약, 요청/응답 크기·시간·동시성 제한, origin·header 투영, binary/SSE/WebSocket 전송, flow-control보다 큰 본문, 중단·half-close·늦은 프레임 처리, canary 인증·quota·idle, kill switch·metrics, resume secret/generation·기한·실패 복구 및 명시적 종료 폐기를 검증한다. 일부 경계에는 주입 clock·relay fault·수동 carrier를 사용한다.",
+      "concerns": [],
+      "testDeclarations": 57,
+      "execution": "이 하위 작업에서는 실행하지 않음",
+      "reviewer": "extra-tests-review",
+      "gitBlob": "73b3dda44b12fc0e1adca590fd1366041aee7c5e",
+      "bytes": 109212,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/http-tunnel.test.ts"
+    },
+    {
+      "path": "apps/gateway/src/inbound-flow.test.ts",
+      "depth": "full",
+      "summary": "전체 테스트 코드 정독: inbound-flow.test.ts의 입력·assertion·cleanup 확인. 테스트 실행은 하지 않음.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "dd987d1b9525f0e80e4eaca28bba013ae25b91a8",
+      "bytes": 1156,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/inbound-flow.test.ts"
+    },
+    {
+      "path": "apps/gateway/src/inbound-flow.ts",
+      "depth": "full",
+      "summary": "stream/connection 수신 credit, local reset retired allowance.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "f8d81792642137ac5312df7b0e4e7b53a7142824",
+      "bytes": 3689,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/inbound-flow.ts"
+    },
+    {
+      "path": "apps/gateway/src/index.ts",
+      "depth": "full",
+      "summary": "공개 export 경계 전문 확인",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "868f42d4c77853141a0ceb9bcb3e3a41536abd55",
+      "bytes": 29,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/index.ts"
+    },
+    {
+      "path": "apps/gateway/src/keyed-concurrent-admission.test.ts",
+      "depth": "full",
+      "summary": "전체 테스트 코드 정독: keyed-concurrent-admission.test.ts의 입력·assertion·cleanup 확인. 테스트 실행은 하지 않음.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "4a23040791590395e8b7c5254fd377b6a95c8bb6",
+      "bytes": 760,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/keyed-concurrent-admission.test.ts"
+    },
+    {
+      "path": "apps/gateway/src/keyed-concurrent-admission.ts",
+      "depth": "full",
+      "summary": "global/key 상한 및 idempotent release.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "44b2cb7cfcb8a53aaa666f155f7c595ab000b2f0",
+      "bytes": 825,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/keyed-concurrent-admission.ts"
+    },
+    {
+      "path": "apps/gateway/src/main.ts",
+      "depth": "full",
+      "summary": "프로세스 구성, DB/서비스 생성, 운영 admission 및 종료 경로",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "08d588795fb4f25ae38f30e4e451e363dbf95a34",
+      "bytes": 12377,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/main.ts"
+    },
+    {
+      "path": "apps/gateway/src/metrics.test.ts",
+      "depth": "full",
+      "summary": "전체 테스트 코드 정독: metrics.test.ts의 입력·assertion·cleanup 확인. 테스트 실행은 하지 않음.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "446596be86d4afacbf844cdaca5294adcdb0cbaf",
+      "bytes": 687,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/metrics.test.ts"
+    },
+    {
+      "path": "apps/gateway/src/metrics.ts",
+      "depth": "full",
+      "summary": "고정 counter label 및 session/stream/kill-switch gauge.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "d5391c51cb3f3e57be5b5559a27454cf8a41b271",
+      "bytes": 1993,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/metrics.ts"
+    },
+    {
+      "path": "apps/gateway/src/public-content-origin.ts",
+      "depth": "full",
+      "summary": "canonical public origin/domain 일치, tunnel share URL 생성.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "b407ddcd7b2c0024d5ce91f76a4aff29cd704c2b",
+      "bytes": 1441,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/public-content-origin.ts"
+    },
+    {
+      "path": "apps/gateway/src/request-isolation.test.ts",
+      "depth": "full",
+      "summary": "전체 테스트 코드 정독: request-isolation.test.ts의 입력·assertion·cleanup 확인. 테스트 실행은 하지 않음.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "59cb0d87d85c413829382b50ebd1fd18055c6520",
+      "bytes": 4376,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/request-isolation.test.ts"
+    },
+    {
+      "path": "apps/gateway/src/response-isolation.test.ts",
+      "depth": "full",
+      "summary": "전체 테스트 코드 정독: response-isolation.test.ts의 입력·assertion·cleanup 확인. 테스트 실행은 하지 않음.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "f4ec83e82be727f241cdc086d024b40f19198742",
+      "bytes": 6813,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/response-isolation.test.ts"
+    },
+    {
+      "path": "apps/gateway/src/resume-authorization.test.ts",
+      "depth": "full",
+      "summary": "전체 테스트 코드 정독: resume-authorization.test.ts의 입력·assertion·cleanup 확인. 테스트 실행은 하지 않음.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "d85b8c50869b523b2f1851ac30278bf686f711b5",
+      "bytes": 790,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/resume-authorization.test.ts"
+    },
+    {
+      "path": "apps/gateway/src/resume-authorization.ts",
+      "depth": "full",
+      "summary": "resume owner account ID/authVersion 일치.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "2d2f9b3c0fd08b9c125751351d5ed1376efbacee",
+      "bytes": 396,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/resume-authorization.ts"
+    },
+    {
+      "path": "apps/gateway/src/retained-operation.test.ts",
+      "depth": "full",
+      "summary": "전체 테스트 코드 정독: retained-operation.test.ts의 입력·assertion·cleanup 확인. 테스트 실행은 하지 않음.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "bf00cac738eb28a477ad60877c6b3717e51a8da5",
+      "bytes": 1111,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/retained-operation.test.ts"
+    },
+    {
+      "path": "apps/gateway/src/retained-operation.ts",
+      "depth": "full",
+      "summary": "실제 promise settle 시에만 admission 해제.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "013bd45a1ff99abb6e62da5894c1da229708aab9",
+      "bytes": 304,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/retained-operation.ts"
+    },
+    {
+      "path": "apps/gateway/src/review-bootstrap.generated.ts",
+      "depth": "generated-check",
+      "summary": "생성 헤더·크기·export 사용 확인. review-ui 원본은 transport 분담; 루트 동일 SHA UI 빌드/Chrome24 검증 근거. 번들 전문 수작업 리뷰는 하지 않음",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "658e4cc512bbd23458a45179620bbd7842778859",
+      "bytes": 85025,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/review-bootstrap.generated.ts"
+    },
+    {
+      "path": "apps/gateway/src/review-bootstrap.ts",
+      "depth": "full",
+      "summary": "생성 bootstrap export 단일 행 확인",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "76f10522e8851c33143a8e7098555f8d3bbf0c31",
+      "bytes": 75,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/review-bootstrap.ts"
+    },
+    {
+      "path": "apps/gateway/src/review-contract.ts",
+      "depth": "full",
+      "summary": "리뷰 DTO와 경계 공유 계약",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "e54d942e9d76b37340acea88ae61036ee3583592",
+      "bytes": 3772,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/review-contract.ts"
+    },
+    {
+      "path": "apps/gateway/src/review-control-view.ts",
+      "depth": "full",
+      "summary": "영속 리뷰함 DOM 렌더링, 알림 polling, 프로젝트 필터/페이지네이션",
+      "concerns": [
+        "D1: 필터 변경 중 More가 이전 cursor를 사용하고 최신 응답을 폐기함",
+        "D3: 펼친 알림은 polling을 중단하며 갱신 안내가 없음"
+      ],
+      "reviewer": "domain-review",
+      "gitBlob": "9e0041e8eea882a0d6d4d47102855151b0829030",
+      "bytes": 12880,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/review-control-view.ts",
+      "finalReviewRequiredReference": "report.md / validation.md",
+      "finalDisposition": "D1_confirmed_U2__D3_optional_documented_behavior"
+    },
+    {
+      "path": "apps/gateway/src/review-control.generated.ts",
+      "depth": "generated-check",
+      "summary": "생성 헤더·크기·export 사용 확인. review-ui 원본은 transport 분담; 루트 동일 SHA UI 빌드/Chrome24 검증 근거. 번들 전문 수작업 리뷰는 하지 않음",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "6fd67dceed7d4e42d15fe50da228f7eb88189107",
+      "bytes": 28299,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/review-control.generated.ts"
+    },
+    {
+      "path": "apps/gateway/src/review-control.ts",
+      "depth": "full",
+      "summary": "영속 리뷰 제어 라우팅·인증·응답 및 변이 경계",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "7bc915385b4c542e290bd68925a8ca668f9402ba",
+      "bytes": 10246,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/review-control.ts"
+    },
+    {
+      "path": "apps/gateway/src/review-draft-session.ts",
+      "depth": "full",
+      "summary": "세션별 초안 식별자 전달",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "b4af2cab2f230b24c5beba0bee989c13966b6a05",
+      "bytes": 427,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/review-draft-session.ts"
+    },
+    {
+      "path": "apps/gateway/src/review-gateway.test.ts",
+      "depth": "full",
+      "summary": "리뷰 HTTP/SSE 인증·터널 binding·종료·저장소 실패 통합 계약; 기존 테스트의 관찰 가능한 계약 및 실패 경로 확인(재실행은 루트 검증 기록 참조)",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "878173645af884268ce2d3de05b3a6268a739407",
+      "bytes": 34093,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/review-gateway.test.ts"
+    },
+    {
+      "path": "apps/gateway/src/review-http.test.ts",
+      "depth": "full",
+      "summary": "콘텐츠 리뷰 라우팅·입력·역할·SSE admission 및 이벤트 전달; 기존 테스트의 관찰 가능한 계약 및 실패 경로 확인(재실행은 루트 검증 기록 참조)",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "49ca5b9922a3d50ad0e80aef55a10d90de93bce9",
+      "bytes": 3120,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/review-http.test.ts"
+    },
+    {
+      "path": "apps/gateway/src/review-http.ts",
+      "depth": "full",
+      "summary": "콘텐츠 리뷰 라우팅·입력·역할·SSE admission 및 이벤트 전달",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "55b079b55f7f6b1f3cc400f0ab48c1b2d11c5de0",
+      "bytes": 35977,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/review-http.ts"
+    },
+    {
+      "path": "apps/gateway/src/review-ui-state.test.ts",
+      "depth": "full",
+      "summary": "초안 범위·세대·저장 실패와 새 로그인 격리 검증; 기존 테스트의 관찰 가능한 계약 및 실패 경로 확인(재실행은 루트 검증 기록 참조)",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "be93f11d95308cb817fdd66f8a73c99b22b0ba8f",
+      "bytes": 7930,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/review-ui-state.test.ts"
+    },
+    {
+      "path": "apps/gateway/src/review-ui/api.ts",
+      "depth": "full",
+      "summary": "same-origin fetch, read/mutate, 401/403 denial callback.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "19495680d6999725d4f1c0fe69ea404f12f1bf55",
+      "bytes": 2106,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/review-ui/api.ts"
+    },
+    {
+      "path": "apps/gateway/src/review-ui/contracts.ts",
+      "depth": "full",
+      "summary": "전체 내용 정독: 공개 export/타입/manifest/빌드 설정/라이선스 또는 사용 문서의 해당 계약 확인.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "8f6fcda3d5b4c4c4c1045fe7a44c9bcb0a3996cd",
+      "bytes": 678,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/review-ui/contracts.ts"
+    },
+    {
+      "path": "apps/gateway/src/review-ui/control-entry.ts",
+      "depth": "full",
+      "summary": "전체 내용 정독: 공개 export/타입/manifest/빌드 설정/라이선스 또는 사용 문서의 해당 계약 확인.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "6004a5fdaeafdca0ca799d78163ee6c5308c5161",
+      "bytes": 179,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/review-ui/control-entry.ts"
+    },
+    {
+      "path": "apps/gateway/src/review-ui/drafts.ts",
+      "depth": "full",
+      "summary": "storage scope/TTL/entry bound, version acknowledgement, denial clear.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "a2e8a09fbaf51d1b973118270796efa889201566",
+      "bytes": 5531,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/review-ui/drafts.ts"
+    },
+    {
+      "path": "apps/gateway/src/review-ui/entry.ts",
+      "depth": "full",
+      "summary": "전체 내용 정독: 공개 export/타입/manifest/빌드 설정/라이선스 또는 사용 문서의 해당 계약 확인.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "632b16b615f97c4b9df2cfbee450d76a391673eb",
+      "bytes": 70,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/review-ui/entry.ts"
+    },
+    {
+      "path": "apps/gateway/src/review-ui/live-updates.ts",
+      "depth": "full",
+      "summary": "EventSource 경로 교체/review-error reset, history wrapper와 cleanup.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "961cef37113078618c1425d89a4a76405971ccf5",
+      "bytes": 2270,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/review-ui/live-updates.ts"
+    },
+    {
+      "path": "apps/gateway/src/review-ui/mentions.ts",
+      "depth": "full",
+      "summary": "debounce/sequence stale guard, IME, 키보드 선택, abort cleanup.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "ab6eea9516833f192d764e39895b2046bdc273c1",
+      "bytes": 3458,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/review-ui/mentions.ts"
+    },
+    {
+      "path": "apps/gateway/src/review-ui/page-state.ts",
+      "depth": "full",
+      "summary": "기존 로드 범위 refresh, ID merge, single-flight dirty reload coordinator.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "4927a06e760594fff10d71d91146958fd6809049",
+      "bytes": 2500,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/review-ui/page-state.ts"
+    },
+    {
+      "path": "apps/gateway/src/review-ui/revision-context.ts",
+      "depth": "full",
+      "summary": "revision 및 개발자 보고 working-tree 라벨.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "d886b9d3d8e7e4560eaee55367c0fe563b328383",
+      "bytes": 583,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/review-ui/revision-context.ts"
+    },
+    {
+      "path": "apps/gateway/src/review-ui/thread-view.ts",
+      "depth": "full",
+      "summary": "전체 정독: DOM patch, draft/IME/focus 유지, edit version 충돌, pending mutation/reload.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "f941da72b093be8fd3f96bda051a043f70c42cfa",
+      "bytes": 17048,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/review-ui/thread-view.ts"
+    },
+    {
+      "path": "apps/gateway/src/review-ui/view.ts",
+      "depth": "full",
+      "summary": "전체 정독: Shadow DOM/nonce, pin anchor, route load sequence, draft/filter/SSE/observer cleanup.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "9eb3a08b24701caac1b79bf8f79faf9c564a3797",
+      "bytes": 43127,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/review-ui/view.ts"
+    },
+    {
+      "path": "apps/gateway/src/server.ts",
+      "depth": "full",
+      "summary": "전체 정독: HTTP/upgrade routing, auth/abort 경계, carrier admission, health/canary/metrics/shutdown.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "b89991eaf239080558012aae4077fca009293c30",
+      "bytes": 36317,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/server.ts"
+    },
+    {
+      "path": "apps/gateway/src/transport-epoch.test.ts",
+      "depth": "full",
+      "summary": "990줄 전체 원문 확인: 재접속 세대 사이 reviewer revocation/heartbeat/SessionActive 격리, 인증 batch admission 유지, stream snapshot, 취소 후 작업 방지 회귀 검증. 신규 후보 재현 없음",
+      "concerns": [],
+      "reviewer": "root-review",
+      "gitBlob": "ac82eec6e579a3c35e3999e27aac39a1a4912e42",
+      "bytes": 32976,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/transport-epoch.test.ts"
+    },
+    {
+      "path": "apps/gateway/src/upgrade-deadline.test.ts",
+      "depth": "full",
+      "summary": "417줄 전체 원문 확인: read-only deadline, readiness single-flight, 일회성 consume settle까지 admission 유지, 취소 뒤 slot 해제, AUTH_CAPACITY 429/Retry-After 계약. 새 실행 없음",
+      "concerns": [],
+      "reviewer": "root-review",
+      "gitBlob": "22fc86fb9e0a09c3650b99ade7fdb6b2cfcafcae",
+      "bytes": 13327,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/upgrade-deadline.test.ts"
+    },
+    {
+      "path": "apps/gateway/src/web-auth-boundary.test.ts",
+      "depth": "full",
+      "summary": "기한/admission 보존·일회성 변이·로그인 보상·Origin·trusted proxy 경계; 기존 테스트의 관찰 가능한 계약 및 실패 경로 확인(재실행은 루트 검증 기록 참조)",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "8f9d06a69c1121c46853d397993d8f61165ae669",
+      "bytes": 33401,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/web-auth-boundary.test.ts"
+    },
+    {
+      "path": "apps/gateway/src/web-auth-pages.ts",
+      "depth": "full",
+      "summary": "인증/관리 페이지의 HTML escaping과 폼 구성",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "333d755800d4d2134145a23ab67f1839b27d494b",
+      "bytes": 7277,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/web-auth-pages.ts"
+    },
+    {
+      "path": "apps/gateway/src/web-auth.test.ts",
+      "depth": "full",
+      "summary": "웹/CLI 인증·관리자 재인증·쿠키·Origin·password 변경·세션 교환; 기존 테스트의 관찰 가능한 계약 및 실패 경로 확인(재실행은 루트 검증 기록 참조)",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "3dd6d9c02435aaf0aba7d2499090961dba55a20f",
+      "bytes": 586,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/web-auth.test.ts"
+    },
+    {
+      "path": "apps/gateway/src/web-auth.ts",
+      "depth": "full",
+      "summary": "웹/CLI 인증·관리자 재인증·쿠키·Origin·password 변경·세션 교환",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "9070b0c4099207ae7ec4875c48a277085d163295",
+      "bytes": 43512,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/gateway/src/web-auth.ts"
+    },
+    {
+      "path": "apps/next-integration/LICENSE",
+      "depth": "full",
+      "summary": "전체 내용 정독: 공개 export/타입/manifest/빌드 설정/라이선스 또는 사용 문서의 해당 계약 확인.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "61bbfbc677122245234e041437713fd1cbf7a4e0",
+      "bytes": 1083,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/next-integration/LICENSE"
+    },
+    {
+      "path": "apps/next-integration/package.json",
+      "depth": "full",
+      "summary": "전체 내용 정독: 공개 export/타입/manifest/빌드 설정/라이선스 또는 사용 문서의 해당 계약 확인.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "c5c8297afe6a60af0d5f536023c41722f1468771",
+      "bytes": 516,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/next-integration/package.json"
+    },
+    {
+      "path": "apps/next-integration/src/index.test.ts",
+      "depth": "full",
+      "summary": "전체 테스트 코드 정독: index.test.ts의 입력·assertion·cleanup 확인. 테스트 실행은 하지 않음.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "460f9915037bb52db1a44b37f1b043c626eb42a6",
+      "bytes": 1597,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/next-integration/src/index.test.ts"
+    },
+    {
+      "path": "apps/next-integration/src/index.ts",
+      "depth": "full",
+      "summary": "전체 내용 정독: 공개 export/타입/manifest/빌드 설정/라이선스 또는 사용 문서의 해당 계약 확인.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "3890fec6d2b5b1ea5ac6cd3264aa580e6c800180",
+      "bytes": 1214,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/next-integration/src/index.ts"
+    },
+    {
+      "path": "apps/next-integration/tsconfig.build.json",
+      "depth": "full",
+      "summary": "전체 내용 정독: 공개 export/타입/manifest/빌드 설정/라이선스 또는 사용 문서의 해당 계약 확인.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "364f6b3c1774324724b44457ee60595947cc7008",
+      "bytes": 283,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/next-integration/tsconfig.build.json"
+    },
+    {
+      "path": "apps/vite-integration/LICENSE",
+      "depth": "full",
+      "summary": "전체 내용 정독: 공개 export/타입/manifest/빌드 설정/라이선스 또는 사용 문서의 해당 계약 확인.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "61bbfbc677122245234e041437713fd1cbf7a4e0",
+      "bytes": 1083,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/vite-integration/LICENSE"
+    },
+    {
+      "path": "apps/vite-integration/package.json",
+      "depth": "full",
+      "summary": "전체 내용 정독: 공개 export/타입/manifest/빌드 설정/라이선스 또는 사용 문서의 해당 계약 확인.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "02f61ab4ed9112b722bc02071448868e7019cfde",
+      "bytes": 510,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/vite-integration/package.json"
+    },
+    {
+      "path": "apps/vite-integration/src/index.test.ts",
+      "depth": "full",
+      "summary": "전체 테스트 코드 정독: index.test.ts의 입력·assertion·cleanup 확인. 테스트 실행은 하지 않음.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "9ff3617bac968c68e9cb96d4f4af2e125c34d8ad",
+      "bytes": 1074,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/vite-integration/src/index.test.ts"
+    },
+    {
+      "path": "apps/vite-integration/src/index.ts",
+      "depth": "full",
+      "summary": "전체 내용 정독: 공개 export/타입/manifest/빌드 설정/라이선스 또는 사용 문서의 해당 계약 확인.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "512bbba94e0805dad7032e1adf8844b2f6e88082",
+      "bytes": 545,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/vite-integration/src/index.ts"
+    },
+    {
+      "path": "apps/vite-integration/tsconfig.build.json",
+      "depth": "full",
+      "summary": "전체 내용 정독: 공개 export/타입/manifest/빌드 설정/라이선스 또는 사용 문서의 해당 계약 확인.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "364f6b3c1774324724b44457ee60595947cc7008",
+      "bytes": 283,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/apps/vite-integration/tsconfig.build.json"
+    },
+    {
+      "path": "biome.json",
+      "depth": "full",
+      "summary": "권장 lint·예외2개·생성/결과 제외와 formatter 비활성 확인.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "9d84d4c17c4f05c346245525a8243c47bbf6c793",
+      "bytes": 823,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/biome.json"
+    },
+    {
+      "path": "compose.demo.yml",
+      "depth": "full",
+      "summary": "로컬 loopback bind·generated password·healthcheck·persistent 전용 volume 확인.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "9e8f32cabc6c24d07234223551be0a14db97ac93",
+      "bytes": 798,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/compose.demo.yml"
+    },
+    {
+      "path": "compose.test.yml",
+      "depth": "full",
+      "summary": "loopback test DB·tmpfs·healthcheck·pinned image 확인.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "93be0eaaf991bf4a05c88f0f93b3b8d27ced755d",
+      "bytes": 507,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/compose.test.yml"
+    },
+    {
+      "path": "deploy/production/deployment.example.json",
+      "depth": "full",
+      "summary": "단일 Gateway 배포 manifest 예시·HTTPS origin·자원/시간 제한 확인.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "d24e98f0bac078f6033e95aee8f2f84585f54ac7",
+      "bytes": 405,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/deploy/production/deployment.example.json"
+    },
+    {
+      "path": "deploy/runtime/package-lock.json",
+      "depth": "generated-check",
+      "summary": "lockfile v3 전 항목 구조 확인; registry 외부 의존성 integrity 누락 없음. root162/runtime28 entry, runtime version/integrity/resolved 전부 root와 일치.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "78558a602465415d458b583fa74c451b24bf5a49",
+      "bytes": 11262,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/deploy/runtime/package-lock.json"
+    },
+    {
+      "path": "deploy/runtime/package.json",
+      "depth": "full",
+      "summary": "Node24·3개 production 직접 dependency와 root 동기화 확인.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "f565ce9740191d5f908ef994e57978c00fb98c16",
+      "bytes": 257,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/deploy/runtime/package.json"
+    },
+    {
+      "path": "docs/adr/0001-typescript-runtime.md",
+      "depth": "full",
+      "summary": "전체 원문 확인: 현재 사용 계약·지원 범위·구현 일치 및 과거 결정 상태 검토",
+      "concerns": [],
+      "reviewer": "root-review",
+      "gitBlob": "319d28f4d42ce66c4d7ef81300277b86d9136bf2",
+      "bytes": 1369,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/adr/0001-typescript-runtime.md"
+    },
+    {
+      "path": "docs/adr/0002-poc-carrier-protocol.md",
+      "depth": "full",
+      "summary": "전체 원문 확인: 현재 사용 계약·지원 범위·구현 일치 및 과거 결정 상태 검토",
+      "concerns": [],
+      "reviewer": "root-review",
+      "gitBlob": "d19f696e770447d77a894c93bcb87e64c7f27db1",
+      "bytes": 2384,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/adr/0002-poc-carrier-protocol.md"
+    },
+    {
+      "path": "docs/adr/0003-internal-account-auth.md",
+      "depth": "full",
+      "summary": "전체 원문 확인: 현재 사용 계약·지원 범위·구현 일치 및 과거 결정 상태 검토",
+      "concerns": [],
+      "reviewer": "root-review",
+      "gitBlob": "86dec966bde0d2f52f07d8f88200330ac406fdfb",
+      "bytes": 2588,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/adr/0003-internal-account-auth.md"
+    },
+    {
+      "path": "docs/adr/0004-review-tunnel-v1-activation.md",
+      "depth": "full",
+      "summary": "전체 원문 확인: 현재 사용 계약·지원 범위·구현 일치 및 과거 결정 상태 검토",
+      "concerns": [],
+      "reviewer": "root-review",
+      "gitBlob": "6da5144d159c4fe2f89954406d98e96478388c24",
+      "bytes": 2639,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/adr/0004-review-tunnel-v1-activation.md"
+    },
+    {
+      "path": "docs/adr/0005-hosted-and-local-network-modes.md",
+      "depth": "full",
+      "summary": "전체 원문 확인: 현재 사용 계약·지원 범위·구현 일치 및 과거 결정 상태 검토",
+      "concerns": [],
+      "reviewer": "root-review",
+      "gitBlob": "89f196045cdeda75b85a77dff4e2f0c40eb06958",
+      "bytes": 2474,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/adr/0005-hosted-and-local-network-modes.md"
+    },
+    {
+      "path": "docs/adr/0006-contextual-review-overlay.md",
+      "depth": "full",
+      "summary": "전체 원문 확인: 현재 사용 계약·지원 범위·구현 일치 및 과거 결정 상태 검토",
+      "concerns": [],
+      "reviewer": "root-review",
+      "gitBlob": "2829bf71387ee109322c546b04b3ebff70b2ac55",
+      "bytes": 3770,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/adr/0006-contextual-review-overlay.md"
+    },
+    {
+      "path": "docs/analysis-2026-09-21/inventory.json",
+      "depth": "metadata-check",
+      "summary": "2026-09-21/5bfb322 기준 생성 목록 구조 검증. 340개 고유 경로·kind 합계·고정 SHA sourceUrl 및 gitBlob을 해당 git ls-tree 340개와 전수 대조, 오류0. 모든 행 실행/정독의 증거가 아니라는 scopeNote 확인",
+      "concerns": [],
+      "reviewer": "historical-review",
+      "gitBlob": "ef53c9f7885ea37226c51c4d84a7b3c1b7c9a36e",
+      "bytes": 138872,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/analysis-2026-09-21/inventory.json"
+    },
+    {
+      "path": "docs/analysis-2026-09-21/report.md",
+      "depth": "full",
+      "summary": "9/21 구 SHA 분석·F01–F08 및 후속 수정 안내·제품/로드맵 전문 확인. 당시 결함·CI/공개 상태를 현재로 재사용 금지",
+      "concerns": [],
+      "reviewer": "historical-review",
+      "gitBlob": "fab2fb66bd22fc321a36a669276ee8381e19c846",
+      "bytes": 39114,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/analysis-2026-09-21/report.md"
+    },
+    {
+      "path": "docs/analysis-2026-09-21/validation.md",
+      "depth": "full",
+      "summary": "9/21 환경·명령·468개 검사·실패/중단·PG17.6 대체 및 재현 한계 전문. 새 HEAD 검증과 분리",
+      "concerns": [],
+      "reviewer": "historical-review",
+      "gitBlob": "f6cb78c38042443b5cd4c378035f07b6c8689980",
+      "bytes": 16368,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/analysis-2026-09-21/validation.md"
+    },
+    {
+      "path": "docs/architecture-review-2026-09-07.md",
+      "depth": "full",
+      "summary": "과거 구조 개선과 이벤트 잠금/snapshot/초안 보존/요청 격리 결과 전문. 구현된 기능을 신규 개선으로 재계산하지 않음",
+      "concerns": [],
+      "reviewer": "historical-review",
+      "gitBlob": "8bc9ae8669e023fe1287e872e634788ecc797ebe",
+      "bytes": 22929,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/architecture-review-2026-09-07.md"
+    },
+    {
+      "path": "docs/automatic-deployment.md",
+      "depth": "full",
+      "summary": "현재 안내·예제 전문 확인, 실제 코드·운영 실행과 계약 대조",
+      "concerns": [],
+      "reviewer": "root-review",
+      "gitBlob": "2c3f38bdb72cae6e8c7f818519be3172c831f486",
+      "bytes": 12491,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/automatic-deployment.md"
+    },
+    {
+      "path": "docs/client-installation.en.md",
+      "depth": "full",
+      "summary": "전체 원문 확인: 현재 사용 계약·지원 범위·구현 일치 및 과거 결정 상태 검토",
+      "concerns": [],
+      "reviewer": "root-review",
+      "gitBlob": "c0da01282b6e75e6e2121722a43fc5e4a102373a",
+      "bytes": 4446,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/client-installation.en.md"
+    },
+    {
+      "path": "docs/client-installation.md",
+      "depth": "full",
+      "summary": "전체 원문 확인: 현재 사용 계약·지원 범위·구현 일치 및 과거 결정 상태 검토",
+      "concerns": [],
+      "reviewer": "root-review",
+      "gitBlob": "75d29d5c7499c738e3e6f8c9f874504a15f4c8d3",
+      "bytes": 4817,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/client-installation.md"
+    },
+    {
+      "path": "docs/code-review-2026-09-06.md",
+      "depth": "full",
+      "summary": "리뷰 통합 전 공유 기반 실패·실제 HTTPS 당시 검증·후속 제안 전문",
+      "concerns": [],
+      "reviewer": "historical-review",
+      "gitBlob": "423b9f238b4e263ee9fe6745446d7a8fde5ee8ff",
+      "bytes": 8418,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/code-review-2026-09-06.md"
+    },
+    {
+      "path": "docs/contextual-review.md",
+      "depth": "full",
+      "summary": "현재 구현 문구가 섞인 415줄 설계 전문. 역할 범위·핀·cursor·SSE·Control·알림 정책 확인",
+      "concerns": [
+        "H2:298 답글 수·프로젝트 생성속도 상한의 집행 근거 없음; 구현/계획 분리 필요"
+      ],
+      "reviewer": "historical-review",
+      "gitBlob": "adbacf5e5b85bb5b6600f481d4e5bf110ad84d73",
+      "bytes": 30562,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/contextual-review.md",
+      "finalReviewRequiredReference": "report.md / validation.md",
+      "finalDisposition": "documentation_clarity_only_not_confirmed_missing_quota"
+    },
+    {
+      "path": "docs/documentation.md",
+      "depth": "full",
+      "summary": "전체 원문 확인: 현재 사용 계약·지원 범위·구현 일치 및 과거 결정 상태 검토",
+      "concerns": [],
+      "reviewer": "root-review",
+      "gitBlob": "d91fb7c519103069e137edb7b9d650b44067b7fa",
+      "bytes": 3690,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/documentation.md"
+    },
+    {
+      "path": "docs/getting-started.en.md",
+      "depth": "full",
+      "summary": "전체 원문 확인: 현재 사용 계약·지원 범위·구현 일치 및 과거 결정 상태 검토",
+      "concerns": [
+        "초안 설명 불일치"
+      ],
+      "reviewer": "root-review",
+      "gitBlob": "2f7c18687a79ac6738ab43170c7bf89b851b937b",
+      "bytes": 15861,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/getting-started.en.md",
+      "finalReviewRequiredReference": "report.md / validation.md",
+      "finalDisposition": "see_report_and_validation_for_scope_and_counterevidence"
+    },
+    {
+      "path": "docs/getting-started.md",
+      "depth": "full",
+      "summary": "전체 원문 확인: 현재 사용 계약·지원 범위·구현 일치 및 과거 결정 상태 검토",
+      "concerns": [
+        "초안 설명 불일치"
+      ],
+      "reviewer": "root-review",
+      "gitBlob": "c8722fbf8e0bef82e27f010c4bf6d7c2c47a5cfe",
+      "bytes": 19481,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/getting-started.md",
+      "finalReviewRequiredReference": "report.md / validation.md",
+      "finalDisposition": "see_report_and_validation_for_scope_and_counterevidence"
+    },
+    {
+      "path": "docs/improvement-goal-2026-09-07.md",
+      "depth": "full",
+      "summary": "완료된 G1–G9 과거 Goal/실행 결과 전문, 현재 미완료 목록 아님",
+      "concerns": [],
+      "reviewer": "historical-review",
+      "gitBlob": "8e00faef56ec9f4cf6ac9a4d4502a07ca4750db0",
+      "bytes": 5421,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/improvement-goal-2026-09-07.md"
+    },
+    {
+      "path": "docs/integration-2026-09-08.md",
+      "depth": "full",
+      "summary": "양쪽 Git/DB migration18충돌 통합·테스트·배포 확인 절차 전문, 당시 memory-only 초안 문구는 역사",
+      "concerns": [],
+      "reviewer": "historical-review",
+      "gitBlob": "b7e2e1dd9e67959258415a00bae844489e283fb3",
+      "bytes": 4378,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/integration-2026-09-08.md"
+    },
+    {
+      "path": "docs/internal-account-operations.md",
+      "depth": "full",
+      "summary": "현재 안내·예제 전문 확인, 실제 코드·운영 실행과 계약 대조",
+      "concerns": [],
+      "reviewer": "root-review",
+      "gitBlob": "a20f712519154c1227618aa2f8a212f806ae5985",
+      "bytes": 10406,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/internal-account-operations.md"
+    },
+    {
+      "path": "docs/internal-review-guide.md",
+      "depth": "full",
+      "summary": "전체 원문 확인: 현재 사용 계약·지원 범위·구현 일치 및 과거 결정 상태 검토",
+      "concerns": [],
+      "reviewer": "root-review",
+      "gitBlob": "fb135e9303127b67d1edd5f7978e2d03969d583e",
+      "bytes": 5826,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/internal-review-guide.md"
+    },
+    {
+      "path": "docs/linux-deployment.md",
+      "depth": "full",
+      "summary": "전문 검토; 운영 절차와 한계, 현재 구현 대비 문서 불일치 확인",
+      "concerns": [],
+      "reviewer": "root-review",
+      "gitBlob": "1b4f62bc630d627904415238b0eff777dc7d8133",
+      "bytes": 28338,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/linux-deployment.md"
+    },
+    {
+      "path": "docs/local-demo.en.md",
+      "depth": "full",
+      "summary": "전체 원문 확인: 현재 사용 계약·지원 범위·구현 일치 및 과거 결정 상태 검토",
+      "concerns": [
+        "초안 설명 불일치"
+      ],
+      "reviewer": "root-review",
+      "gitBlob": "5f2895afda2d60e11a8ecf5878893156c44aaa7f",
+      "bytes": 5647,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/local-demo.en.md",
+      "finalReviewRequiredReference": "report.md / validation.md",
+      "finalDisposition": "see_report_and_validation_for_scope_and_counterevidence"
+    },
+    {
+      "path": "docs/local-demo.md",
+      "depth": "full",
+      "summary": "전체 원문 확인: 현재 사용 계약·지원 범위·구현 일치 및 과거 결정 상태 검토",
+      "concerns": [
+        "초안 설명 불일치"
+      ],
+      "reviewer": "root-review",
+      "gitBlob": "c3ac3f9fce57eb568aa55f340bb688daf74c8505",
+      "bytes": 6153,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/local-demo.md",
+      "finalReviewRequiredReference": "report.md / validation.md",
+      "finalDisposition": "see_report_and_validation_for_scope_and_counterevidence"
+    },
+    {
+      "path": "docs/login-ui-improvement-plan-2026-09-08.md",
+      "depth": "full",
+      "summary": "미구현 로그인 디자인/오류·복귀·접근성 계획 전문. return intent 후보는 새 재현 없이 확정 버그로 사용하지 않음",
+      "concerns": [],
+      "reviewer": "historical-review",
+      "gitBlob": "75b474672e3fe871e68d67738a2297f5fb65b312",
+      "bytes": 13083,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/login-ui-improvement-plan-2026-09-08.md"
+    },
+    {
+      "path": "docs/media/README.md",
+      "depth": "full",
+      "summary": "현재 안내·예제 전문 확인, 실제 코드·운영 실행과 계약 대조",
+      "concerns": [],
+      "reviewer": "root-review",
+      "gitBlob": "9b516f125f63da285830b21b219f16d2b5123180",
+      "bytes": 1256,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/media/README.md"
+    },
+    {
+      "path": "docs/media/needs-review.png",
+      "depth": "visual-check",
+      "summary": "실제 이미지 열람. 합성 데모 캡처이며 현재 실서비스/성능 증거로 사용하지 않음",
+      "concerns": [],
+      "reviewer": "root-review",
+      "gitBlob": "0cb07efeb7d85bf0d2bdb4d88bbc57bc1eee3aff",
+      "bytes": 169550,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/media/needs-review.png"
+    },
+    {
+      "path": "docs/media/pinned-review.png",
+      "depth": "visual-check",
+      "summary": "실제 이미지 열람. 합성 데모 캡처이며 현재 실서비스/성능 증거로 사용하지 않음",
+      "concerns": [],
+      "reviewer": "root-review",
+      "gitBlob": "b6f0dfd57b13b88c77b3cf73935cc4a6ccc5677c",
+      "bytes": 152185,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/media/pinned-review.png"
+    },
+    {
+      "path": "docs/media/review-flow.webm",
+      "depth": "metadata-check",
+      "summary": "WebM 바이너리 형식·크기·hash 및 capture-media 생성 경로와 연관 PNG 확인. 전 프레임 재생은 수행하지 않음",
+      "concerns": [],
+      "reviewer": "root-review",
+      "gitBlob": "6ce050eb7722dfdfd1591bdd6239df30c6325f51",
+      "bytes": 1756769,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/media/review-flow.webm"
+    },
+    {
+      "path": "docs/media/review-inbox.png",
+      "depth": "visual-check",
+      "summary": "실제 이미지 열람. 합성 데모 캡처이며 현재 실서비스/성능 증거로 사용하지 않음",
+      "concerns": [],
+      "reviewer": "root-review",
+      "gitBlob": "a94f98b16382cb72939277c19117b4051ee1b211",
+      "bytes": 88869,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/media/review-inbox.png"
+    },
+    {
+      "path": "docs/open-source-alpha-plan.md",
+      "depth": "full",
+      "summary": "기준41e9570 및 후속 후보 e3b7826 계획·진행·공개 경계 전문. 외부 승인 지시는 역사적 기록으로만 취급",
+      "concerns": [],
+      "reviewer": "historical-review",
+      "gitBlob": "86bf3ba00e261cb19a8c7bd0fde555fcdbc38d8a",
+      "bytes": 31084,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/open-source-alpha-plan.md"
+    },
+    {
+      "path": "docs/poc-status.md",
+      "depth": "full",
+      "summary": "전문 검토; 운영 절차와 한계, 현재 구현 대비 문서 불일치 확인",
+      "concerns": [
+        "초안/배포/준비 상태의 현재성"
+      ],
+      "reviewer": "root-review",
+      "gitBlob": "184c9fc378b8f070e4852100050d8fbecd972963",
+      "bytes": 5157,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/poc-status.md",
+      "finalReviewRequiredReference": "report.md / validation.md",
+      "finalDisposition": "see_report_and_validation_for_scope_and_counterevidence"
+    },
+    {
+      "path": "docs/public-path-testing.md",
+      "depth": "full",
+      "summary": "현재 안내·예제 전문 확인, 실제 코드·운영 실행과 계약 대조",
+      "concerns": [],
+      "reviewer": "root-review",
+      "gitBlob": "8833cb95ff2eb8f0b06806370567c1700fb0dac8",
+      "bytes": 5960,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/public-path-testing.md"
+    },
+    {
+      "path": "docs/releases/0.1.0-alpha.1.md",
+      "depth": "full",
+      "summary": "알파 배포물 안내 전문. 태그/첨부/공개 검증의 현재 사실은 별도 확인 필요; 새로고침 초안 미지원은 현재 코드와 불일치",
+      "concerns": [
+        "H1:22/28 현재 sessionStorage reload 복구와 memory-only 문구 불일치; 실제 태그 기준은 확정 후 갱신"
+      ],
+      "reviewer": "historical-review",
+      "gitBlob": "2709e756305855789168eafe4b445ea6545e41a9",
+      "bytes": 4712,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/releases/0.1.0-alpha.1.md",
+      "finalReviewRequiredReference": "report.md / validation.md",
+      "finalDisposition": "see_report_and_validation_for_scope_and_counterevidence"
+    },
+    {
+      "path": "docs/releasing.md",
+      "depth": "full",
+      "summary": "현재 안내·예제 전문 확인, 실제 코드·운영 실행과 계약 대조",
+      "concerns": [],
+      "reviewer": "root-review",
+      "gitBlob": "0d5fde8c39d0101ab2602deab62f72e8b5c594fa",
+      "bytes": 12905,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/releasing.md"
+    },
+    {
+      "path": "docs/review-guide.en.md",
+      "depth": "full",
+      "summary": "전체 원문 확인: 현재 사용 계약·지원 범위·구현 일치 및 과거 결정 상태 검토",
+      "concerns": [],
+      "reviewer": "root-review",
+      "gitBlob": "64770de8d82efdfa21883887b965e67c94ac1e81",
+      "bytes": 6173,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/review-guide.en.md"
+    },
+    {
+      "path": "docs/review-improvement-plan-2026-09-07.md",
+      "depth": "full",
+      "summary": "0–4단계 기능/상태/알림/영속 접근/작업량/인수 계획 전문, 다수 이미 구현됨",
+      "concerns": [],
+      "reviewer": "historical-review",
+      "gitBlob": "d1c5c1f53c026d9ee60adc625abebcd26c7b3fa1",
+      "bytes": 36444,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/review-improvement-plan-2026-09-07.md"
+    },
+    {
+      "path": "docs/review-improvement-progress.md",
+      "depth": "full",
+      "summary": "통합 전 완료 기능·검사·DB p95의 좁은 범위·구현 선택 전문. 열린 inbox 갱신중지 의도 확인",
+      "concerns": [],
+      "reviewer": "historical-review",
+      "gitBlob": "cf77db48391228f25c42339eb2afbc821be2a060",
+      "bytes": 6866,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/review-improvement-progress.md"
+    },
+    {
+      "path": "docs/review-tunnel-plan.md",
+      "depth": "full",
+      "summary": "1177줄 공유 기반 기획 전문을 분할 읽음. 현재 구현·과거 정책·미래 후보 혼재; REVIEWER 단독 문구와 요소 anchor 미래 후보는 현재와 불일치",
+      "concerns": [
+        "H3:909/1103 REVIEWER 단독 정책 문구가 DEVELOPER 또는 REVIEWER 구현과 다름",
+        "H3:1126 data-review-id anchor는 이미 구현되어 미래 후보로 재제안 불필요"
+      ],
+      "reviewer": "historical-review",
+      "gitBlob": "0b352f072380ac0ce86f3cf54f19ee19830ae60c",
+      "bytes": 131545,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/review-tunnel-plan.md",
+      "finalReviewRequiredReference": "report.md / validation.md",
+      "finalDisposition": "see_report_and_validation_for_scope_and_counterevidence"
+    },
+    {
+      "path": "docs/roadmap.md",
+      "depth": "full",
+      "summary": "전체 원문 확인: 현재 사용 계약·지원 범위·구현 일치 및 과거 결정 상태 검토",
+      "concerns": [],
+      "reviewer": "root-review",
+      "gitBlob": "f89839d6316847ca2864299abe02154ac82c967b",
+      "bytes": 3820,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/roadmap.md"
+    },
+    {
+      "path": "docs/upgrading.en.md",
+      "depth": "full",
+      "summary": "현재 안내·예제 전문 확인, 실제 코드·운영 실행과 계약 대조",
+      "concerns": [],
+      "reviewer": "root-review",
+      "gitBlob": "766f988182147bd51b36106b161422fdb6f5c8e2",
+      "bytes": 8953,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/upgrading.en.md"
+    },
+    {
+      "path": "docs/upgrading.md",
+      "depth": "full",
+      "summary": "현재 안내·예제 전문 확인, 실제 코드·운영 실행과 계약 대조",
+      "concerns": [],
+      "reviewer": "root-review",
+      "gitBlob": "93155b44e0aa9e152331bbc0287ec7ef7c98a685",
+      "bytes": 9109,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/upgrading.md"
+    },
+    {
+      "path": "docs/validation/2026-09-06-public-https.json",
+      "depth": "full",
+      "summary": "2026-09-06 공유/인증 HTTPS 결과. Node24.12/PG17.6/Next16.3.2. 통합 리뷰·현재 HEAD·CDN·load/restore/재부팅 증거 아님.",
+      "concerns": [],
+      "reviewer": "validationdocs-review",
+      "gitBlob": "ac09d98130c5ac3c2f90812d4ba04a35ae9d71c6",
+      "bytes": 2197,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/validation/2026-09-06-public-https.json"
+    },
+    {
+      "path": "docs/validation/2026-09-07-local.json",
+      "depth": "full",
+      "summary": "e41541c 당시 미커밋 트리 local411 unique 검사. PG17개는 app349에 포함. 현재 테스트 수/원격배포 증거로 재사용 금지.",
+      "concerns": [],
+      "reviewer": "validationdocs-review",
+      "gitBlob": "51d5a74a6058ca9f505a8d8942f67437a5a50dcb",
+      "bytes": 1560,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/validation/2026-09-07-local.json"
+    },
+    {
+      "path": "docs/validation/candidate-images-2026-09-09.md",
+      "depth": "full",
+      "summary": "509667e 초기private candidate 및 PG17.6. e3b7826 refreshed candidate로 대체됨. full restore/notice 후속완료와 구별.",
+      "concerns": [],
+      "reviewer": "validationdocs-review",
+      "gitBlob": "aba7e61988aafffdfb7bf7f68f2b9f0111411612",
+      "bytes": 4116,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/validation/candidate-images-2026-09-09.md"
+    },
+    {
+      "path": "docs/validation/candidate-refresh-2026-09-09.md",
+      "depth": "full",
+      "summary": "e3b7826 PG17.11 private candidate456검사. production 미배포. 별도개발서버/DNS/TLS 요청 철회 명시. old-image compatibility 미검증.",
+      "concerns": [],
+      "reviewer": "validationdocs-review",
+      "gitBlob": "271ef5e21f6ab07359e183bf5ec0c4cf0b440a67",
+      "bytes": 4432,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/validation/candidate-refresh-2026-09-09.md"
+    },
+    {
+      "path": "docs/validation/client-package-2026-09-09.md",
+      "depth": "full",
+      "summary": "70035ee/a339774 client offline package·PTY·reconnect 검증 완료. 당시0.1.0 값과 이후alpha version구별. 현재아카이브 배포사실 아님.",
+      "concerns": [],
+      "reviewer": "validationdocs-review",
+      "gitBlob": "5d0b32870e170ab6c6071d837712fc452efd11a2",
+      "bytes": 4330,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/validation/client-package-2026-09-09.md"
+    },
+    {
+      "path": "docs/validation/database-restore-2026-09-09.md",
+      "depth": "full",
+      "summary": "f62050b 초기/macOS host source와95820ae Linuximage restoration 구별.24table2sequence8check. oldimage/new schema 미검증. 추가DNS요구는 후속철회됨.",
+      "concerns": [],
+      "reviewer": "validationdocs-review",
+      "gitBlob": "52ee970e1a480c0418910b58f3902527b7882396",
+      "bytes": 5256,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/validation/database-restore-2026-09-09.md"
+    },
+    {
+      "path": "docs/validation/implementation-2026-09-07.md",
+      "depth": "full",
+      "summary": "명시적 과거기록.328/329/285 및51/48 등 서로다른시점 결과. 현재poc-status 참조. 미지원범위/외부인수와 구현완료 구분.",
+      "concerns": [],
+      "reviewer": "validationdocs-review",
+      "gitBlob": "1c4067d7ec6e0e281a05ba74a4463063b2415551",
+      "bytes": 14055,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/validation/implementation-2026-09-07.md"
+    },
+    {
+      "path": "docs/validation/local-demo-2026-09-09.md",
+      "depth": "full",
+      "summary": "d67d097 실제runner/2actor/persistence/cleanup macOS/Linux완료. 외부client/restore 필요 문구는 후속문서에서 완료됨.9.6초는cached synthetic측정.",
+      "concerns": [],
+      "reviewer": "validationdocs-review",
+      "gitBlob": "df6500b7ac3d54612873455041e0b0103f36fd25",
+      "bytes": 6384,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/validation/local-demo-2026-09-09.md"
+    },
+    {
+      "path": "docs/validation/local-demo-probe-2026-09-09.md",
+      "depth": "full",
+      "summary": "초기feasibility의runner 미완료 문구는 local-demo 후속완료로 대체. Control port/API/metric ordering사례 역사증거.",
+      "concerns": [],
+      "reviewer": "validationdocs-review",
+      "gitBlob": "2fcd83d5650bcc7ee98eacb90169032feeb34a53",
+      "bytes": 4068,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/validation/local-demo-probe-2026-09-09.md"
+    },
+    {
+      "path": "docs/validation/open-source-preflight-2026-09-09.md",
+      "depth": "full",
+      "summary": "0f00fe6/41e9570 공개전검토.과거metadata/log공개위험은 별도승인사항. standalone package/visibility초기공백은후속완료; 현재remote visibility단정불가.",
+      "concerns": [],
+      "reviewer": "validationdocs-review",
+      "gitBlob": "35f37a8009d6e55a0adcc42948be031baa9349e4",
+      "bytes": 6085,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/validation/open-source-preflight-2026-09-09.md"
+    },
+    {
+      "path": "docs/validation/public-https-2026-09-06.md",
+      "depth": "full",
+      "summary": "공유기반 이전 HTTPS 검증, 통합review/overlay/SSE 포함 아님을명시. 서비스제공/운영인증 근거로확대금지.",
+      "concerns": [],
+      "reviewer": "validationdocs-review",
+      "gitBlob": "620d1b8ccb0eb7aae09645d6802ef21808ca9c5a",
+      "bytes": 4014,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/validation/public-https-2026-09-06.md"
+    },
+    {
+      "path": "docs/validation/release-files-2026-09-09.md",
+      "depth": "full",
+      "summary": "1823216b 당시8파일macOS/Linuxbyte동일. 일반재현성/출처인증보장아님.후속refresh는새payload이므로구분.",
+      "concerns": [],
+      "reviewer": "validationdocs-review",
+      "gitBlob": "346588c77f53745b4a0690fea2d6870f56b8a703",
+      "bytes": 1771,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/validation/release-files-2026-09-09.md"
+    },
+    {
+      "path": "docs/validation/reliability-fixes-2026-09-21.md",
+      "depth": "full",
+      "summary": "5bfb322기준F01–F08 수정과local485검증.원격/운영성공주장없음.F06 worker서버갱신필요명시.현재실패와일치.원래수정다시미완료분류금지.",
+      "concerns": [],
+      "reviewer": "validationdocs-review",
+      "gitBlob": "24080d9367df4fc070691fcc19278b08b99868bf",
+      "bytes": 10200,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/validation/reliability-fixes-2026-09-21.md"
+    },
+    {
+      "path": "docs/validation/runtime-notices-2026-09-09.md",
+      "depth": "full",
+      "summary": "95820ae+변경/e3b7826실제license inventory.당시Node24.20·27npm/88/144OS.현재patch/CVE/법적인증아님.현재Dockerfile수정존재확인.",
+      "concerns": [],
+      "reviewer": "validationdocs-review",
+      "gitBlob": "a0d4dd34088c4235849c7a5799fc78e028c3ba02",
+      "bytes": 4399,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/docs/validation/runtime-notices-2026-09-09.md"
+    },
+    {
+      "path": "examples/vite-review/README.md",
+      "depth": "full",
+      "summary": "현재 안내·예제 전문 확인, 실제 코드·운영 실행과 계약 대조",
+      "concerns": [],
+      "reviewer": "root-review",
+      "gitBlob": "169faceb298d41808cbd2ffd135bd99082b4c8c2",
+      "bytes": 1104,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/examples/vite-review/README.md"
+    },
+    {
+      "path": "examples/vite-review/index.html",
+      "depth": "full",
+      "summary": "현재 안내·예제 전문 확인, 실제 코드·운영 실행과 계약 대조",
+      "concerns": [],
+      "reviewer": "root-review",
+      "gitBlob": "cfaae2eb40a34c6f00f33acc928fc190d632cee9",
+      "bytes": 1561,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/examples/vite-review/index.html"
+    },
+    {
+      "path": "examples/vite-review/src/main.js",
+      "depth": "full",
+      "summary": "현재 안내·예제 전문 확인, 실제 코드·운영 실행과 계약 대조",
+      "concerns": [],
+      "reviewer": "root-review",
+      "gitBlob": "82016e6210beb0535dda38ac982aa5d65df113a6",
+      "bytes": 4992,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/examples/vite-review/src/main.js"
+    },
+    {
+      "path": "examples/vite-review/src/style.css",
+      "depth": "full",
+      "summary": "현재 안내·예제 전문 확인, 실제 코드·운영 실행과 계약 대조",
+      "concerns": [],
+      "reviewer": "root-review",
+      "gitBlob": "dddce555ce1c6a70f66b43f576b912bd0f590fb8",
+      "bytes": 6517,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/examples/vite-review/src/style.css"
+    },
+    {
+      "path": "examples/vite-review/vite.config.mjs",
+      "depth": "full",
+      "summary": "현재 안내·예제 전문 확인, 실제 코드·운영 실행과 계약 대조",
+      "concerns": [],
+      "reviewer": "root-review",
+      "gitBlob": "9333e0746936d4282ed208c06df25d6f9633c53a",
+      "bytes": 150,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/examples/vite-review/vite.config.mjs"
+    },
+    {
+      "path": "package-lock.json",
+      "depth": "generated-check",
+      "summary": "lockfile v3 전 항목 구조 확인; registry 외부 의존성 integrity 누락 없음. root162/runtime28 entry, runtime version/integrity/resolved 전부 root와 일치.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "b3fa17960a5bc67f36fbb342e387a2297d21252f",
+      "bytes": 78671,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/package-lock.json"
+    },
+    {
+      "path": "package.json",
+      "depth": "full",
+      "summary": "check/mvp/DB/framework/demo/restore/배포 artifact scripts 의존과 production/development dependency 구분 검토.",
+      "concerns": [
+        "OPS-3(유지보수 제안)"
+      ],
+      "reviewer": "operations-review",
+      "gitBlob": "58f61d5ef33a35cc747b95d4eabe380cd42dfb35",
+      "bytes": 3107,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/package.json",
+      "finalReviewRequiredReference": "report.md / validation.md",
+      "finalDisposition": "see_report_and_validation_for_scope_and_counterevidence"
+    },
+    {
+      "path": "packages/auth/package.json",
+      "depth": "metadata-check",
+      "summary": "패키지 이름/버전/private/ESM 및 직접 의존성 전문 확인",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "7a794a6f7223871f626d562161331d4f492e5b96",
+      "bytes": 174,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/auth/package.json"
+    },
+    {
+      "path": "packages/auth/src/argon2-password-hasher.ts",
+      "depth": "full",
+      "summary": "Argon2 해시 어댑터",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "8fec3422d4b6e6427e219438e31ee2d0b8cecab4",
+      "bytes": 512,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/auth/src/argon2-password-hasher.ts"
+    },
+    {
+      "path": "packages/auth/src/audit-policy.ts",
+      "depth": "full",
+      "summary": "감사 용량 한계 및 운영 예약 정책",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "d00defadf5c9e1739a840a1048d17387baa679c1",
+      "bytes": 965,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/auth/src/audit-policy.ts"
+    },
+    {
+      "path": "packages/auth/src/auth-error.ts",
+      "depth": "full",
+      "summary": "유형화된 인증 실패 코드",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "8b09d7420a84e380a2a06315007dfe6f8c1e0a02",
+      "bytes": 553,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/auth/src/auth-error.ts"
+    },
+    {
+      "path": "packages/auth/src/auth-service.test.ts",
+      "depth": "full",
+      "summary": "로그인·일회성 intent/exchange/carrier·HMAC rotation·관리자/계정 상태·비밀번호·폐기 정책; 기존 테스트의 관찰 가능한 계약 및 실패 경로 확인(재실행은 루트 검증 기록 참조)",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "a0793db0cf6a054b328163306dcdd106e25d887a",
+      "bytes": 61587,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/auth/src/auth-service.test.ts"
+    },
+    {
+      "path": "packages/auth/src/auth-service.ts",
+      "depth": "full",
+      "summary": "로그인·일회성 intent/exchange/carrier·HMAC rotation·관리자/계정 상태·비밀번호·폐기 정책",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "d8e86dd91b227103af9e9a389c5d662d7e90be20",
+      "bytes": 32038,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/auth/src/auth-service.ts"
+    },
+    {
+      "path": "packages/auth/src/content-access-policy.test.ts",
+      "depth": "full",
+      "summary": "DEVELOPER/REVIEWER 접근과 ADMIN 단독 거부 정책; 기존 테스트의 관찰 가능한 계약 및 실패 경로 확인(재실행은 루트 검증 기록 참조)",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "629d45fe86d1119a74b9dcb173c08ad6bf3afc0f",
+      "bytes": 445,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/auth/src/content-access-policy.test.ts"
+    },
+    {
+      "path": "packages/auth/src/in-memory-auth-repository.ts",
+      "depth": "full",
+      "summary": "메모리 인증 저장소·세션/토큰 용량·actor version·관리자 불변식",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "bfd48e6dfb6c44b2d1143c680c5eaf538c25ab5a",
+      "bytes": 17630,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/auth/src/in-memory-auth-repository.ts"
+    },
+    {
+      "path": "packages/auth/src/index.ts",
+      "depth": "full",
+      "summary": "공개 export 경계 전문 확인",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "a762af94d83c0fbbda649793597431800f963035",
+      "bytes": 290,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/auth/src/index.ts"
+    },
+    {
+      "path": "packages/auth/src/model.ts",
+      "depth": "full",
+      "summary": "도메인 자료형·저장소 포트 및 불변식 전문 검토",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "30e6e6d73bbd22e1ac4d6d06dc9e57a18e8d3075",
+      "bytes": 3295,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/auth/src/model.ts"
+    },
+    {
+      "path": "packages/auth/src/password-policy.ts",
+      "depth": "full",
+      "summary": "암호 입력과 임시 암호 정책",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "9e4c1a915818ca0f7c8f6adbb61417ba3f23ba5a",
+      "bytes": 1491,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/auth/src/password-policy.ts"
+    },
+    {
+      "path": "packages/auth/src/ports.ts",
+      "depth": "full",
+      "summary": "도메인 자료형·저장소 포트 및 불변식 전문 검토",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "bd75f75ab4b26dccff8a3ba750acfc0279b692d9",
+      "bytes": 4535,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/auth/src/ports.ts"
+    },
+    {
+      "path": "packages/cli-utils/package.json",
+      "depth": "metadata-check",
+      "summary": "패키지 이름/버전/private/ESM 및 직접 의존성 전문 확인",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "8f84afdb06a870f6aa713d79e1debe37415d368d",
+      "bytes": 130,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/cli-utils/package.json"
+    },
+    {
+      "path": "packages/cli-utils/src/secret-input.ts",
+      "depth": "full",
+      "summary": "TTY 비밀 입력과 stdin 경계/오류 복구",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "bb6728b6c800df059cc5db25168019dc81d9307c",
+      "bytes": 1923,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/cli-utils/src/secret-input.ts"
+    },
+    {
+      "path": "packages/operations/package.json",
+      "depth": "metadata-check",
+      "summary": "패키지 이름/버전/private/ESM 및 직접 의존성 전문 확인",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "de9aee1ca6765894b795acfa47dcd31b73bd1092",
+      "bytes": 131,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/operations/package.json"
+    },
+    {
+      "path": "packages/operations/src/index.ts",
+      "depth": "full",
+      "summary": "공개 export 경계 전문 확인",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "44adba38c1d47849b28d934280c524b606254480",
+      "bytes": 40,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/operations/src/index.ts"
+    },
+    {
+      "path": "packages/operations/src/operational-state.test.ts",
+      "depth": "full",
+      "summary": "배포 identity, canary/승인/kill switch 상태와 DB unavailable 캐시; 기존 테스트의 관찰 가능한 계약 및 실패 경로 확인(재실행은 루트 검증 기록 참조)",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "099383e37ad573b26e76fb0e45c0efd5b7e34e15",
+      "bytes": 2016,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/operations/src/operational-state.test.ts"
+    },
+    {
+      "path": "packages/operations/src/operational-state.ts",
+      "depth": "full",
+      "summary": "배포 identity, canary/승인/kill switch 상태와 DB unavailable 캐시",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "588f8fb05c8ff3234872284128fa1a0b61c1e42b",
+      "bytes": 3489,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/operations/src/operational-state.ts"
+    },
+    {
+      "path": "packages/protocol/package.json",
+      "depth": "full",
+      "summary": "전체 내용 정독: 공개 export/타입/manifest/빌드 설정/라이선스 또는 사용 문서의 해당 계약 확인.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "79101da895a473547c41969c771a581ce8f9d523",
+      "bytes": 160,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/protocol/package.json"
+    },
+    {
+      "path": "packages/protocol/src/envelope.test.ts",
+      "depth": "full",
+      "summary": "바이너리 왕복 변환과 길이, 버전, magic, type, stream ID, payload 크기, flags/reserved 및 payload 없는 프레임 계약을 검증한다.",
+      "concerns": [],
+      "testDeclarations": 8,
+      "execution": "이 하위 작업에서는 실행하지 않음",
+      "reviewer": "extra-tests-review",
+      "gitBlob": "66183e4dd3bdd770bd1435c9759025a3a2d4c5d5",
+      "bytes": 4867,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/protocol/src/envelope.test.ts"
+    },
+    {
+      "path": "packages/protocol/src/envelope.ts",
+      "depth": "full",
+      "summary": "magic/version/type/flags/length/stream ID/empty payload 검증.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "56a1c54537aa504add5f04b33693ae27077b183a",
+      "bytes": 5751,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/protocol/src/envelope.ts"
+    },
+    {
+      "path": "packages/protocol/src/http-metadata.test.ts",
+      "depth": "full",
+      "summary": "헤더 개수 255/256 허용과 257 거부, 인코더·디코더 일치, 상태 코드·CRLF, origin-form 경로, 원시 인코딩·반복 헤더를 검증한다.",
+      "concerns": [],
+      "testDeclarations": 5,
+      "execution": "이 하위 작업에서는 실행하지 않음",
+      "reviewer": "extra-tests-review",
+      "gitBlob": "63e50203f902509ecca747a1eecdd1236ccebb63",
+      "bytes": 3597,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/protocol/src/http-metadata.test.ts"
+    },
+    {
+      "path": "packages/protocol/src/http-metadata.ts",
+      "depth": "full",
+      "summary": "HTTP header/path, session-active, window-update decoder bounds.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "a3adfb5b32d1e2a7d89141d802d8f9a98ee4772c",
+      "bytes": 9013,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/protocol/src/http-metadata.ts"
+    },
+    {
+      "path": "packages/protocol/src/index.ts",
+      "depth": "full",
+      "summary": "전체 내용 정독: 공개 export/타입/manifest/빌드 설정/라이선스 또는 사용 문서의 해당 계약 확인.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "8ed35247e5219a7670310a9b4040db28a5c6bc09",
+      "bytes": 177,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/protocol/src/index.ts"
+    },
+    {
+      "path": "packages/protocol/src/session-config.test.ts",
+      "depth": "full",
+      "summary": "설정의 정규 바이트와 digest 일치, snapshot 변조 및 0 window 거부를 검증한다.",
+      "concerns": [],
+      "testDeclarations": 2,
+      "execution": "이 하위 작업에서는 실행하지 않음",
+      "reviewer": "extra-tests-review",
+      "gitBlob": "bde38e739a9ae837d0940148d9473e12350f8ed1",
+      "bytes": 2404,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/protocol/src/session-config.test.ts"
+    },
+    {
+      "path": "packages/protocol/src/session-config.ts",
+      "depth": "full",
+      "summary": "전체 정독: canonical digest, 정책/limit bounds, provision/config/probe/error decoder.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "fa6c6858018bf8ff9234f90e1bf4235e8c9f213b",
+      "bytes": 15171,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/protocol/src/session-config.ts"
+    },
+    {
+      "path": "packages/protocol/src/session-policy.test.ts",
+      "depth": "full",
+      "summary": "TTL·idle·resume 기본값, 활성 stream의 deadline, resume 정확한 경계와 1ms 초과를 검증한다.",
+      "concerns": [],
+      "testDeclarations": 4,
+      "execution": "이 하위 작업에서는 실행하지 않음",
+      "reviewer": "extra-tests-review",
+      "gitBlob": "94e40a1edf5a1aaca1ae3e03ccdef8d94cf5df98",
+      "bytes": 1476,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/protocol/src/session-policy.test.ts"
+    },
+    {
+      "path": "packages/protocol/src/session-policy.ts",
+      "depth": "full",
+      "summary": "TTL/idle/reconnect deadline 순수 정책.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "4cbdef42eb4860ddc762cb4af642da188843b4b6",
+      "bytes": 1122,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/protocol/src/session-policy.ts"
+    },
+    {
+      "path": "packages/protocol/src/session-state.test.ts",
+      "depth": "full",
+      "summary": "활성화·연결 손실·resume 시도 구분, generation, TTL 보존, idle/max/reconnect deadline 우선순위 및 CLOSE 사유를 검증한다.",
+      "concerns": [],
+      "testDeclarations": 12,
+      "execution": "이 하위 작업에서는 실행하지 않음",
+      "reviewer": "extra-tests-review",
+      "gitBlob": "1b75aacab486bf25514f87b74bc9f87771139e0d",
+      "bytes": 7596,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/protocol/src/session-state.test.ts"
+    },
+    {
+      "path": "packages/protocol/src/session-state.ts",
+      "depth": "full",
+      "summary": "상태 전이, candidate attempt guard, generation 증가, 만료 우선순위.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "d9ccecbc95e5fc42b99978857f14ed3fde242983",
+      "bytes": 6701,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/protocol/src/session-state.ts"
+    },
+    {
+      "path": "packages/proxy/package.json",
+      "depth": "full",
+      "summary": "전체 내용 정독: 공개 export/타입/manifest/빌드 설정/라이선스 또는 사용 문서의 해당 계약 확인.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "b8ba74162a53d0665c3f812f2a163460753061dc",
+      "bytes": 229,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/proxy/package.json"
+    },
+    {
+      "path": "packages/proxy/src/header-policy.test.ts",
+      "depth": "full",
+      "summary": "hop-by-hop 헤더 제거, 예약 자격증명 제거, 앱 자격증명 보존, 반복 Set-Cookie, prototype와 유사한 헤더 이름을 검증한다.",
+      "concerns": [],
+      "testDeclarations": 4,
+      "execution": "이 하위 작업에서는 실행하지 않음",
+      "reviewer": "extra-tests-review",
+      "gitBlob": "6adfb76caf86fa33bd93c01ac58e92c87cb4181c",
+      "bytes": 2188,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/proxy/src/header-policy.test.ts"
+    },
+    {
+      "path": "packages/proxy/src/header-policy.ts",
+      "depth": "full",
+      "summary": "hop-by-hop/Connection 지명 header 제거, credential 격리, null-prototype header map.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "27846c66b33895c627e3e2b3b15d96412ecdd8f5",
+      "bytes": 2706,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/proxy/src/header-policy.ts"
+    },
+    {
+      "path": "packages/proxy/src/index.ts",
+      "depth": "full",
+      "summary": "전체 내용 정독: 공개 export/타입/manifest/빌드 설정/라이선스 또는 사용 문서의 해당 계약 확인.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "5cc2f1d7dadea822b973ae61c5fb4745a2aeaf01",
+      "bytes": 76,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/proxy/src/index.ts"
+    },
+    {
+      "path": "packages/proxy/src/projection-policy.test.ts",
+      "depth": "full",
+      "summary": "로컬·공개 origin 투영, 신뢰하지 않는 forwarding 제거, proxy 헤더 재생성, redirect·cookie 정책을 검증한다.",
+      "concerns": [],
+      "testDeclarations": 4,
+      "execution": "이 하위 작업에서는 실행하지 않음",
+      "reviewer": "extra-tests-review",
+      "gitBlob": "1f1972b2274650fa48cfbefd7ed635987306e435",
+      "bytes": 4151,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/proxy/src/projection-policy.test.ts"
+    },
+    {
+      "path": "packages/proxy/src/projection-policy.ts",
+      "depth": "full",
+      "summary": "request origin projection, forwarding 제거, redirect/cookie projection.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "16b4caa4c094f66b74698f94dd891d74de85d48f",
+      "bytes": 6570,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/proxy/src/projection-policy.ts"
+    },
+    {
+      "path": "packages/relay/package.json",
+      "depth": "full",
+      "summary": "전체 내용 정독: 공개 export/타입/manifest/빌드 설정/라이선스 또는 사용 문서의 해당 계약 확인.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "44d71bcaf5e7c1d8df2916ca53aa1eac883da084",
+      "bytes": 229,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/relay/package.json"
+    },
+    {
+      "path": "packages/relay/src/carrier.test.ts",
+      "depth": "full",
+      "summary": "mock socket으로 닫힌 carrier 및 대기 바이트 상한 초과를 send 이전에 거부함을 검증한다. 이 파일 자체는 정상 네트워크 전송 통합 테스트가 아니다.",
+      "concerns": [],
+      "testDeclarations": 1,
+      "execution": "이 하위 작업에서는 실행하지 않음",
+      "reviewer": "extra-tests-review",
+      "gitBlob": "6aba66623ab0874a4aaa4a9bb941dfeb43bc7634",
+      "bytes": 865,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/relay/src/carrier.test.ts"
+    },
+    {
+      "path": "packages/relay/src/carrier.ts",
+      "depth": "full",
+      "summary": "1MiB carrier buffer 상한, 32KiB chunk, flow-controlled send.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "34c86b83e52fb5aaddf5a947ed34ba2a91031d5c",
+      "bytes": 1997,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/relay/src/carrier.ts"
+    },
+    {
+      "path": "packages/relay/src/flow-window.test.ts",
+      "depth": "full",
+      "summary": "credit 최솟값, 대기·갱신, 과도한 credit 거부, reset 환급과 대기 취소, 다른 stream 진행 보존을 검증한다.",
+      "concerns": [],
+      "testDeclarations": 5,
+      "execution": "이 하위 작업에서는 실행하지 않음",
+      "reviewer": "extra-tests-review",
+      "gitBlob": "066b45cf19e04f6a4f8f4190a4234b5fc19978a2",
+      "bytes": 2370,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/relay/src/flow-window.test.ts"
+    },
+    {
+      "path": "packages/relay/src/flow-window.ts",
+      "depth": "full",
+      "summary": "outstanding 초과 update 거부, credit 복구, waiter cancellation과 다른 stream 진행.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "55a1ef5eb7b56991455a2d07ea17e3f0ebeeb179",
+      "bytes": 4135,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/relay/src/flow-window.ts"
+    },
+    {
+      "path": "packages/relay/src/index.ts",
+      "depth": "full",
+      "summary": "전체 내용 정독: 공개 export/타입/manifest/빌드 설정/라이선스 또는 사용 문서의 해당 계약 확인.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "c7263f916fd6e81807b2febd17ec785bfb224dd1",
+      "bytes": 106,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/relay/src/index.ts"
+    },
+    {
+      "path": "packages/relay/src/retired-data-budget.test.ts",
+      "depth": "full",
+      "summary": "로컬 reset 후 허용량, stream 및 누적 수명 byte/frame 상한, 오래된 미사용 허용량 제거를 검증한다.",
+      "concerns": [],
+      "testDeclarations": 3,
+      "execution": "이 하위 작업에서는 실행하지 않음",
+      "reviewer": "extra-tests-review",
+      "gitBlob": "310527eaf2f9873cf2da8acb2bdd73038870ed7f",
+      "bytes": 1238,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/relay/src/retired-data-budget.test.ts"
+    },
+    {
+      "path": "packages/relay/src/retired-data-budget.ts",
+      "depth": "full",
+      "summary": "connection lifetime byte/frame 예산, tracked stream 상한. 반복 취소 가용성은 미검증.",
+      "concerns": [],
+      "reviewer": "transport-review",
+      "gitBlob": "86a2151f531f5c76fb557bf67c996151a2c640bf",
+      "bytes": 2648,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/relay/src/retired-data-budget.ts"
+    },
+    {
+      "path": "packages/review/package.json",
+      "depth": "metadata-check",
+      "summary": "패키지 이름/버전/private/ESM 및 직접 의존성 전문 확인",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "d083ee26410d816aac90f363bd1d33609a09e3ea",
+      "bytes": 127,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/review/package.json"
+    },
+    {
+      "path": "packages/review/src/content-mutation-policy.test.ts",
+      "depth": "full",
+      "summary": "작성자 수정·관리자 삭제·상태/버전 충돌 우선순위 순수 정책; 기존 테스트의 관찰 가능한 계약 및 실패 경로 확인(재실행은 루트 검증 기록 참조)",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "f8c9823aec305a8a2e25f62e5afc78d5e24c37ff",
+      "bytes": 1718,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/review/src/content-mutation-policy.test.ts"
+    },
+    {
+      "path": "packages/review/src/content-mutation-policy.ts",
+      "depth": "full",
+      "summary": "작성자 수정·관리자 삭제·상태/버전 충돌 우선순위 순수 정책",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "ea53ec1cd84ded8aa35246bc6fbc749ae13223eb",
+      "bytes": 1009,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/review/src/content-mutation-policy.ts"
+    },
+    {
+      "path": "packages/review/src/in-memory-review-repository.ts",
+      "depth": "full",
+      "summary": "메모리 리뷰·pin·workflow·notification·event 및 keyset 동작",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "bf07b5310c98591505b041e9090adff0b7f8edec",
+      "bytes": 28110,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/review/src/in-memory-review-repository.ts"
+    },
+    {
+      "path": "packages/review/src/index.ts",
+      "depth": "full",
+      "summary": "공개 export 경계 전문 확인",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "334f7d53ee712df048778838a90aae8718343990",
+      "bytes": 189,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/review/src/index.ts"
+    },
+    {
+      "path": "packages/review/src/model.ts",
+      "depth": "full",
+      "summary": "도메인 자료형·저장소 포트 및 불변식 전문 검토",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "b48016ebddfbc062ba35efd3e99eae99c44d6626",
+      "bytes": 17136,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/review/src/model.ts"
+    },
+    {
+      "path": "packages/review/src/ports.ts",
+      "depth": "full",
+      "summary": "도메인 자료형·저장소 포트 및 불변식 전문 검토",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "36a10fff7d7a0ca0b7cbedabe5d780454de74d29",
+      "bytes": 8261,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/review/src/ports.ts"
+    },
+    {
+      "path": "packages/review/src/review-service.ts",
+      "depth": "full",
+      "summary": "도메인 입력·권한·workflow·페이지네이션 scope·영속 리뷰 조합",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "05aac65a9cd17ea86da2400347655cacc4c33267",
+      "bytes": 31470,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/review/src/review-service.ts"
+    },
+    {
+      "path": "packages/review/src/review.test.ts",
+      "depth": "full",
+      "summary": "리뷰 모델·서비스의 workflow ABA/권한/페이지 경계·알림·핀 회귀 검증; 기존 테스트의 관찰 가능한 계약 및 실패 경로 확인(재실행은 루트 검증 기록 참조)",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "ef961eb2fd14b5d704a32a7579b26811d91e63af",
+      "bytes": 40272,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/review/src/review.test.ts"
+    },
+    {
+      "path": "packages/storage-postgres/package.json",
+      "depth": "metadata-check",
+      "summary": "패키지 이름/버전/private/ESM 및 직접 의존성 전문 확인",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "8f7e57af56185aad9ed404ac96c1935e44892040",
+      "bytes": 322,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/storage-postgres/package.json"
+    },
+    {
+      "path": "packages/storage-postgres/src/bounded-audit-writer.ts",
+      "depth": "full",
+      "summary": "감사 카운터·운영 예약과 트랜잭션 원자성",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "15cba387dda546dfd870aef599a1fa8483ec45f8",
+      "bytes": 1658,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/storage-postgres/src/bounded-audit-writer.ts"
+    },
+    {
+      "path": "packages/storage-postgres/src/capacity-locks.ts",
+      "depth": "full",
+      "summary": "감사/로그인 throttle advisory lock 식별자",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "dd2b9080870cb3e304dfa649644c772cd07f6e2f",
+      "bytes": 121,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/storage-postgres/src/capacity-locks.ts"
+    },
+    {
+      "path": "packages/storage-postgres/src/fixtures/review-schema-github-18.sql",
+      "depth": "full",
+      "summary": "보존된 과거 스키마 SQL 전문 확인; 현재 migration과 비교 및 기존 DB upgrade 통합 테스트 연결",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "7b8c18fd983600ee6b3b419cd980ad6d1c1302a5",
+      "bytes": 17153,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/storage-postgres/src/fixtures/review-schema-github-18.sql"
+    },
+    {
+      "path": "packages/storage-postgres/src/fixtures/review-schema-local-20.sql",
+      "depth": "full",
+      "summary": "보존된 과거 스키마 SQL 전문 확인; 현재 migration과 비교 및 기존 DB upgrade 통합 테스트 연결",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "390d135ea036cb933d874a3ebd352cb97e560247",
+      "bytes": 19001,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/storage-postgres/src/fixtures/review-schema-local-20.sql"
+    },
+    {
+      "path": "packages/storage-postgres/src/index.ts",
+      "depth": "full",
+      "summary": "공개 export 경계 전문 확인",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "af6134103329e5d74a08672ed5717a0478959a83",
+      "bytes": 221,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/storage-postgres/src/index.ts"
+    },
+    {
+      "path": "packages/storage-postgres/src/postgres-auth-repository.integration.test.ts",
+      "depth": "full",
+      "summary": "도메인 자료형·저장소 포트 및 불변식 전문 검토; 기존 테스트의 관찰 가능한 계약 및 실패 경로 확인(재실행은 루트 검증 기록 참조)",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "ebb6e68de0c4d3e4cb7089296c43555756edbd47",
+      "bytes": 36033,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/storage-postgres/src/postgres-auth-repository.integration.test.ts"
+    },
+    {
+      "path": "packages/storage-postgres/src/postgres-auth-repository.ts",
+      "depth": "full",
+      "summary": "SQL 인증 저장소·actor row lock·마지막 관리자 직렬화·원자적 소비·용량 감사",
+      "concerns": [
+        "D2: ROLLBACK 실패가 최초 오류를 덮으며 client.release()에서 명시적 폐기하지 않음"
+      ],
+      "reviewer": "domain-review",
+      "gitBlob": "e9f53ec0d8ffa6a02e73f1357fd729786be2fc3d",
+      "bytes": 33281,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/storage-postgres/src/postgres-auth-repository.ts",
+      "finalReviewRequiredReference": "report.md / validation.md",
+      "finalDisposition": "see_report_and_validation_for_scope_and_counterevidence"
+    },
+    {
+      "path": "packages/storage-postgres/src/postgres-operational-state-repository.ts",
+      "depth": "full",
+      "summary": "관리자 actor 재검증 및 영속 canary/admission/kill switch 감사 트랜잭션",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "0eb8248bc2fb1f0780b1a784b2c1dc32f45146dd",
+      "bytes": 8775,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/storage-postgres/src/postgres-operational-state-repository.ts"
+    },
+    {
+      "path": "packages/storage-postgres/src/postgres-review-repository.integration.test.ts",
+      "depth": "full",
+      "summary": "도메인 자료형·저장소 포트 및 불변식 전문 검토; 기존 테스트의 관찰 가능한 계약 및 실패 경로 확인(재실행은 루트 검증 기록 참조)",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "057c1daff99522b325614eb390265bb0dc1ff2c9",
+      "bytes": 51783,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/storage-postgres/src/postgres-review-repository.integration.test.ts"
+    },
+    {
+      "path": "packages/storage-postgres/src/postgres-review-repository.ts",
+      "depth": "full",
+      "summary": "행/advisory lock·snapshot 페이지·핀 번호·workflow CAS·이벤트/알림 원자성",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "43a79d597d7c419b866e7be06720ad0b799fd41a",
+      "bytes": 70476,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/storage-postgres/src/postgres-review-repository.ts"
+    },
+    {
+      "path": "packages/storage-postgres/src/postgres-transaction.test.ts",
+      "depth": "full",
+      "summary": "단일 client BEGIN/COMMIT/ROLLBACK/release 및 read-only snapshot; 기존 테스트의 관찰 가능한 계약 및 실패 경로 확인(재실행은 루트 검증 기록 참조)",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "44e5e8cda5d3864b0d943436313ae74209e4252f",
+      "bytes": 1470,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/storage-postgres/src/postgres-transaction.test.ts"
+    },
+    {
+      "path": "packages/storage-postgres/src/postgres-transaction.ts",
+      "depth": "full",
+      "summary": "단일 client BEGIN/COMMIT/ROLLBACK/release 및 read-only snapshot",
+      "concerns": [
+        "D2: ROLLBACK 실패가 최초 오류를 덮으며 client.release()에서 명시적 폐기하지 않음"
+      ],
+      "reviewer": "domain-review",
+      "gitBlob": "bb51f9cdd6df63c766d7e7a83b0f6ad5d5b56035",
+      "bytes": 644,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/storage-postgres/src/postgres-transaction.ts",
+      "finalReviewRequiredReference": "report.md / validation.md",
+      "finalDisposition": "see_report_and_validation_for_scope_and_counterevidence"
+    },
+    {
+      "path": "packages/storage-postgres/src/review-event-transaction.ts",
+      "depth": "full",
+      "summary": "feed별 트랜잭션 advisory lock으로 이벤트 커밋 순서 보존",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "5f7a002b0a2757dcfb51b81b89c5f48eca25efba",
+      "bytes": 781,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/storage-postgres/src/review-event-transaction.ts"
+    },
+    {
+      "path": "packages/storage-postgres/src/review-schema.test.ts",
+      "depth": "full",
+      "summary": "리뷰 제약/인덱스·legacy 버전 충돌과 retention/workflow 통합 마이그레이션; 기존 테스트의 관찰 가능한 계약 및 실패 경로 확인(재실행은 루트 검증 기록 참조)",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "81db0edf6cf12a3f0c74da0839c0ab77f1274f1c",
+      "bytes": 3365,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/storage-postgres/src/review-schema.test.ts"
+    },
+    {
+      "path": "packages/storage-postgres/src/review-schema.ts",
+      "depth": "full",
+      "summary": "리뷰 제약/인덱스·legacy 버전 충돌과 retention/workflow 통합 마이그레이션",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "694cf816ad22291b8407b0ba5a060ea9dddd0290",
+      "bytes": 20217,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/storage-postgres/src/review-schema.ts"
+    },
+    {
+      "path": "packages/storage-postgres/src/schema.test.ts",
+      "depth": "full",
+      "summary": "인증/운영 테이블 제약 및 카운터 마이그레이션; 기존 테스트의 관찰 가능한 계약 및 실패 경로 확인(재실행은 루트 검증 기록 참조)",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "134a2f9b5506143cc7b1b0b50a3263ac9076b5fa",
+      "bytes": 1694,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/storage-postgres/src/schema.test.ts"
+    },
+    {
+      "path": "packages/storage-postgres/src/schema.ts",
+      "depth": "full",
+      "summary": "인증/운영 테이블 제약 및 카운터 마이그레이션",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "c9cce67e525b645fef8575addcc6e8dc124c455d",
+      "bytes": 6621,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/packages/storage-postgres/src/schema.ts"
+    },
+    {
+      "path": "scripts/build-review-ui.mjs",
+      "depth": "full",
+      "summary": "단일 IIFE 생성·serialized TS 출력과 --check stale 검증 검토.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "3116c0838c5a64749aab81056bf33440516d887e",
+      "bytes": 1451,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/build-review-ui.mjs"
+    },
+    {
+      "path": "scripts/canary-origin.mjs",
+      "depth": "full",
+      "summary": "loopback HTTP·SSE·upload streaming·WS echo와 종료 경로 검토.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "2e1a5b91a40c591132502604d724c897e1248add",
+      "bytes": 2780,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/canary-origin.mjs"
+    },
+    {
+      "path": "scripts/canary-policy.mjs",
+      "depth": "full",
+      "summary": "요청 deadline·incremental bounded SSE·WebSocket timeout cleanup 검토.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "9926243c8c9e9613a8a4101ef6ffbf833c5a1a6c",
+      "bytes": 3522,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/canary-policy.mjs"
+    },
+    {
+      "path": "scripts/canary-policy.test.mjs",
+      "depth": "full",
+      "summary": "SSE 분할/초과·HTTP deadline/caller abort·WS terminate cleanup 테스트 전체 읽음; 구현과 대조.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "2ad818d8af863d46eb1baab4bf810ac166a924f2",
+      "bytes": 3172,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/canary-policy.test.mjs"
+    },
+    {
+      "path": "scripts/candidate-images.mjs",
+      "depth": "full",
+      "summary": "manual context·package owner/source/visibility·no-overwrite·build smoke·push/pull digest·record 검사 검토.",
+      "concerns": [
+        "OPS-1"
+      ],
+      "reviewer": "operations-review",
+      "gitBlob": "2bc3b7918a9be51c13d4e924bcd1ab14ad40d10d",
+      "bytes": 8214,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/candidate-images.mjs",
+      "finalReviewRequiredReference": "report.md / validation.md",
+      "finalDisposition": "see_report_and_validation_for_scope_and_counterevidence"
+    },
+    {
+      "path": "scripts/candidate-images.test.mjs",
+      "depth": "full",
+      "summary": "명시적 input·destination 사전검증·push 전후 smoke/digest·source/권한 실패 테스트 전체 읽음; 구현과 대조.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "ae388f581a812ec62b2999db09a151d224118489",
+      "bytes": 5949,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/candidate-images.test.mjs"
+    },
+    {
+      "path": "scripts/check-boundaries-lib.mjs",
+      "depth": "full",
+      "summary": "TypeScript AST의 import/export/type/dynamic/require/createRequire 수집 및 workspace 해석 검토.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "8994f6db475011698195afcc3129545c78bc8368",
+      "bytes": 7080,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/check-boundaries-lib.mjs"
+    },
+    {
+      "path": "scripts/check-boundaries.mjs",
+      "depth": "full",
+      "summary": "앱/도메인/adapter 방향·4개 pure policy allowlist·위반 nonzero 검토.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "19600ec872b4f595c6b28c2eeb413619ca5fecb5",
+      "bytes": 5166,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/check-boundaries.mjs"
+    },
+    {
+      "path": "scripts/check-boundaries.test.mjs",
+      "depth": "full",
+      "summary": "TSX/type/CJS loader parsing·workspace alias·실제 CLI 위반·pure policy 테스트 전체 읽음; 구현과 대조.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "c7fccef33aa8c2141d49c55787060f73df103b69",
+      "bytes": 6330,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/check-boundaries.test.mjs"
+    },
+    {
+      "path": "scripts/check-release-version.mjs",
+      "depth": "full",
+      "summary": "root 상대 경로 version gate와 실패 반환 검토.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "dc156b22efe57faa81877a588d0b35f8f6002f53",
+      "bytes": 389,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/check-release-version.mjs"
+    },
+    {
+      "path": "scripts/ci-contract.test.mjs",
+      "depth": "full",
+      "summary": "CI 정적 gate/서비스/이미지 target·restore 순서·action SHA 계약 테스트 전체 읽음; 구현과 대조.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "046e3fa042f4a4d08f4c1975845222bca31303c3",
+      "bytes": 1827,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/ci-contract.test.mjs"
+    },
+    {
+      "path": "scripts/cli-help.test.mjs",
+      "depth": "full",
+      "summary": "DB 없이 Client/Admin 도움말 실행 테스트 전체 읽음; 구현과 대조.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "a8b588ad1fbbe7584ceaf4cb07ff53a48eaa6c1a",
+      "bytes": 930,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/cli-help.test.mjs"
+    },
+    {
+      "path": "scripts/client-package.mjs",
+      "depth": "full",
+      "summary": "Node24 단일 ESM·허용 module closure·ws 버전/번들·license·temp 정리 검토.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "d5a51c2f93e615a51cf00fc2ed3082f814ad6692",
+      "bytes": 5293,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/client-package.mjs"
+    },
+    {
+      "path": "scripts/client-package.test.mjs",
+      "depth": "full",
+      "summary": "외부 offline 설치·정확한 archive 목록/license·CLI 동작·TTY·덮어쓰기 거부 테스트 전체 읽음; 구현과 대조.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "0f4d038e73ec3dd9aab1f22486f641d531fe5915",
+      "bytes": 5380,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/client-package.test.mjs"
+    },
+    {
+      "path": "scripts/config-documentation.test.mjs",
+      "depth": "full",
+      "summary": "운영 설정 목록의 example env/문서 table·최초 시작 필수명령 계약 테스트 전체 읽음; 구현과 대조.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "4eacb5dbb5ccf32c779521833d9c331f9b5498d8",
+      "bytes": 3652,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/config-documentation.test.mjs"
+    },
+    {
+      "path": "scripts/demo-dns.test.mjs",
+      "depth": "full",
+      "summary": "demo namespace 한정·다른 DNS 위임·IPv6/all 테스트 전체 읽음; 구현과 대조.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "326309f6f7e98947c01c52a0f63250581eb0c712",
+      "bytes": 1649,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/demo-dns.test.mjs"
+    },
+    {
+      "path": "scripts/demo-lifecycle.test.mjs",
+      "depth": "full",
+      "summary": "reset 확인·remote Docker 거부·Docker 부재·port충돌 보존 테스트 전체 읽음; 구현과 대조.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "8011a0bf8f07942a53cac5a30d6e4175ef303064",
+      "bytes": 4396,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/demo-lifecycle.test.mjs"
+    },
+    {
+      "path": "scripts/demo-state.test.mjs",
+      "depth": "full",
+      "summary": "private 파일·credential/port 검증·unrelated state 보존·dead lock 회수·env 격리 테스트 전체 읽음; 구현과 대조.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "aafb6f1090be4af6d2d7fe46fa5d97b87b9c91c2",
+      "bytes": 3543,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/demo-state.test.mjs"
+    },
+    {
+      "path": "scripts/demo.mjs",
+      "depth": "full",
+      "summary": "초기화·local Docker 제한·계정복구·canary/admission·child/DB cleanup·reset 구분 검토.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "be1038523f44e32a17beb6807ddbf05acafd28e3",
+      "bytes": 12367,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/demo.mjs"
+    },
+    {
+      "path": "scripts/demo/bootstrap.mjs",
+      "depth": "full",
+      "summary": "DB instance identity·DDL/runtime role 분리·pending password 선저장·계정 재개 검토.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "ec821c6c4b22939d98ddf5cb95a0cd96c0d8d135",
+      "bytes": 5153,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/demo/bootstrap.mjs"
+    },
+    {
+      "path": "scripts/demo/loopback-dns.mjs",
+      "depth": "full",
+      "summary": "한정 localhost namespace만 resolver override·기타 위임 확인.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "32a221a5090d19930024aa6da6e9d246dab4c42c",
+      "bytes": 1267,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/demo/loopback-dns.mjs"
+    },
+    {
+      "path": "scripts/demo/processes.mjs",
+      "depth": "full",
+      "summary": "허용 환경·직접 spawn·출력 redaction·timeout/abort·SIGTERM→SIGKILL·port 예약 검토.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "c727ea721a644b95c5e785c532225f2258ad53ae",
+      "bytes": 4250,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/demo/processes.mjs"
+    },
+    {
+      "path": "scripts/demo/state.mjs",
+      "depth": "full",
+      "summary": "private state·atomic rename·config validation·dead PID lock 회수·argv/reset 계약 검토.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "0d261e40ce304ae1d287246e1e562dcdb6496664",
+      "bytes": 7097,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/demo/state.mjs"
+    },
+    {
+      "path": "scripts/deploy-over-ssh.py",
+      "depth": "full",
+      "summary": "SSH host key 고정·단기 token stdin·worker digest·secret 임시파일 권한 확인.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "0a4fa9fe982aff27e563b6e59244da3f0b8cbd20",
+      "bytes": 3368,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/deploy-over-ssh.py"
+    },
+    {
+      "path": "scripts/deploy_gateway.py",
+      "depth": "full",
+      "summary": "config/digest validation·lock·migration 순서·container ownership·rollback·timeout daemon cleanup 검토.",
+      "concerns": [
+        "OPS-2"
+      ],
+      "reviewer": "operations-review",
+      "gitBlob": "0a9c78049d9ee5af42ce579acf95a8dab1de8b99",
+      "bytes": 21962,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/deploy_gateway.py",
+      "finalReviewRequiredReference": "report.md / validation.md",
+      "finalDisposition": "see_report_and_validation_for_scope_and_counterevidence"
+    },
+    {
+      "path": "scripts/deployment.test.mjs",
+      "depth": "full",
+      "summary": "Python 제어흐름 실행 및 main/manual/production/SSH gate 정적 계약 테스트 전체 읽음; 구현과 대조.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "cc5e165216a12a9f0c1c9c6b7f039cdba7a197ac",
+      "bytes": 2907,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/deployment.test.mjs"
+    },
+    {
+      "path": "scripts/docker-contract.test.mjs",
+      "depth": "full",
+      "summary": "target·digest·runtime dependency 분리·transitive script copy closure 테스트 전체 읽음; 구현과 대조.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "c392b178486cc9ddabe58e01af15049b567d8545",
+      "bytes": 5797,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/docker-contract.test.mjs"
+    },
+    {
+      "path": "scripts/image-notices-probe.mjs",
+      "depth": "full",
+      "summary": "실제 설치 OS/npm 버전과 license hash·검토 예외 고정·출력 최소화 검토.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "8da9ed241347d766ce67d662367adbb6177b794c",
+      "bytes": 3844,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/image-notices-probe.mjs"
+    },
+    {
+      "path": "scripts/inspect-image-notices.mjs",
+      "depth": "full",
+      "summary": "exact local image Id 실행·source/license digest·6개 target inventory 검증 및 파일 wx 기록 검토.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "631e99706c488e9f3fa1f5f7554d64759202e9c1",
+      "bytes": 3552,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/inspect-image-notices.mjs"
+    },
+    {
+      "path": "scripts/integration-packages.test.mjs",
+      "depth": "full",
+      "summary": "외부 offline pack/install/import·license·export/type 포함 테스트 전체 읽음; 구현과 대조.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "31cc3586cc65596febe993b4a1ab56cae66fbf04",
+      "bytes": 3378,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/integration-packages.test.mjs"
+    },
+    {
+      "path": "scripts/pack-client.mjs",
+      "depth": "full",
+      "summary": "임시 경로 npm pack·hard link no-overwrite publication·cleanup 검토.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "ccf640ddce43f58aaa88f560feb4051cf2f9457a",
+      "bytes": 1431,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/pack-client.mjs"
+    },
+    {
+      "path": "scripts/pack-release.mjs",
+      "depth": "full",
+      "summary": "clean Git revision/tree·archive/패키지·version inventory·checksum·실패 output 정리 검토.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "4693f01b9e70d0e88d4ae4a32cabbc295d189407",
+      "bytes": 4118,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/pack-release.mjs"
+    },
+    {
+      "path": "scripts/postgres-backup.mjs",
+      "depth": "full",
+      "summary": "CLI/URL 검증 후 private 예약 fd로 pg_dump·signal runner 경계 검토.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "fe53cd77c30d13058bc5b931ec8c632ea57b5a2b",
+      "bytes": 1237,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/postgres-backup.mjs"
+    },
+    {
+      "path": "scripts/postgres-operations.mjs",
+      "depth": "full",
+      "summary": "private directory·inode/nlink·fsync/rename/dirsync·snapshot·single transaction restore·취소 검토.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "200d1386d8d2f659b5a63331e0aed9ea8380f05f",
+      "bytes": 8565,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/postgres-operations.mjs"
+    },
+    {
+      "path": "scripts/postgres-operations.test.mjs",
+      "depth": "full",
+      "summary": "argv·single transaction 옵션·private fd/inode/fsync·signal·immutable snapshot 교체·실제 child fixture 테스트 전체 읽음; 구현과 대조.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "bb94baf9ddd7c260b5ad8cef9529af345963eaf8",
+      "bytes": 16877,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/postgres-operations.test.mjs"
+    },
+    {
+      "path": "scripts/postgres-process.mjs",
+      "depth": "full",
+      "summary": "SIGINT/TERM 전달·race 시 abort·child 이벤트·listener dispose 검토.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "168e6ceb603593a39e4f44d09f0420071064662c",
+      "bytes": 2473,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/postgres-process.mjs"
+    },
+    {
+      "path": "scripts/postgres-restore.mjs",
+      "depth": "full",
+      "summary": "default DB 거부·정확한 target 확인·snapshot restore·signal cleanup 검토.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "694454267833394472db00f3876cbdad96704a12",
+      "bytes": 1717,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/postgres-restore.mjs"
+    },
+    {
+      "path": "scripts/postgres-url.mjs",
+      "depth": "full",
+      "summary": "single host/IPv6·allowlisted libpq env·중복/무제한 connect timeout 거부 검토.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "7df10b4fd07943c750798006e8d9391f60b61670",
+      "bytes": 3183,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/postgres-url.mjs"
+    },
+    {
+      "path": "scripts/postgres-url.test.mjs",
+      "depth": "full",
+      "summary": "URL·IPv6·override 제거·duplicate/timeout 오류 테스트 전체 읽음; 구현과 대조.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "ce3c13820b5e01b027f8b2656b7ad8826c12830f",
+      "bytes": 3451,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/postgres-url.test.mjs"
+    },
+    {
+      "path": "scripts/product-language.test.mjs",
+      "depth": "full",
+      "summary": "선택 사용자 문서/코드의 운영주체 중립 표현 테스트 전체 읽음; 구현과 대조.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "aac90156c834139c3ec61a1916dcedde770bf5b9",
+      "bytes": 1037,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/product-language.test.mjs"
+    },
+    {
+      "path": "scripts/promote-release-images.mjs",
+      "depth": "full",
+      "summary": "manual workflow·clean source·2파일 checksum·임시 Docker auth·dry-run/publish 호출 검토.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "9d966f8cd9389b075c674e3ce0235dbc9ccccde0",
+      "bytes": 3806,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/promote-release-images.mjs"
+    },
+    {
+      "path": "scripts/publish-candidate-images.mjs",
+      "depth": "full",
+      "summary": "manual candidate·clean source 전후 검사·package metadata·isolated auth·record/checksum 기록 검토.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "8545a66151f068139377f8ced42221991092e1c9",
+      "bytes": 4395,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/publish-candidate-images.mjs"
+    },
+    {
+      "path": "scripts/receive-deployment.py",
+      "depth": "full",
+      "summary": "forced command·bounded envelope·worker digest guard가 main보다 먼저 실행됨을 확인.",
+      "concerns": [
+        "OPS-0(정상 guard; 운영 미완료)"
+      ],
+      "reviewer": "operations-review",
+      "gitBlob": "f1da1b6b8563f91b0f828522e96a7423d168d46c",
+      "bytes": 1539,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/receive-deployment.py",
+      "finalReviewRequiredReference": "report.md / validation.md",
+      "finalDisposition": "see_report_and_validation_for_scope_and_counterevidence"
+    },
+    {
+      "path": "scripts/release-artifacts.mjs",
+      "depth": "full",
+      "summary": "정확한 파일 목록·symlink 거부·revision/tree·checksum/bytes 검증 검토.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "51b9e211f39570d2c773f39f4b57c0cc860cd97d",
+      "bytes": 3248,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/release-artifacts.mjs"
+    },
+    {
+      "path": "scripts/release-artifacts.test.mjs",
+      "depth": "full",
+      "summary": "checksum 변경·잘못된 commit·추가파일/symlink·version mismatch 테스트 전체 읽음; 구현과 대조.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "a64aba27576dfa3819cc13bb5329552bd29d9657",
+      "bytes": 4643,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/release-artifacts.test.mjs"
+    },
+    {
+      "path": "scripts/release-image-tags.mjs",
+      "depth": "full",
+      "summary": "6개 source/destination 사전 검증·immutable source tag 복사·부분완료 재시도 검토.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "c93a52a866946009f13c63c7ccb67b376d9aaa92",
+      "bytes": 3236,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/release-image-tags.mjs"
+    },
+    {
+      "path": "scripts/release-image-tags.test.mjs",
+      "depth": "full",
+      "summary": "dry-run·6개 사전검사·partial retry·digest rewrite·mixed commit 거부 테스트 전체 읽음; 구현과 대조.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "f0a2f1eb9499aeaa8bb426bff2f51c2a338a9ae6",
+      "bytes": 4944,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/release-image-tags.test.mjs"
+    },
+    {
+      "path": "scripts/release-version.mjs",
+      "depth": "full",
+      "summary": "root/workspace/runtime version·license·internal dependency pin 검토.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "c91f41763257de9c0ec7faf54949ef964ce009ba",
+      "bytes": 2570,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/release-version.mjs"
+    },
+    {
+      "path": "scripts/review-ui-build.test.mjs",
+      "depth": "full",
+      "summary": "실제 browser build와 generated source 일치 검사 테스트 전체 읽음; 구현과 대조.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "7d60edf3a631e805fd10c7cd43757c6cde93a7fa",
+      "bytes": 436,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/review-ui-build.test.mjs"
+    },
+    {
+      "path": "scripts/style-contract.test.mjs",
+      "depth": "full",
+      "summary": "고정 lint tool·rule 예외·generated ignore 설정 계약 테스트 전체 읽음; 구현과 대조.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "5bccdd89fa26d96809a4f87afd85750660e306b8",
+      "bytes": 1301,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/style-contract.test.mjs"
+    },
+    {
+      "path": "scripts/test_deployment.py",
+      "depth": "full",
+      "summary": "FakeDocker 실패 injection·실제 HTTP Node readiness·SSH/digest·부분실패/복구 테스트 전부 검토.",
+      "concerns": [
+        "OPS-2"
+      ],
+      "reviewer": "operations-review",
+      "gitBlob": "e03904f8b8c535c5bd942efff7033efa2e46f5e2",
+      "bytes": 21784,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/test_deployment.py",
+      "finalReviewRequiredReference": "report.md / validation.md",
+      "finalDisposition": "see_report_and_validation_for_scope_and_counterevidence"
+    },
+    {
+      "path": "scripts/verify-public-path.mjs",
+      "depth": "full",
+      "summary": "unauthenticated/auth·request streaming·SSE·binary WS·HTTPS와 deadline 검토.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "9bae86578b670f275b9fcee40369419cb2a234e0",
+      "bytes": 4552,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/verify-public-path.mjs"
+    },
+    {
+      "path": "scripts/verify-release.mjs",
+      "depth": "full",
+      "summary": "argv/commit 제한 및 manifest integrity 경계 검토.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "f736a4d45bda5354cfa3d7b14db0a875dbe7b8ec",
+      "bytes": 642,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/verify-release.mjs"
+    },
+    {
+      "path": "scripts/workspace-dependencies.test.mjs",
+      "depth": "full",
+      "summary": "root runtime와 workspace production source의 직접 dependency 선언 검사 테스트 전체 읽음; 구현과 대조.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "730ddeffae5f4f51266b7be1b8cdad1c5a47eb00",
+      "bytes": 4231,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/scripts/workspace-dependencies.test.mjs"
+    },
+    {
+      "path": "tests/demo/capture-media.mjs",
+      "depth": "full",
+      "summary": "synthetic demo·로그인 후 녹화·memory storageState·명시적 media 경로/cleanup 검토.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "a6de0768b845bbd1eea52171ce1382457aa437bc",
+      "bytes": 6718,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/tests/demo/capture-media.mjs"
+    },
+    {
+      "path": "tests/demo/client-package.spec.mjs",
+      "depth": "full",
+      "summary": "외부 offline install·actual PTY password·reconnect·binding failure cleanup 브라우저 흐름 검토.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "340b1bb86929715d036b8164620f2e5f92fbf4e1",
+      "bytes": 9178,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/tests/demo/client-package.spec.mjs"
+    },
+    {
+      "path": "tests/demo/demo.spec.mjs",
+      "depth": "full",
+      "summary": "2actor·핀·알림·동시 reply·재시작 데이터·계정 초기화 강제중단 복구 흐름 검토.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "fa87c76bae5de78b440be7bce4dd088854f98772",
+      "bytes": 9646,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/tests/demo/demo.spec.mjs"
+    },
+    {
+      "path": "tests/demo/playwright.config.mjs",
+      "depth": "full",
+      "summary": "Chrome 단일 worker·timeouts·failure trace 범위 검토.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "39dd6227848de1c461861ac80cd2fa0d1d06cbff",
+      "bytes": 397,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/tests/demo/playwright.config.mjs"
+    },
+    {
+      "path": "tests/demo/runtime.mjs",
+      "depth": "full",
+      "summary": "격리 temp/ports·demo process·DB snapshot·stop/reset·login fixture 검토.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "9f918e941943297119ad22aff5d468daa56d15b2",
+      "bytes": 4220,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/tests/demo/runtime.mjs"
+    },
+    {
+      "path": "tests/demo/terminal-client.py",
+      "depth": "full",
+      "summary": "PTY echo-off 감지 뒤 stdin password·signal forwarding·waitpid 검토.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "d21a9582a7d9ee4a3c2bc0b17021c638892fab28",
+      "bytes": 1456,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/tests/demo/terminal-client.py"
+    },
+    {
+      "path": "tests/frameworks/compatibility.spec.mjs",
+      "depth": "full",
+      "summary": "379행 전체 검토. 격리 fixture에 포장된 integration을 설치하고 인증 Gateway를 통한 Vite HMR, Next App Router·Server Action·상태 보존 Fast Refresh·탐색·세션 종료와 Next production bootstrap 제외를 검증한다. 실제 프레임워크는 루트 node_modules의 고정 버전을 사용한다.",
+      "concerns": [],
+      "reviewer": "framework-review",
+      "gitBlob": "6f9871fbb3dbdffec0190539063a07e1be6b4ab4",
+      "bytes": 16362,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/tests/frameworks/compatibility.spec.mjs"
+    },
+    {
+      "path": "tests/frameworks/fixtures/next/app/api/health/route.js",
+      "depth": "full",
+      "summary": "3행 전체 검토. GET Route Handler가 고정 JSON marker를 반환하며 브라우저 fetch 경로의 정상 응답을 확인한다.",
+      "concerns": [],
+      "reviewer": "framework-review",
+      "gitBlob": "d2ea9199935d75b8fe4648c2a2ad2cafb977a9b8",
+      "bytes": 87,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/tests/frameworks/fixtures/next/app/api/health/route.js"
+    },
+    {
+      "path": "tests/frameworks/fixtures/next/app/details/page.jsx",
+      "depth": "full",
+      "summary": "5행 전체 검토. next/link를 통한 상세 페이지와 홈 링크를 제공한다. 테스트는 상세 진입 결과를 확인한다.",
+      "concerns": [],
+      "reviewer": "framework-review",
+      "gitBlob": "e022b3355ac4adfb694ef1a6239dac8a831ca336",
+      "bytes": 175,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/tests/frameworks/fixtures/next/app/details/page.jsx"
+    },
+    {
+      "path": "tests/frameworks/fixtures/next/app/interactive-fixture.jsx",
+      "depth": "full",
+      "summary": "24행 전체 검토. hydration 완료 후 활성화되는 카운터, useActionState 폼, Fast Refresh marker를 제공한다. 정상 action 결과와 갱신 시 카운터 상태 유지에 사용한다.",
+      "concerns": [],
+      "reviewer": "framework-review",
+      "gitBlob": "6f21e650b398d688938568aeef13540fdf459944",
+      "bytes": 919,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/tests/frameworks/fixtures/next/app/interactive-fixture.jsx"
+    },
+    {
+      "path": "tests/frameworks/fixtures/next/app/layout.jsx",
+      "depth": "full",
+      "summary": "17행 전체 검토. App Router root layout에서 helper가 반환한 props를 next/script에 전달하고 production 기본 비활성화를 적용한다.",
+      "concerns": [],
+      "reviewer": "framework-review",
+      "gitBlob": "5cad2b18735247fbf54cc9e26151d20a74a13755",
+      "bytes": 459,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/tests/frameworks/fixtures/next/app/layout.jsx"
+    },
+    {
+      "path": "tests/frameworks/fixtures/next/app/page.jsx",
+      "depth": "full",
+      "summary": "21행 전체 검토. 50ms 지연 Server Component와 Suspense, 상호작용 fixture, 상세 링크를 구성한다. 테스트는 최종 marker를 확인하며 청크 도착 시점 자체는 검증하지 않는다.",
+      "concerns": [],
+      "reviewer": "framework-review",
+      "gitBlob": "44d118c3a19e8ad48f9a255912e5a8c0fcd853ea",
+      "bytes": 629,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/tests/frameworks/fixtures/next/app/page.jsx"
+    },
+    {
+      "path": "tests/frameworks/fixtures/next/app/server-actions.js",
+      "depth": "full",
+      "summary": "5행 전체 검토. use server action이 FormData message를 문자열로 반환한다. 저장소 부수효과 없는 정상 action 왕복 fixture다.",
+      "concerns": [],
+      "reviewer": "framework-review",
+      "gitBlob": "b6489d030aa29253a30c0d55cb51a465eaafb07c",
+      "bytes": 121,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/tests/frameworks/fixtures/next/app/server-actions.js"
+    },
+    {
+      "path": "tests/frameworks/fixtures/next/app/style.css",
+      "depth": "full",
+      "summary": "5행 전체 검토. Next 화면의 기본 타이포그래피·배경·그리드·컨트롤 스타일이다. CSS 변경 회귀 시나리오는 없다.",
+      "concerns": [],
+      "reviewer": "framework-review",
+      "gitBlob": "c11626157b2a319b077c588435c213d2595f9ac5",
+      "bytes": 305,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/tests/frameworks/fixtures/next/app/style.css"
+    },
+    {
+      "path": "tests/frameworks/fixtures/next/next.config.mjs",
+      "depth": "full",
+      "summary": "11행 전체 검토. withReviewTunnel로 *.localhost 개발 origin을 추가하며 strict mode 및 agentRules 설정을 유지한다.",
+      "concerns": [],
+      "reviewer": "framework-review",
+      "gitBlob": "13332eb2a50bc975af825c564f922d9f5515dc2c",
+      "bytes": 257,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/tests/frameworks/fixtures/next/next.config.mjs"
+    },
+    {
+      "path": "tests/frameworks/fixtures/vite/index.html",
+      "depth": "full",
+      "summary": "12행 전체 검토. app mount와 /src/main.js 모듈 entry를 갖는 표준 HTML fixture다.",
+      "concerns": [],
+      "reviewer": "framework-review",
+      "gitBlob": "43e63bc309c4e4f8ecdd9057ab3ade6c8595160d",
+      "bytes": 313,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/tests/frameworks/fixtures/vite/index.html"
+    },
+    {
+      "path": "tests/frameworks/fixtures/vite/src/main.js",
+      "depth": "full",
+      "summary": "16행 전체 검토. 고정 heading·HMR marker·카운터를 렌더링하고 모듈 자체 HMR accept를 등록한다. 갱신 후 카운터 보존을 약속하거나 검증하지 않는다.",
+      "concerns": [],
+      "reviewer": "framework-review",
+      "gitBlob": "4d297d0464e3d1e2d3c40f5a3f7feb7043f8e99a",
+      "bytes": 458,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/tests/frameworks/fixtures/vite/src/main.js"
+    },
+    {
+      "path": "tests/frameworks/fixtures/vite/src/style.css",
+      "depth": "full",
+      "summary": "4행 전체 검토. Vite 기본 화면 스타일이며 CSS HMR을 직접 검증하는 수정 시나리오는 없다.",
+      "concerns": [],
+      "reviewer": "framework-review",
+      "gitBlob": "fc49a650ab5ac70fbf87f774aabf07c5a21c000b",
+      "bytes": 237,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/tests/frameworks/fixtures/vite/src/style.css"
+    },
+    {
+      "path": "tests/frameworks/fixtures/vite/vite.config.mjs",
+      "depth": "full",
+      "summary": "7행 전체 검토. 공식 defineConfig plugins 배열에 reviewTunnel()을 등록한다.",
+      "concerns": [],
+      "reviewer": "framework-review",
+      "gitBlob": "286c0ac1e0e3f1e1da358ae291b8a7eb66b15bb5",
+      "bytes": 154,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/tests/frameworks/fixtures/vite/vite.config.mjs"
+    },
+    {
+      "path": "tests/frameworks/playwright.config.mjs",
+      "depth": "full",
+      "summary": "20행 전체 검토. framework 및 review overlay spec을 Chrome headless 단일 worker로 실행한다. Firefox·WebKit·다중 프레임워크 버전 행렬은 없다.",
+      "concerns": [],
+      "reviewer": "framework-review",
+      "gitBlob": "54d8d3720faac588737ed0b7e28f6ab8e2881fd0",
+      "bytes": 426,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/tests/frameworks/playwright.config.mjs"
+    },
+    {
+      "path": "tests/frameworks/public-compatibility.mjs",
+      "depth": "full",
+      "summary": "203행 전체 검토. 명시한 외부 환경에서 인증·쿠키·Vite HMR·동일 URL resume·Next 정상 기능·세션 종료를 확인하는 별도 스크립트다. 이번 검토에서는 실행하지 않았다. 로컬 spec과 달리 tarball 설치 단계를 포함하지 않는다.",
+      "concerns": [],
+      "reviewer": "framework-review",
+      "gitBlob": "47e728b00b2050a08fb5d931d65a3d910b6ed694",
+      "bytes": 11656,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/tests/frameworks/public-compatibility.mjs"
+    },
+    {
+      "path": "tests/frameworks/vite-readiness.mjs",
+      "depth": "full",
+      "summary": "18행 전체 검토. 공유 host WebSocket의 connected/update frame을 관찰해 소스 변경 전 준비 상태를 확인한다. 메시지 전체나 토큰을 보관하지 않는다.",
+      "concerns": [],
+      "reviewer": "framework-review",
+      "gitBlob": "ad0d36c13a486fad7cedfd0cdb1a29eeed8165a0",
+      "bytes": 856,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/tests/frameworks/vite-readiness.mjs"
+    },
+    {
+      "path": "tests/release/playwright.config.mjs",
+      "depth": "full",
+      "summary": "restore 전용 단일 worker·산출물 위치·timeout·failure trace 검토.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "87011b7801ad008bf74d34a0d2573493a420aa22",
+      "bytes": 375,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/tests/release/playwright.config.mjs"
+    },
+    {
+      "path": "tests/release/restore-runtime.mjs",
+      "depth": "full",
+      "summary": "동일 SHA images·quiescent 현재 DB backup·역할/전체행/sequence·재migration·candidate gateway·cleanup 검토.",
+      "concerns": [
+        "OPS-2"
+      ],
+      "reviewer": "operations-review",
+      "gitBlob": "8d98932bd6a3569e9dc83014474c69bfb79f3b98",
+      "bytes": 18373,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/tests/release/restore-runtime.mjs",
+      "finalReviewRequiredReference": "report.md / validation.md",
+      "finalDisposition": "see_report_and_validation_for_scope_and_counterevidence"
+    },
+    {
+      "path": "tests/release/restore.spec.mjs",
+      "depth": "full",
+      "summary": "브라우저 review/notification fixture를 복원 후 fresh login·권한·workflow·새 공유로 검증하는 흐름 검토.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "5a22cced46e3b0c3ba34f3e79bc4a9f1756bd2f4",
+      "bytes": 7185,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/tests/release/restore.spec.mjs"
+    },
+    {
+      "path": "tests/review/review-overlay.spec.mjs",
+      "depth": "full",
+      "summary": "브라우저 초안·IME·필터·페이지네이션·SSE 재동기화·핀·모바일·영속 리뷰·workflow 흐름 전문 검토",
+      "concerns": [],
+      "reviewer": "domain-review",
+      "gitBlob": "a147e87777e391ee0c06ff09e45428bab5c7d6d1",
+      "bytes": 66527,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/tests/review/review-overlay.spec.mjs"
+    },
+    {
+      "path": "third-party-notices/epic-web-invariant-1.0.0.txt",
+      "depth": "full",
+      "summary": "전체 원문 확인: 현재 사용 계약·지원 범위·구현 일치 및 과거 결정 상태 검토",
+      "concerns": [],
+      "reviewer": "root-review",
+      "gitBlob": "cf462ff56a8c5ad6f53c1a711d914c2b6d830828",
+      "bytes": 1693,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/third-party-notices/epic-web-invariant-1.0.0.txt"
+    },
+    {
+      "path": "tsconfig.build.json",
+      "depth": "full",
+      "summary": "source maps·relative extension rewrite·test emit 제외와 root config 상속 확인.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "e78517e725c42cdf3da3b3d054941975ab4b42b3",
+      "bytes": 233,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/tsconfig.build.json"
+    },
+    {
+      "path": "tsconfig.json",
+      "depth": "full",
+      "summary": "strict·indexed access·exact optionals·NodeNext·erasable TS와 포함범위 확인.",
+      "concerns": [],
+      "reviewer": "operations-review",
+      "gitBlob": "ecfcc3d721f0db8a3cda966f3463a999e21c8c5f",
+      "bytes": 463,
+      "sourceUrl": "https://github.com/ddussi/lotur/blob/ae8d8bc52b289b9ac50d36c9ed53224a2d0a679b/tsconfig.json"
+    }
+  ],
+  "candidateNotesAreNotFinalFindings": true,
+  "finalDispositionReference": "validation.md"
+}
