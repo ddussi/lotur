@@ -83,13 +83,7 @@ jobs:
       - run: npm run check:mvp
       - run: npm run test:demo
       - name: Build every production runtime image
-        run: |
-          docker build --target gateway --label "org.opencontainers.image.revision=${GITHUB_SHA}" -t review-tunnel-gateway:ci .
-          docker build --target admin-cli --label "org.opencontainers.image.revision=${GITHUB_SHA}" -t review-tunnel-admin-cli:ci .
-          docker build --target client --label "org.opencontainers.image.revision=${GITHUB_SHA}" -t review-tunnel-client:ci .
-          docker build --target canary-check --label "org.opencontainers.image.revision=${GITHUB_SHA}" -t review-tunnel-canary-check:ci .
-          docker build --target db-backup --label "org.opencontainers.image.revision=${GITHUB_SHA}" -t review-tunnel-db-backup:ci .
-          docker build --target db-restore --label "org.opencontainers.image.revision=${GITHUB_SHA}" -t review-tunnel-db-restore:ci .
+        run: node scripts/verified-images-cli.mjs build
       - name: Smoke runtime entrypoints and fail-closed configuration
         run: |
           expect_failure() {
@@ -142,6 +136,17 @@ jobs:
           path: test-results/restore/**/restore-validation.json
           if-no-files-found: error
           retention-days: 7
+      - name: Seal the exact images after successful restoration
+        run: node scripts/verified-images-cli.mjs seal
+      - name: Retain verified runtime images
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: verified-images-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: dist/verified-images/
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
       - name: Build source and installable release candidate files
         run: npm run pack:release
       - name: Retain verified candidate files for review
@@ -162,6 +167,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -170,6 +176,10 @@ jobs:
         with:
           node-version: 24
           package-manager-cache: false
+      - name: Download the images from this verification run and attempt
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "verified-images-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" --dir dist/verified-images
       - name: Publish and pull-check the exact candidate images
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -220,6 +230,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      actions: read
     outputs:
       gateway: ${{ steps.images.outputs.gateway }}
       admin: ${{ steps.images.outputs.admin-cli }}
@@ -229,6 +240,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Download the images from this verification run and attempt
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "verified-images-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" --dir dist/verified-images
       - name: Publish the verified revision to GHCR
         id: images
         env:
@@ -238,18 +257,14 @@ jobs:
           set -euo pipefail
           trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
           printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io --username "$REGISTRY_USER" --password-stdin
-          repository="${GITHUB_REPOSITORY,,}"
-          for target in gateway admin-cli canary-check; do
-            image="ghcr.io/${repository}-${target}:${GITHUB_SHA}"
-            docker build --target "$target" \
-              --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
-              --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
-              -t "$image" .
-            docker push "$image"
-            digest=$(docker image inspect "$image" --format '{{index .RepoDigests 0}}')
-            [[ "$digest" =~ @sha256:[a-f0-9]{64}$ ]]
-            printf '%s=%s\n' "$target" "$digest" >> "$GITHUB_OUTPUT"
-          done
+          node scripts/verified-images-cli.mjs publish
+      - name: Retain published digest to verification identity mapping
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: published-images-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: dist/verified-images/published-images.json
+          if-no-files-found: error
+          retention-days: 7
       - name: Skip a revision superseded on main
         id: current
         env:

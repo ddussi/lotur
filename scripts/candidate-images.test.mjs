@@ -38,7 +38,8 @@ function registry({ visibility = "private", wrongRevision = false, existingTag =
     }
     return success("");
   };
-  return { packageInfo, docker, operations };
+  const manifest = { format: "review-tunnel-verified-images-v1", ...context, platform: IMAGE_PLATFORM, images: RUNTIME_TARGETS.map(target => ({ target, reference: `review-tunnel-${target}:ci`, id: `sha256:${"b".repeat(64)}` })) };
+  return { packageInfo, docker, operations, manifest };
 }
 
 test("candidate publication requires explicit manual input and bounded GitHub identities", () => {
@@ -53,7 +54,7 @@ test("candidate publication requires explicit manual input and bounded GitHub id
 test("all package destinations are checked before publication and existing tags are preserved", async () => {
   for (const options of [{ visibility: "public" }, { denied: true }, { existingTag: true }, { wrongSource: true }]) {
     const runtime = registry(options);
-    await assert.rejects(publishCandidateImages(context, runtime), /visibility|access denied|already exists|different or unidentified source/);
+    await assert.rejects(publishCandidateImages(context, runtime), /visibility|access denied|already exists|different or unidentified source|verified image/);
     assert.equal(runtime.operations.filter(args => ["build", "push"].includes(args[0])).length, 0);
   }
 });
@@ -62,18 +63,20 @@ test("candidate images are checked before push and again by digest after pulling
   const runtime = registry();
   const record = await publishCandidateImages(context, runtime);
   assert.equal(record.platform, IMAGE_PLATFORM);
+  assert.equal(runtime.operations.some(args => args[0] === "build"), false);
+  assert.deepEqual(record.verification.images, runtime.manifest.images);
   assert.deepEqual(record.images.map(image => image.target), RUNTIME_TARGETS);
   assert.equal(runtime.operations.filter(args => args[0] === "push").length, 6);
   assert.equal(runtime.operations.filter(args => args[0] === "pull" && args.at(-1).includes("@sha256:")).length, 12);
   assert.equal(runtime.operations.filter(args => args[0] === "run" && args.includes("--network") && args.some(arg => arg.includes("@sha256:"))).length, 7);
-  assert.equal(runtime.operations.slice(0, 6).every(args => args[0] === "package"), true);
+  assert.equal(runtime.operations.slice(6, 12).every(args => args[0] === "package"), true);
   const changed = structuredClone(record); changed.images[0].reference = changed.images[0].tag;
   assert.throws(() => verifyImageRecord(changed, context), /immutable image identity/);
   assert.throws(() => verifyImageRecord(record, { ...context, revision: "f".repeat(40) }), /source/);
 });
 
 test("a wrong pulled source or unexpectedly successful invalid configuration cannot complete a candidate", async () => {
-  await assert.rejects(publishCandidateImages(context, registry({ wrongRevision: true })), /differs from the checked source/);
+  await assert.rejects(publishCandidateImages(context, registry({ wrongRevision: true })), /verified image/);
   const runtime = registry({ smokeSuccess: true });
   await assert.rejects(publishCandidateImages(context, runtime), /smoke result/);
   assert.equal(runtime.operations.some(args => args[0] === "push"), false);
@@ -87,4 +90,12 @@ test("a newly created private target is checked after publication without assumi
   const record = await publishCandidateImages(context, runtime);
   assert.equal(record.images.find(image => image.target === "client").visibility, "private");
   assert.equal(runtime.operations.filter(args => args[0] === "pull").length, 11);
+});
+test('missing or substituted verification images prevent all candidate registry writes', async () => {
+  for (const mutation of [record => { record.images.pop(); }, record => { record.images[5].id = `sha256:${'e'.repeat(64)}`; }, record => { record.attempt = '2'; }]) {
+    const runtime = registry();
+    mutation(runtime.manifest);
+    await assert.rejects(publishCandidateImages(context, runtime), /verified image/);
+    assert.equal(runtime.operations.some(args => ['push', 'build', 'tag'].includes(args[0])), false);
+  }
 });

@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { checkReleaseVersions } from "./release-version.mjs";
 import { candidateContext, publishCandidateImages } from "./candidate-images.mjs";
+import { loadVerifiedImages } from "./verified-images-cli.mjs";
 import { sha256 } from "./release-artifacts.mjs";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
@@ -44,8 +45,9 @@ try {
   const dockerEnvironment = Object.fromEntries(["PATH", "HOME", "TMPDIR", "LANG"].filter(key => process.env[key] !== undefined).map(key => [key, process.env[key]]));
   dockerEnvironment.DOCKER_CONFIG = temporary;
   const docker = (args, options) => run("docker", args, { ...options, env: dockerEnvironment });
+  const manifest = await loadVerifiedImages(context, docker);
   await run("docker", ["login", "ghcr.io", "--username", process.env.GITHUB_ACTOR, "--password-stdin"], { env: dockerEnvironment, input: process.env.GH_TOKEN });
-  const record = await publishCandidateImages(context, { packageInfo, docker, log: console.log });
+  const record = await publishCandidateImages(context, { packageInfo, docker, manifest, log: console.log });
   if ((await run("git", ["rev-parse", "HEAD"])).stdout.trim() !== context.revision ||
       (await run("git", ["status", "--porcelain", "--untracked-files=all"])).stdout.trim()) throw new Error("Source changed during the image build; no complete candidate record was written.");
   const parent = join(root, "dist/image-candidates");

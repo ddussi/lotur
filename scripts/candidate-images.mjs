@@ -1,4 +1,5 @@
 import { RUNTIME_TARGETS } from "./release-artifacts.mjs";
+import { inspectVerifiedImages, publishVerifiedImage } from "./verified-images.mjs";
 import { VERSION_PATTERN } from "./release-version.mjs";
 
 export const IMAGE_FORMAT = "review-tunnel-images-v1";
@@ -58,8 +59,9 @@ export function verifyImageRecord(record, { revision, version, repository }) {
 
 // All registry operations use the selected repository. A missing package may be
 // created with GHCR's private default; access errors must not mean "missing".
-export async function publishCandidateImages(context, { packageInfo, docker, log = () => {} }) {
+export async function publishCandidateImages(context, { packageInfo, docker, manifest, log = () => {} }) {
   const { repository, revision, version, tag, visibility } = context;
+  await inspectVerifiedImages(manifest, context, docker);
   const existingPackages = new Set();
   for (const target of RUNTIME_TARGETS) {
     const info = await packageInfo(target);
@@ -90,34 +92,21 @@ export async function publishCandidateImages(context, { packageInfo, docker, log
         throw new Error(`Cannot establish that the ${target} candidate tag is unused.`);
       }
     }
-    log(`Building and checking ${target} (${IMAGE_PLATFORM}).`);
-    await docker(["build", "--platform", IMAGE_PLATFORM, "--target", target,
-      "--label", `org.opencontainers.image.source=https://github.com/${repository}`,
-      "--label", `org.opencontainers.image.revision=${revision}`,
-      "--label", `org.opencontainers.image.version=${version}`,
-      "--label", "org.opencontainers.image.licenses=MIT", "-t", image, "."]);
+    const expected = manifest.images.find(entry => entry.target === target);
+    log(`Publishing verified ${target} (${IMAGE_PLATFORM}).`);
+    await docker(["tag", expected.id, image]);
     await smoke(target, image, version, docker);
-    await docker(["push", image]);
-    const local = JSON.parse((await docker(["image", "inspect", image])).stdout)[0];
-    const prefix = `ghcr.io/${repository}-${target}@`;
-    const reference = local.RepoDigests?.find(value => value.startsWith(prefix) && digestPattern.test(value.slice(prefix.length)));
-    if (!reference) throw new Error(`Registry digest missing for ${target}.`);
-    await docker(["pull", "--platform", IMAGE_PLATFORM, reference]);
-    const pulled = JSON.parse((await docker(["image", "inspect", reference])).stdout)[0];
-    const labels = pulled.Config?.Labels;
-    if (`${pulled.Os}/${pulled.Architecture}` !== IMAGE_PLATFORM || pulled.Id !== local.Id ||
-        labels?.["org.opencontainers.image.revision"] !== revision || labels?.["org.opencontainers.image.version"] !== version ||
-        labels?.["org.opencontainers.image.source"] !== `https://github.com/${repository}` || labels?.["org.opencontainers.image.licenses"] !== "MIT") {
-      throw new Error(`Pulled ${target} image differs from the checked source/platform.`);
-    }
+    const reference = await publishVerifiedImage(expected, image, context, docker);
     await smoke(target, reference, version, docker);
     const info = await packageInfo(target);
     if (!info) throw new Error(`Published ${target} package metadata is unavailable.`);
     checkPackage(info, target, context);
-    images.push({ target, tag: image, reference, configDigest: pulled.Id, visibility: info.visibility });
+    // The existing v1 field stores Docker's image ID (a config or manifest/index digest, depending on the image store).
+    images.push({ target, tag: image, reference, configDigest: expected.id, visibility: info.visibility });
   }
   return verifyImageRecord({ format: IMAGE_FORMAT, version, source: { revision }, repository,
     platform: IMAGE_PLATFORM, candidateTag: tag,
+    verification: { runId: context.runId, attempt: context.attempt, images: manifest.images },
     workflow: `https://github.com/${repository}/actions/runs/${context.runId}/attempts/${context.attempt}`, images }, context);
 }
 

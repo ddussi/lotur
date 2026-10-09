@@ -15,20 +15,12 @@ test("CI는 실제 PostgreSQL과 framework를 포함한 완료 게이트를 실�
   assert.match(workflow, /npm run check:mvp/);
   assert.match(workflow, /playwright install --with-deps chrome/);
   assert.match(workflow, /npm audit --omit=dev/);
-  for (const target of [
-    "gateway",
-    "admin-cli",
-    "client",
-    "canary-check",
-    "db-backup",
-    "db-restore",
-  ]) {
-    assert.match(
-      workflow,
-      new RegExp(`docker build --target ${target}\\b`),
-      `CI must build the ${target} production image`,
-    );
-  }
+  assert.match(workflow, /node scripts\/verified-images-cli.mjs build/);
+  assert.equal((workflow.match(/verified-images-cli.mjs build/g) || []).length, 1);
+  assert.doesNotMatch(workflow, /docker build/);
+  assert.ok(workflow.indexOf('verified-images-cli.mjs seal') > workflow.indexOf('npm run test:restore'));
+  assert.match(workflow, /gh run download/);
+  assert.match(workflow, /verified-images-cli.mjs publish/);
   assert.match(workflow, /expect_failure "DATABASE_URL is required" docker run --rm/);
   assert.match(workflow, /runtime failed for an unexpected reason/);
   assert.match(workflow, /RESTORE_TEST_IMAGE_TAG: ci/);

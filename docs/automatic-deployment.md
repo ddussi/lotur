@@ -74,7 +74,7 @@ GHCR 게시와 다운로드에는 각 job의 단기 `GITHUB_TOKEN`을 사용한�
 
 ## 매 배포에서 확인하는 순서
 
-1. 기존 전체 CI가 성공해야 이미지를 게시한다. Gateway·Admin CLI·canary 이미지를 같은 commit SHA로 빌드하고 서버에는 변경 불가능한 `@sha256:…` 주소를 전달한다. 다운로드 뒤 이미지의 source revision도 검사한다.
+1. 기존 전체 CI가 성공해야 이미지를 게시한다. 검증 job이 여섯 runtime 이미지를 한 번 빌드하고 smoke·복원 검사를 마친 뒤 이미지 ID와 archive를 보관한다. 게시 job은 같은 실행·attempt의 archive를 불러와 ID·source·revision·version·platform을 확인하고, Gateway·Admin CLI·canary 이미지를 재빌드 없이 게시한다. 게시 digest를 다시 내려받아 검증 ID와 일치하는지 확인하고 서버에는 변경 불가능한 `@sha256:…` 주소를 전달한다. 서버도 다운로드 뒤 source revision을 검사한다.
 2. 이미지 게시 중 `main`이 바뀌었으면 해당 실행은 배포를 건너뛴다. GitHub 배포 job과 서버 파일 잠금으로 동시 교체를 막고, 이미 배포한 실행보다 오래된 실행 번호는 서버에서도 거부한다.
 3. 서버 환경과 관리자 인증을 확인한다. 공유 중지 스위치가 켜져 있으면 기존 컨테이너를 건드리지 않고 중단한다.
 4. DDL 전용 계정으로 migration을 실행한다. 실패하면 실행 중인 기존 Gateway를 유지한다.
