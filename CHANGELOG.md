@@ -2,6 +2,12 @@
 
 Release contents are grouped by version below. Check [GitHub Releases](https://github.com/ddussi/lotur/releases) for publication status, dates and verified downloads; this source file does not establish that a release has been published.
 
+## Unreleased
+
+### Fixed
+
+- Update Next.js and the integration's minimum peer version to 16.3.8, and refresh the locked sharp 0.35.5 and source-map-js 1.2.2 dependencies.
+
 ## 0.1.0-alpha.1
 
 ### Fixed
