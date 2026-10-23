@@ -1,4 +1,4 @@
-FROM node:24-bookworm-slim@sha256:ba849c60be29959425b8734d57b8b4b7d56f98edd9504c9af091d5281095a71e AS build
+FROM node:24.22.1-bookworm-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205 AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps ./apps
@@ -9,12 +9,12 @@ COPY scripts ./scripts
 COPY LICENSE ./LICENSE
 RUN npm run check:boundaries && npm run build
 
-FROM node:24-bookworm-slim@sha256:ba849c60be29959425b8734d57b8b4b7d56f98edd9504c9af091d5281095a71e AS production-dependencies
+FROM node:24.22.1-bookworm-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205 AS production-dependencies
 WORKDIR /app
 COPY deploy/runtime/package.json deploy/runtime/package-lock.json ./
 RUN npm ci --omit=dev
 
-FROM node:24-bookworm-slim@sha256:ba849c60be29959425b8734d57b8b4b7d56f98edd9504c9af091d5281095a71e AS runtime-files
+FROM node:24.22.1-bookworm-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205 AS runtime-files
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=production-dependencies --chown=node:node /app/package.json /app/package-lock.json ./

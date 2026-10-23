@@ -37,6 +37,7 @@ test("standalone Client archive installs offline outside the repository with onl
     assert.equal((await lstat(installation)).isSymbolicLink(), false);
     const manifest = JSON.parse(await readFile(join(installation, "package.json"), "utf8"));
     assert.equal(manifest.version, version);
+    assert.deepEqual(manifest.engines, JSON.parse(await readFile(join(root, "package.json"), "utf8")).engines);
     assert.deepEqual(manifest.bundledDependencies, ["ws"]);
     assert.deepEqual(Object.keys(manifest.dependencies), ["ws"]);
     assert.equal(manifest.scripts, undefined);

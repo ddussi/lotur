@@ -49,7 +49,7 @@ export async function withClientPackage(consume) {
       name: source.name, version: source.version, private: true,
       description: "Authenticated sharing of a local web app through your Review Tunnel Gateway",
       type: "module", bin: { "review-tunnel": "./bin/review-tunnel.mjs" },
-      files: ["bin", "dist", "THIRD_PARTY_NOTICES.md"], engines: { node: ">=24" },
+      files: ["bin", "dist", "THIRD_PARTY_NOTICES.md"], engines: rootManifest.engines,
       license: "MIT", repository: { type: "git", url: "git+https://github.com/ddussi/lotur.git" },
       dependencies: { ws: wsManifest.version }, bundledDependencies: ["ws"],
     }, null, 2)}\n`);

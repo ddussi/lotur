@@ -10,6 +10,8 @@ Share a web application running on your computer with authenticated reviewers th
 
 [Watch the short review walkthrough](docs/media/review-flow.webm): place a pin, receive a developer reply, request re-review, and confirm the fix in the persistent inbox. These are actual demo captures with synthetic local data. [More screens and capture instructions](docs/media/README.md).
 
+Security runtime baseline: use Node.js 24.22.1 or newer in the 24.x line. Docker build and runtime stages use a pinned patched image digest; rebuild and redeploy images to apply runtime updates.
+
 ## How it works
 
 1. An operator deploys a Gateway with PostgreSQL, DNS, and HTTPS, then issues developer and reviewer accounts.
